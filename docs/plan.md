@@ -16,6 +16,8 @@ El font ya esta dentro del proyecto.
 
 El desing esta en docs/DESING.md
 
+Tienes que darme el sql solo para ejecutar en un archivo especifico
+
 ---
 
 ## 🏗️ Stack Tecnológico
