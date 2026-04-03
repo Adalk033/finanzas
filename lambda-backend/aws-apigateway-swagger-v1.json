@@ -1,0 +1,130 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "version": "1.0.0",
+    "title": "Finanzas API"
+  },
+  "schemes": ["https"],
+  "consumes": ["application/json"],
+  "produces": ["application/json"],
+  "securityDefinitions": {
+    "api_key": {
+      "type": "apiKey",
+      "name": "x-api-key",
+      "in": "header"
+    }
+  },
+  "security": [
+    {
+      "api_key": []
+    }
+  ],
+  "x-amazon-apigateway-request-validators": {
+    "Validate headers and body": {
+      "validateRequestParameters": true,
+      "validateRequestBody": true
+    }
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-client-version",
+            "in": "header",
+            "required": true,
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Health status"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      }
+    },
+    "/bootstrap/ping": {
+      "post": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-client-version",
+            "in": "header",
+            "required": true,
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/BootstrapPingRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ping response"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      }
+    }
+  },
+  "definitions": {
+    "BootstrapPingRequest": {
+      "type": "object",
+      "required": ["awsRegion", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "awsRegion": {
+          "type": "string",
+          "enum": ["us-east-1", "us-east-2", "us-west-1", "us-west-2"]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        }
+      }
+    }
+  }
+}

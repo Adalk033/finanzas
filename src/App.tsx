@@ -1,121 +1,135 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
+import { useState, type FormEvent } from 'react'
 import './App.css'
+import { apiClient } from './api/client'
+import { useLocalConfig } from './hooks/useLocalConfig'
 
-function App() {
-  const [count, setCount] = useState(0)
+export function App() {
+  const {
+    config,
+    isLoading,
+    isSaving,
+    error,
+    successMessage,
+    setConfig,
+    saveConfig,
+  } = useLocalConfig()
+  const [pingResponse, setPingResponse] = useState('')
+  const [pingError, setPingError] = useState('')
+  const [isPinging, setIsPinging] = useState(false)
+
+  const handleSave = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault()
+    await saveConfig()
+  }
+
+  const handlePing = async (): Promise<void> => {
+    setIsPinging(true)
+    setPingError('')
+    setPingResponse('')
+
+    const healthResult = await apiClient.health()
+
+    if (!healthResult.success) {
+      setPingError(healthResult.error ?? 'Fallo health check.')
+      setIsPinging(false)
+      return
+    }
+
+    const pingResult = await apiClient.bootstrapPing('conexion inicial ok')
+
+    if (!pingResult.success) {
+      setPingError(pingResult.error ?? 'Fallo bootstrap ping.')
+      setIsPinging(false)
+      return
+    }
+
+    setPingResponse(pingResult.data?.message ?? 'Conexion validada.')
+    setIsPinging(false)
+  }
+
+  if (isLoading) {
+    return (
+      <main className="settings-screen settings-screen--centered">
+        <p className="settings-screen__status">Cargando configuracion local...</p>
+      </main>
+    )
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
+    <main className="settings-screen">
+      <section className="settings-screen__card">
+        <header className="settings-screen__header">
+          <h1 className="settings-screen__title">Configuracion Inicial</h1>
+          <p className="settings-screen__subtitle">
+            Guarda API Key, endpoint HTTPS y region AWS en SQLite local.
           </p>
-        </div>
-        <button
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
+        </header>
+
+        <form className="settings-form" onSubmit={handleSave}>
+          <label className="settings-form__field" htmlFor="apiKey">
+            API Key
+          </label>
+          <input
+            id="apiKey"
+            className="settings-form__input"
+            type="password"
+            value={config.apiKey}
+            onChange={(event) => setConfig({ ...config, apiKey: event.target.value })}
+            placeholder="Ingresa tu x-api-key"
+            autoComplete="off"
+            required
+          />
+
+          <label className="settings-form__field" htmlFor="apiEndpoint">
+            API Endpoint (HTTPS)
+          </label>
+          <input
+            id="apiEndpoint"
+            className="settings-form__input"
+            type="url"
+            value={config.apiEndpoint}
+            onChange={(event) => setConfig({ ...config, apiEndpoint: event.target.value })}
+            placeholder="https://xxxxx.execute-api.us-east-1.amazonaws.com/prod"
+            autoComplete="off"
+            required
+          />
+
+          <label className="settings-form__field" htmlFor="awsRegion">
+            AWS Region
+          </label>
+          <input
+            id="awsRegion"
+            className="settings-form__input"
+            type="text"
+            value={config.awsRegion}
+            onChange={(event) => setConfig({ ...config, awsRegion: event.target.value })}
+            placeholder="us-east-1"
+            autoComplete="off"
+            required
+          />
+
+          <div className="settings-form__actions">
+            <button className="button button--primary" type="submit" disabled={isSaving}>
+              {isSaving ? 'Guardando...' : 'Guardar configuracion'}
+            </button>
+            <button
+              className="button button--secondary"
+              type="button"
+              disabled={isPinging}
+              onClick={() => {
+                void handlePing()
+              }}
+            >
+              {isPinging ? 'Probando...' : 'Probar conexion'}
+            </button>
+          </div>
+        </form>
+
+        {error ? <p className="settings-screen__message settings-screen__message--error">{error}</p> : null}
+        {successMessage ? <p className="settings-screen__message settings-screen__message--success">{successMessage}</p> : null}
+        {pingError ? <p className="settings-screen__message settings-screen__message--error">{pingError}</p> : null}
+        {pingResponse ? <p className="settings-screen__message settings-screen__message--info">{pingResponse}</p> : null}
       </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+    </main>
   )
 }
-
-export default App

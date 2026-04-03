@@ -3,17 +3,22 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-    "author": {
+  "author": {
     "name": "Adalk033",
     "email": "adal_garcia1999@hotmail.com"
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "dev:renderer": "vite",
+    "build": "tsc -b && vite build && npm run build:electron",
+    "build:electron": "tsc -p tsconfig.electron.json",
+    "electron": "electron dist-electron/main.js",
+    "dev:electron": "npm run build:electron && electron dist-electron/main.js",
     "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
+    "better-sqlite3": "^11.10.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
   },
@@ -22,11 +27,13 @@
     "@eslint/js": "^9.39.4",
     "@rolldown/plugin-babel": "^0.2.1",
     "@types/babel__core": "^7.20.5",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^24.12.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
     "babel-plugin-react-compiler": "^1.0.0",
+    "electron": "^41.1.1",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",

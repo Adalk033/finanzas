@@ -1,0 +1,43 @@
+@font-face {
+  font-family: 'Google Sans';
+  src: url('/fonts/static/GoogleSans-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Google Sans';
+  src: url('/fonts/static/GoogleSans-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Google Sans';
+  src: url('/fonts/static/GoogleSans-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+}
+
+:root {
+  --color-bg: #0f1218;
+  --color-card: #1a212d;
+  --color-primary: #2d8f85;
+  --color-text: #f3f6fa;
+  --color-text-secondary: #a9b3bf;
+  --color-border: #2a3442;
+  --color-success: #3cb179;
+  --color-warning: #e6a23c;
+  --color-error: #d95f5f;
+  --color-info: #57a6d8;
+
+  --shadow-card: 0px 4px 6px -1px rgba(0, 0, 0, 0.35);
+  --radius-card: 12px;
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+  --space-5: 48px;
+
+  --font-base: 'Google Sans', system-ui, sans-serif;
+}
