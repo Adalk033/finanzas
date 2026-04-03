@@ -1,0 +1,50 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-electron
+dist-ssr
+release
+*.local
+
+# SQLite database files (runtime data, not source)
+*.db
+*.db-shm
+*.db-wal
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+#Claves internas
+*.pem
+*.key
+*.crt
+*.pfx
+*.cer
+*.csr
+*.der
+*.jks
+*.p12
+*.keystore
+*.env
+.env.*
+
+#Ciertos bash
+.bash_history
+apigw-enforce-method-security.sh
+*.sh
