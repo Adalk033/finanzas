@@ -6,4 +6,6 @@ export const ENDPOINTS = {
   INSTRUMENTS: '/instruments',
   SUBCATEGORIES: '/subcategories',
   TRANSACTIONS: '/transactions',
+  STATEMENTS: '/statements',
+  TRANSFERS: '/transfers',
 } as const

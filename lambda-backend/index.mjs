@@ -13,6 +13,7 @@ const ALLOWED_INSTRUMENT_TYPES = new Set(['credit_card', 'debit_card', 'account'
 const ALLOWED_CATEGORY_TYPES = new Set(['expense', 'income', 'both']);
 const ALLOWED_TRANSACTION_TYPES = new Set(['expense', 'income']);
 const ALLOWED_MSI_MONTHS = new Set([3, 6, 9, 12, 18, 24]);
+const ALLOWED_TRANSFER_TYPES = new Set(['card_payment', 'inter_account', 'loan_payment', 'other']);
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 let pool;
@@ -164,6 +165,24 @@ function parsePathParameters(path) {
 
   if (path === '/transactions') {
     return { resource: 'transactions', id: null };
+  }
+
+  const statementsWithId = path.match(/^\/statements\/(\d+)$/);
+  if (statementsWithId) {
+    return { resource: 'statements', id: Number.parseInt(statementsWithId[1], 10) };
+  }
+
+  if (path === '/statements') {
+    return { resource: 'statements', id: null };
+  }
+
+  const transfersWithId = path.match(/^\/transfers\/(\d+)$/);
+  if (transfersWithId) {
+    return { resource: 'transfers', id: Number.parseInt(transfersWithId[1], 10) };
+  }
+
+  if (path === '/transfers') {
+    return { resource: 'transfers', id: null };
   }
 
   return { resource: null, id: null };
@@ -500,6 +519,175 @@ function validateTransactionPayload(body) {
   };
 }
 
+function validateStatementPayload(body) {
+  if (!body || typeof body !== 'object') {
+    return { ok: false, error: 'Body invalido.' };
+  }
+
+  const instrumentId = normalizeNullableInteger(body.instrumentId);
+  const cutOffDate = normalizeNullableDate(body.cutOffDate);
+  const paymentDueDate = normalizeNullableDate(body.paymentDueDate);
+  const minimumPayment = normalizeNullableNumber(body.minimumPayment);
+  const noInterestPayment = normalizeNullableNumber(body.noInterestPayment);
+
+  if (!instrumentId || instrumentId < 1) {
+    return { ok: false, error: 'instrumentId invalido.' };
+  }
+
+  if (!cutOffDate) {
+    return { ok: false, error: 'cutOffDate invalida. Usa YYYY-MM-DD.' };
+  }
+
+  if (paymentDueDate === null && body.paymentDueDate !== undefined && body.paymentDueDate !== null && body.paymentDueDate !== '') {
+    return { ok: false, error: 'paymentDueDate invalida. Usa YYYY-MM-DD.' };
+  }
+
+  if (minimumPayment !== null && (minimumPayment < 0 || minimumPayment > 9999999999.99)) {
+    return { ok: false, error: 'minimumPayment invalido.' };
+  }
+
+  if (noInterestPayment !== null && (noInterestPayment < 0 || noInterestPayment > 9999999999.99)) {
+    return { ok: false, error: 'noInterestPayment invalido.' };
+  }
+
+  return {
+    ok: true,
+    value: {
+      instrumentId,
+      cutOffDate,
+      paymentDueDate,
+      minimumPayment,
+      noInterestPayment,
+    },
+  };
+}
+
+function validateStatementUpdatePayload(body) {
+  if (!body || typeof body !== 'object') {
+    return { ok: false, error: 'Body invalido.' };
+  }
+
+  const paymentDueDate = normalizeNullableDate(body.paymentDueDate);
+  const minimumPayment = normalizeNullableNumber(body.minimumPayment);
+  const noInterestPayment = normalizeNullableNumber(body.noInterestPayment);
+  const paidAmount = normalizeNullableNumber(body.paidAmount);
+  const paidDate = normalizeNullableDate(body.paidDate);
+  const isPaid = body.isPaid === undefined ? null : Boolean(body.isPaid);
+
+  if (paymentDueDate === null && body.paymentDueDate !== undefined && body.paymentDueDate !== null && body.paymentDueDate !== '') {
+    return { ok: false, error: 'paymentDueDate invalida. Usa YYYY-MM-DD.' };
+  }
+
+  if (minimumPayment !== null && (minimumPayment < 0 || minimumPayment > 9999999999.99)) {
+    return { ok: false, error: 'minimumPayment invalido.' };
+  }
+
+  if (noInterestPayment !== null && (noInterestPayment < 0 || noInterestPayment > 9999999999.99)) {
+    return { ok: false, error: 'noInterestPayment invalido.' };
+  }
+
+  if (paidAmount !== null && (paidAmount < 0 || paidAmount > 9999999999.99)) {
+    return { ok: false, error: 'paidAmount invalido.' };
+  }
+
+  if (paidDate === null && body.paidDate !== undefined && body.paidDate !== null && body.paidDate !== '') {
+    return { ok: false, error: 'paidDate invalida. Usa YYYY-MM-DD.' };
+  }
+
+  return {
+    ok: true,
+    value: {
+      paymentDueDate,
+      minimumPayment,
+      noInterestPayment,
+      isPaid,
+      paidAmount,
+      paidDate,
+    },
+  };
+}
+
+function validateTransferPayload(body) {
+  if (!body || typeof body !== 'object') {
+    return { ok: false, error: 'Body invalido.' };
+  }
+
+  const sourceInstrumentId = normalizeNullableInteger(body.sourceInstrumentId);
+  const destinationInstrumentId = normalizeNullableInteger(body.destinationInstrumentId);
+  const amount = normalizeNullableNumber(body.amount);
+  const currencyId = normalizeNullableInteger(body.currencyId);
+  const transferDate = normalizeNullableDate(body.transferDate);
+  const type = normalizeText(body.type);
+  const statementId = normalizeNullableInteger(body.statementId);
+  const loanId = normalizeNullableInteger(body.loanId);
+  const description = normalizeNullableText(body.description);
+  const notes = normalizeNullableText(body.notes);
+
+  if (!sourceInstrumentId || sourceInstrumentId < 1) {
+    return { ok: false, error: 'sourceInstrumentId invalido.' };
+  }
+
+  if (!destinationInstrumentId || destinationInstrumentId < 1) {
+    return { ok: false, error: 'destinationInstrumentId invalido.' };
+  }
+
+  if (sourceInstrumentId === destinationInstrumentId) {
+    return { ok: false, error: 'sourceInstrumentId y destinationInstrumentId deben ser distintos.' };
+  }
+
+  if (amount === null || amount <= 0 || amount > 9999999999.99) {
+    return { ok: false, error: 'amount invalido.' };
+  }
+
+  if (!currencyId || currencyId < 1) {
+    return { ok: false, error: 'currencyId invalido.' };
+  }
+
+  if (!transferDate) {
+    return { ok: false, error: 'transferDate invalida. Usa YYYY-MM-DD.' };
+  }
+
+  if (!ALLOWED_TRANSFER_TYPES.has(type)) {
+    return { ok: false, error: 'type invalido.' };
+  }
+
+  if (statementId !== null && statementId < 1) {
+    return { ok: false, error: 'statementId invalido.' };
+  }
+
+  if (loanId !== null && loanId < 1) {
+    return { ok: false, error: 'loanId invalido.' };
+  }
+
+  if (type === 'loan_payment' && !loanId) {
+    return { ok: false, error: 'loanId es requerido para loan_payment.' };
+  }
+
+  if (description && description.length > 255) {
+    return { ok: false, error: 'description no puede exceder 255 caracteres.' };
+  }
+
+  if (notes && notes.length > 500) {
+    return { ok: false, error: 'notes no puede exceder 500 caracteres.' };
+  }
+
+  return {
+    ok: true,
+    value: {
+      sourceInstrumentId,
+      destinationInstrumentId,
+      amount,
+      currencyId,
+      transferDate,
+      type,
+      statementId,
+      loanId,
+      description,
+      notes,
+    },
+  };
+}
+
 function mapBank(row) {
   return {
     id: row.id,
@@ -591,6 +779,46 @@ function mapTransaction(row) {
   };
 }
 
+function mapCreditCardStatement(row) {
+  return {
+    id: row.id,
+    instrumentId: row.instrument_id,
+    instrumentName: row.instrument_name ?? null,
+    cutOffDate: row.cut_off_date,
+    paymentDueDate: row.payment_due_date,
+    totalAmount: Number(row.total_amount),
+    minimumPayment: row.minimum_payment === null ? null : Number(row.minimum_payment),
+    noInterestPayment: row.no_interest_payment === null ? null : Number(row.no_interest_payment),
+    isPaid: row.is_paid,
+    paidAmount: row.paid_amount === null ? null : Number(row.paid_amount),
+    paidDate: row.paid_date,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapTransfer(row) {
+  return {
+    id: row.id,
+    sourceInstrumentId: row.source_instrument_id,
+    sourceInstrumentName: row.source_instrument_name ?? null,
+    sourceInstrumentType: row.source_instrument_type ?? null,
+    destinationInstrumentId: row.destination_instrument_id,
+    destinationInstrumentName: row.destination_instrument_name ?? null,
+    destinationInstrumentType: row.destination_instrument_type ?? null,
+    amount: Number(row.amount),
+    currencyId: row.currency_id,
+    transferDate: row.transfer_date,
+    type: row.type,
+    statementId: row.statement_id,
+    loanId: row.loan_id,
+    description: row.description,
+    notes: row.notes,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 async function withDbTransaction(work) {
   const client = await getPool().connect();
 
@@ -631,6 +859,623 @@ function computeMsiStartDate(transactionDate, cutOffDay) {
   const nextCutOffDay = Math.min(cutOffDay, nextMonthLastDay);
 
   return `${String(nextYear).padStart(4, '0')}-${String(nextMonth).padStart(2, '0')}-${String(nextCutOffDay).padStart(2, '0')}`;
+}
+
+function addMonthsToIsoDate(dateValue, months) {
+  const date = new Date(`${dateValue}T00:00:00.000Z`);
+  date.setUTCMonth(date.getUTCMonth() + months);
+  return date.toISOString().slice(0, 10);
+}
+
+function getBoundedDayForMonth(year, month, targetDay) {
+  const monthLastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return Math.min(targetDay, monthLastDay);
+}
+
+function buildDateFromParts(year, month, day) {
+  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function computeDefaultPaymentDueDate(cutOffDate, paymentDueDay) {
+  const nextMonthDate = new Date(`${addMonthsToIsoDate(cutOffDate, 1)}T00:00:00.000Z`);
+  const year = nextMonthDate.getUTCFullYear();
+  const month = nextMonthDate.getUTCMonth() + 1;
+  const day = getBoundedDayForMonth(year, month, paymentDueDay);
+  return buildDateFromParts(year, month, day);
+}
+
+async function getCreditCardInstrumentForStatement(client, instrumentId) {
+  const result = await client.query(
+    `
+    SELECT id, type, payment_due_day, is_active
+    FROM app_gastos.financial_instruments
+    WHERE id = $1
+    FOR UPDATE
+    `,
+    [instrumentId],
+  );
+
+  const instrument = result.rows[0] ?? null;
+
+  if (!instrument || !instrument.is_active || instrument.type !== 'credit_card') {
+    return null;
+  }
+
+  return instrument;
+}
+
+async function calculateStatementTotalAmount(client, instrumentId, cutOffDate) {
+  const previousCutOffResult = await client.query(
+    `
+    SELECT MAX(cut_off_date) AS previous_cut_off_date
+    FROM app_gastos.credit_card_statements
+    WHERE instrument_id = $1
+      AND cut_off_date < $2
+    `,
+    [instrumentId, cutOffDate],
+  );
+
+  const previousCutOffDate = previousCutOffResult.rows[0]?.previous_cut_off_date
+    ? String(previousCutOffResult.rows[0].previous_cut_off_date)
+    : addMonthsToIsoDate(cutOffDate, -1);
+
+  const result = await client.query(
+    `
+    SELECT COALESCE(SUM(
+      CASE WHEN type = 'expense' THEN amount ELSE -amount END
+    ), 0) AS total
+    FROM app_gastos.transactions
+    WHERE instrument_id = $1
+      AND transaction_date > $2
+      AND transaction_date <= $3
+    `,
+    [instrumentId, previousCutOffDate, cutOffDate],
+  );
+
+  return Number(result.rows[0]?.total ?? 0);
+}
+
+async function listStatements(instrumentId) {
+  const values = [];
+  let whereClause = '';
+
+  if (instrumentId) {
+    values.push(instrumentId);
+    whereClause = 'AND s.instrument_id = $1';
+  }
+
+  const result = await query(
+    `
+    SELECT
+      s.id,
+      s.instrument_id,
+      fi.name AS instrument_name,
+      s.cut_off_date,
+      s.payment_due_date,
+      s.total_amount,
+      s.minimum_payment,
+      s.no_interest_payment,
+      s.is_paid,
+      s.paid_amount,
+      s.paid_date,
+      s.created_at,
+      s.updated_at
+    FROM app_gastos.credit_card_statements s
+    INNER JOIN app_gastos.financial_instruments fi ON fi.id = s.instrument_id
+    WHERE fi.is_active = TRUE
+      AND fi.type = 'credit_card'
+      ${whereClause}
+    ORDER BY s.cut_off_date DESC, s.id DESC
+    `,
+    values,
+  );
+
+  return result.rows.map(mapCreditCardStatement);
+}
+
+async function createStatement(payload) {
+  return withDbTransaction(async (client) => {
+    const instrument = await getCreditCardInstrumentForStatement(client, payload.instrumentId);
+
+    if (!instrument) {
+      return { error: 'Tarjeta de credito no encontrada o inactiva.', data: null };
+    }
+
+    const totalAmount = await calculateStatementTotalAmount(client, payload.instrumentId, payload.cutOffDate);
+    const minimumPayment = payload.minimumPayment ?? Math.max(0, Number((totalAmount * 0.1).toFixed(2)));
+    const noInterestPayment = payload.noInterestPayment ?? Math.max(0, totalAmount);
+    const paymentDueDate = payload.paymentDueDate ?? computeDefaultPaymentDueDate(payload.cutOffDate, instrument.payment_due_day ?? 1);
+
+    const insertResult = await client.query(
+      `
+      INSERT INTO app_gastos.credit_card_statements (
+        instrument_id,
+        cut_off_date,
+        payment_due_date,
+        total_amount,
+        minimum_payment,
+        no_interest_payment,
+        is_paid,
+        paid_amount,
+        paid_date
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, FALSE, NULL, NULL)
+      RETURNING id
+      `,
+      [
+        payload.instrumentId,
+        payload.cutOffDate,
+        paymentDueDate,
+        totalAmount,
+        minimumPayment,
+        noInterestPayment,
+      ],
+    );
+
+    const createdId = insertResult.rows[0]?.id;
+    const fullResult = await client.query(
+      `
+      SELECT
+        s.id,
+        s.instrument_id,
+        fi.name AS instrument_name,
+        s.cut_off_date,
+        s.payment_due_date,
+        s.total_amount,
+        s.minimum_payment,
+        s.no_interest_payment,
+        s.is_paid,
+        s.paid_amount,
+        s.paid_date,
+        s.created_at,
+        s.updated_at
+      FROM app_gastos.credit_card_statements s
+      INNER JOIN app_gastos.financial_instruments fi ON fi.id = s.instrument_id
+      WHERE s.id = $1
+      `,
+      [createdId],
+    );
+
+    return { error: null, data: mapCreditCardStatement(fullResult.rows[0]) };
+  });
+}
+
+async function updateStatement(statementId, payload) {
+  return withDbTransaction(async (client) => {
+    const previousResult = await client.query(
+      `
+      SELECT id, total_amount, minimum_payment, no_interest_payment, is_paid, paid_amount, paid_date, payment_due_date
+      FROM app_gastos.credit_card_statements
+      WHERE id = $1
+      FOR UPDATE
+      `,
+      [statementId],
+    );
+
+    if (previousResult.rows.length === 0) {
+      return { notFound: true, data: null };
+    }
+
+    const previous = previousResult.rows[0];
+    const isPaid = payload.isPaid === null ? previous.is_paid : payload.isPaid;
+    const paidAmount = payload.paidAmount === null
+      ? (isPaid ? Number(previous.total_amount) : null)
+      : payload.paidAmount;
+    const paidDate = payload.paidDate === null
+      ? (isPaid ? normalizeNullableDate(new Date().toISOString().slice(0, 10)) : null)
+      : payload.paidDate;
+
+    await client.query(
+      `
+      UPDATE app_gastos.credit_card_statements
+      SET payment_due_date = COALESCE($1, payment_due_date),
+          minimum_payment = COALESCE($2, minimum_payment),
+          no_interest_payment = COALESCE($3, no_interest_payment),
+          is_paid = $4,
+          paid_amount = $5,
+          paid_date = $6,
+          updated_at = NOW()
+      WHERE id = $7
+      `,
+      [
+        payload.paymentDueDate,
+        payload.minimumPayment,
+        payload.noInterestPayment,
+        isPaid,
+        paidAmount,
+        paidDate,
+        statementId,
+      ],
+    );
+
+    const fullResult = await client.query(
+      `
+      SELECT
+        s.id,
+        s.instrument_id,
+        fi.name AS instrument_name,
+        s.cut_off_date,
+        s.payment_due_date,
+        s.total_amount,
+        s.minimum_payment,
+        s.no_interest_payment,
+        s.is_paid,
+        s.paid_amount,
+        s.paid_date,
+        s.created_at,
+        s.updated_at
+      FROM app_gastos.credit_card_statements s
+      INNER JOIN app_gastos.financial_instruments fi ON fi.id = s.instrument_id
+      WHERE s.id = $1
+      `,
+      [statementId],
+    );
+
+    return { notFound: false, data: mapCreditCardStatement(fullResult.rows[0]) };
+  });
+}
+
+async function deleteStatement(statementId) {
+  const result = await query(
+    `
+    DELETE FROM app_gastos.credit_card_statements
+    WHERE id = $1
+    RETURNING id
+    `,
+    [statementId],
+  );
+
+  return result.rows.length > 0;
+}
+
+async function validateTransferReferences(client, payload) {
+  const currencyResult = await client.query('SELECT id FROM app_gastos.currencies WHERE id = $1', [payload.currencyId]);
+
+  if (currencyResult.rows.length === 0) {
+    return { ok: false, error: 'currencyId no existe.' };
+  }
+
+  const source = await getInstrumentForUpdate(client, payload.sourceInstrumentId);
+  const destination = await getInstrumentForUpdate(client, payload.destinationInstrumentId);
+
+  if (!source || !source.is_active) {
+    return { ok: false, error: 'Instrumento origen no encontrado o inactivo.' };
+  }
+
+  if (!destination || !destination.is_active) {
+    return { ok: false, error: 'Instrumento destino no encontrado o inactivo.' };
+  }
+
+  if (source.type === 'credit_card') {
+    return { ok: false, error: 'El instrumento origen no puede ser tarjeta de credito.' };
+  }
+
+  if (payload.type === 'card_payment' && destination.type !== 'credit_card') {
+    return { ok: false, error: 'card_payment requiere destino de tipo credit_card.' };
+  }
+
+  if (payload.type === 'inter_account' && destination.type === 'credit_card') {
+    return { ok: false, error: 'inter_account no permite destino credit_card.' };
+  }
+
+  if (payload.statementId) {
+    const statementResult = await client.query(
+      `
+      SELECT id, instrument_id
+      FROM app_gastos.credit_card_statements
+      WHERE id = $1
+      `,
+      [payload.statementId],
+    );
+
+    if (statementResult.rows.length === 0) {
+      return { ok: false, error: 'statementId no existe.' };
+    }
+
+    const statementInstrumentId = Number(statementResult.rows[0].instrument_id);
+    if (statementInstrumentId !== destination.id) {
+      return { ok: false, error: 'statementId debe pertenecer al instrumento destino.' };
+    }
+  }
+
+  if (payload.loanId) {
+    const loanResult = await client.query('SELECT id FROM app_gastos.loans WHERE id = $1', [payload.loanId]);
+    if (loanResult.rows.length === 0) {
+      return { ok: false, error: 'loanId no existe.' };
+    }
+  }
+
+  if (payload.amount > Number(source.current_amount ?? 0)) {
+    return { ok: false, error: 'Saldo insuficiente en instrumento origen.' };
+  }
+
+  return { ok: true, source, destination };
+}
+
+async function applyTransferImpact(client, source, destination, amount, direction) {
+  const signedAmount = direction === 'apply' ? amount : -amount;
+
+  await client.query(
+    `
+    UPDATE app_gastos.financial_instruments
+    SET current_amount = COALESCE(current_amount, 0) - $1,
+        updated_at = NOW()
+    WHERE id = $2
+    `,
+    [signedAmount, source.id],
+  );
+
+  if (destination.type === 'credit_card') {
+    await client.query(
+      `
+      UPDATE app_gastos.financial_instruments
+      SET current_balance = COALESCE(current_balance, 0) - $1,
+          available_credit = COALESCE(credit_limit, 0) - (COALESCE(current_balance, 0) - $1),
+          updated_at = NOW()
+      WHERE id = $2
+      `,
+      [signedAmount, destination.id],
+    );
+    return;
+  }
+
+  await client.query(
+    `
+    UPDATE app_gastos.financial_instruments
+    SET current_amount = COALESCE(current_amount, 0) + $1,
+        updated_at = NOW()
+    WHERE id = $2
+    `,
+    [signedAmount, destination.id],
+  );
+}
+
+async function listTransfers(instrumentId) {
+  const values = [];
+  let whereClause = '';
+
+  if (instrumentId) {
+    values.push(instrumentId);
+    whereClause = `
+      AND (t.source_instrument_id = $1 OR t.destination_instrument_id = $1)
+    `;
+  }
+
+  const result = await query(
+    `
+    SELECT
+      t.id,
+      t.source_instrument_id,
+      src.name AS source_instrument_name,
+      src.type AS source_instrument_type,
+      t.destination_instrument_id,
+      dst.name AS destination_instrument_name,
+      dst.type AS destination_instrument_type,
+      t.amount,
+      t.currency_id,
+      t.transfer_date,
+      t.type,
+      t.statement_id,
+      t.loan_id,
+      t.description,
+      t.notes,
+      t.created_at,
+      t.updated_at
+    FROM app_gastos.transfers t
+    INNER JOIN app_gastos.financial_instruments src ON src.id = t.source_instrument_id
+    INNER JOIN app_gastos.financial_instruments dst ON dst.id = t.destination_instrument_id
+    WHERE src.is_active = TRUE
+      AND dst.is_active = TRUE
+      ${whereClause}
+    ORDER BY t.transfer_date DESC, t.id DESC
+    `,
+    values,
+  );
+
+  return result.rows.map(mapTransfer);
+}
+
+async function createTransfer(payload) {
+  return withDbTransaction(async (client) => {
+    const references = await validateTransferReferences(client, payload);
+
+    if (!references.ok) {
+      return { error: references.error, data: null };
+    }
+
+    await applyTransferImpact(client, references.source, references.destination, payload.amount, 'apply');
+
+    const insertResult = await client.query(
+      `
+      INSERT INTO app_gastos.transfers (
+        source_instrument_id,
+        destination_instrument_id,
+        amount,
+        currency_id,
+        transfer_date,
+        type,
+        statement_id,
+        loan_id,
+        description,
+        notes
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      RETURNING id
+      `,
+      [
+        payload.sourceInstrumentId,
+        payload.destinationInstrumentId,
+        payload.amount,
+        payload.currencyId,
+        payload.transferDate,
+        payload.type,
+        payload.statementId,
+        payload.loanId,
+        payload.description,
+        payload.notes,
+      ],
+    );
+
+    const createdId = insertResult.rows[0]?.id;
+    const fullResult = await client.query(
+      `
+      SELECT
+        t.id,
+        t.source_instrument_id,
+        src.name AS source_instrument_name,
+        src.type AS source_instrument_type,
+        t.destination_instrument_id,
+        dst.name AS destination_instrument_name,
+        dst.type AS destination_instrument_type,
+        t.amount,
+        t.currency_id,
+        t.transfer_date,
+        t.type,
+        t.statement_id,
+        t.loan_id,
+        t.description,
+        t.notes,
+        t.created_at,
+        t.updated_at
+      FROM app_gastos.transfers t
+      INNER JOIN app_gastos.financial_instruments src ON src.id = t.source_instrument_id
+      INNER JOIN app_gastos.financial_instruments dst ON dst.id = t.destination_instrument_id
+      WHERE t.id = $1
+      `,
+      [createdId],
+    );
+
+    return { error: null, data: mapTransfer(fullResult.rows[0]) };
+  });
+}
+
+async function updateTransfer(transferId, payload) {
+  return withDbTransaction(async (client) => {
+    const previousResult = await client.query(
+      `
+      SELECT id, source_instrument_id, destination_instrument_id, amount
+      FROM app_gastos.transfers
+      WHERE id = $1
+      FOR UPDATE
+      `,
+      [transferId],
+    );
+
+    if (previousResult.rows.length === 0) {
+      return { notFound: true, error: null, data: null };
+    }
+
+    const previous = previousResult.rows[0];
+    const previousSource = await getInstrumentForUpdate(client, previous.source_instrument_id);
+    const previousDestination = await getInstrumentForUpdate(client, previous.destination_instrument_id);
+
+    if (!previousSource || !previousDestination) {
+      return { notFound: true, error: null, data: null };
+    }
+
+    await applyTransferImpact(client, previousSource, previousDestination, Number(previous.amount), 'revert');
+
+    const references = await validateTransferReferences(client, payload);
+    if (!references.ok) {
+      await applyTransferImpact(client, previousSource, previousDestination, Number(previous.amount), 'apply');
+      return { notFound: false, error: references.error, data: null };
+    }
+
+    await applyTransferImpact(client, references.source, references.destination, payload.amount, 'apply');
+
+    await client.query(
+      `
+      UPDATE app_gastos.transfers
+      SET source_instrument_id = $1,
+          destination_instrument_id = $2,
+          amount = $3,
+          currency_id = $4,
+          transfer_date = $5,
+          type = $6,
+          statement_id = $7,
+          loan_id = $8,
+          description = $9,
+          notes = $10,
+          updated_at = NOW()
+      WHERE id = $11
+      `,
+      [
+        payload.sourceInstrumentId,
+        payload.destinationInstrumentId,
+        payload.amount,
+        payload.currencyId,
+        payload.transferDate,
+        payload.type,
+        payload.statementId,
+        payload.loanId,
+        payload.description,
+        payload.notes,
+        transferId,
+      ],
+    );
+
+    const fullResult = await client.query(
+      `
+      SELECT
+        t.id,
+        t.source_instrument_id,
+        src.name AS source_instrument_name,
+        src.type AS source_instrument_type,
+        t.destination_instrument_id,
+        dst.name AS destination_instrument_name,
+        dst.type AS destination_instrument_type,
+        t.amount,
+        t.currency_id,
+        t.transfer_date,
+        t.type,
+        t.statement_id,
+        t.loan_id,
+        t.description,
+        t.notes,
+        t.created_at,
+        t.updated_at
+      FROM app_gastos.transfers t
+      INNER JOIN app_gastos.financial_instruments src ON src.id = t.source_instrument_id
+      INNER JOIN app_gastos.financial_instruments dst ON dst.id = t.destination_instrument_id
+      WHERE t.id = $1
+      `,
+      [transferId],
+    );
+
+    return { notFound: false, error: null, data: mapTransfer(fullResult.rows[0]) };
+  });
+}
+
+async function deleteTransfer(transferId) {
+  return withDbTransaction(async (client) => {
+    const previousResult = await client.query(
+      `
+      SELECT id, source_instrument_id, destination_instrument_id, amount
+      FROM app_gastos.transfers
+      WHERE id = $1
+      FOR UPDATE
+      `,
+      [transferId],
+    );
+
+    if (previousResult.rows.length === 0) {
+      return { deleted: false };
+    }
+
+    const previous = previousResult.rows[0];
+    const previousSource = await getInstrumentForUpdate(client, previous.source_instrument_id);
+    const previousDestination = await getInstrumentForUpdate(client, previous.destination_instrument_id);
+
+    if (!previousSource || !previousDestination) {
+      return { deleted: false };
+    }
+
+    await applyTransferImpact(client, previousSource, previousDestination, Number(previous.amount), 'revert');
+
+    await client.query('DELETE FROM app_gastos.transfers WHERE id = $1', [transferId]);
+
+    return { deleted: true };
+  });
 }
 
 async function getInstrumentForUpdate(client, instrumentId) {
@@ -1852,6 +2697,140 @@ async function handleTransactionsRoute(method, path, event) {
   return null;
 }
 
+async function handleStatementsRoute(method, path, event) {
+  const { id } = parsePathParameters(path);
+
+  if (method === 'GET' && id === null) {
+    const instrumentIdRaw = getQueryParam(event, 'instrument_id');
+    const instrumentId = instrumentIdRaw ? parseInteger(instrumentIdRaw) : null;
+
+    if (instrumentIdRaw && !instrumentId) {
+      return jsonResponse(400, { success: false, error: 'instrument_id invalido.' });
+    }
+
+    const data = await listStatements(instrumentId);
+    return jsonResponse(200, { success: true, data });
+  }
+
+  if (method === 'POST' && id === null) {
+    const bodyResult = parseJsonBody(event);
+    if (!bodyResult.ok) {
+      return jsonResponse(400, { success: false, error: bodyResult.error });
+    }
+
+    const validated = validateStatementPayload(bodyResult.value);
+    if (!validated.ok) {
+      return jsonResponse(400, { success: false, error: validated.error });
+    }
+
+    const created = await createStatement(validated.value);
+    if (created.error) {
+      return jsonResponse(400, { success: false, error: created.error });
+    }
+
+    return jsonResponse(201, { success: true, data: created.data });
+  }
+
+  if (method === 'PUT' && id !== null) {
+    const bodyResult = parseJsonBody(event);
+    if (!bodyResult.ok) {
+      return jsonResponse(400, { success: false, error: bodyResult.error });
+    }
+
+    const validated = validateStatementUpdatePayload(bodyResult.value);
+    if (!validated.ok) {
+      return jsonResponse(400, { success: false, error: validated.error });
+    }
+
+    const updated = await updateStatement(id, validated.value);
+    if (updated.notFound) {
+      return jsonResponse(404, { success: false, error: 'Estado de cuenta no encontrado.' });
+    }
+
+    return jsonResponse(200, { success: true, data: updated.data });
+  }
+
+  if (method === 'DELETE' && id !== null) {
+    const deleted = await deleteStatement(id);
+    if (!deleted) {
+      return jsonResponse(404, { success: false, error: 'Estado de cuenta no encontrado.' });
+    }
+
+    return jsonResponse(200, { success: true, data: { id } });
+  }
+
+  return null;
+}
+
+async function handleTransfersRoute(method, path, event) {
+  const { id } = parsePathParameters(path);
+
+  if (method === 'GET' && id === null) {
+    const instrumentIdRaw = getQueryParam(event, 'instrument_id');
+    const instrumentId = instrumentIdRaw ? parseInteger(instrumentIdRaw) : null;
+
+    if (instrumentIdRaw && !instrumentId) {
+      return jsonResponse(400, { success: false, error: 'instrument_id invalido.' });
+    }
+
+    const data = await listTransfers(instrumentId);
+    return jsonResponse(200, { success: true, data });
+  }
+
+  if (method === 'POST' && id === null) {
+    const bodyResult = parseJsonBody(event);
+    if (!bodyResult.ok) {
+      return jsonResponse(400, { success: false, error: bodyResult.error });
+    }
+
+    const validated = validateTransferPayload(bodyResult.value);
+    if (!validated.ok) {
+      return jsonResponse(400, { success: false, error: validated.error });
+    }
+
+    const created = await createTransfer(validated.value);
+    if (created.error) {
+      return jsonResponse(400, { success: false, error: created.error });
+    }
+
+    return jsonResponse(201, { success: true, data: created.data });
+  }
+
+  if (method === 'PUT' && id !== null) {
+    const bodyResult = parseJsonBody(event);
+    if (!bodyResult.ok) {
+      return jsonResponse(400, { success: false, error: bodyResult.error });
+    }
+
+    const validated = validateTransferPayload(bodyResult.value);
+    if (!validated.ok) {
+      return jsonResponse(400, { success: false, error: validated.error });
+    }
+
+    const updated = await updateTransfer(id, validated.value);
+    if (updated.notFound) {
+      return jsonResponse(404, { success: false, error: 'Transferencia no encontrada.' });
+    }
+
+    if (updated.error) {
+      return jsonResponse(400, { success: false, error: updated.error });
+    }
+
+    return jsonResponse(200, { success: true, data: updated.data });
+  }
+
+  if (method === 'DELETE' && id !== null) {
+    const deleted = await deleteTransfer(id);
+    if (!deleted.deleted) {
+      return jsonResponse(404, { success: false, error: 'Transferencia no encontrada.' });
+    }
+
+    return jsonResponse(200, { success: true, data: { id } });
+  }
+
+  return null;
+}
+
 export async function handler(event) {
   if (event.requestContext?.http?.method === 'OPTIONS' || event.httpMethod === 'OPTIONS') {
     return jsonResponse(204, { success: true });
@@ -1936,6 +2915,20 @@ export async function handler(event) {
 
     if (resource === 'transactions') {
       const response = await handleTransactionsRoute(method, path, event);
+      if (response) {
+        return response;
+      }
+    }
+
+    if (resource === 'statements') {
+      const response = await handleStatementsRoute(method, path, event);
+      if (response) {
+        return response;
+      }
+    }
+
+    if (resource === 'transfers') {
+      const response = await handleTransfersRoute(method, path, event);
       if (response) {
         return response;
       }

@@ -1,6 +1,7 @@
 export type InstrumentType = 'credit_card' | 'debit_card' | 'account'
 export type CategoryType = 'expense' | 'income' | 'both'
 export type TransactionType = 'expense' | 'income'
+export type TransferType = 'card_payment' | 'inter_account' | 'loan_payment' | 'other'
 
 export interface Bank {
   id: number
@@ -144,4 +145,70 @@ export interface TransactionFilters {
   instrumentId?: number
   type?: TransactionType
   search?: string
+}
+
+export interface CreditCardStatement {
+  id: number
+  instrumentId: number
+  instrumentName: string | null
+  cutOffDate: string
+  paymentDueDate: string
+  totalAmount: number
+  minimumPayment: number | null
+  noInterestPayment: number | null
+  isPaid: boolean
+  paidAmount: number | null
+  paidDate: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreditCardStatementInput {
+  instrumentId: number
+  cutOffDate: string
+  paymentDueDate: string
+  minimumPayment: number | null
+  noInterestPayment: number | null
+}
+
+export interface CreditCardStatementUpdateInput {
+  paymentDueDate: string
+  minimumPayment: number | null
+  noInterestPayment: number | null
+  isPaid: boolean | null
+  paidAmount: number | null
+  paidDate: string
+}
+
+export interface Transfer {
+  id: number
+  sourceInstrumentId: number
+  sourceInstrumentName: string | null
+  sourceInstrumentType: InstrumentType | null
+  destinationInstrumentId: number
+  destinationInstrumentName: string | null
+  destinationInstrumentType: InstrumentType | null
+  amount: number
+  currencyId: number
+  transferDate: string
+  type: TransferType
+  statementId: number | null
+  loanId: number | null
+  description: string | null
+  notes: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface TransferInput {
+  sourceInstrumentId: number
+  destinationInstrumentId: number
+  amount: number
+  currencyId: number
+  transferDate: string
+  type: TransferType
+  statementId: number | null
+  loanId: number | null
+  description: string
+  notes: string
 }

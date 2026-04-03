@@ -289,6 +289,10 @@
   margin-top: var(--space-2);
 }
 
+.statement-edit-form {
+  margin-top: var(--space-2);
+}
+
 .badge {
   display: inline-flex;
   align-items: center;

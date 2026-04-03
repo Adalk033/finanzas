@@ -5,10 +5,15 @@ import type {
   BankInput,
   Category,
   CategoryInput,
+  CreditCardStatement,
+  CreditCardStatementInput,
+  CreditCardStatementUpdateInput,
   FinancialInstrument,
   FinancialInstrumentInput,
   Subcategory,
   SubcategoryInput,
+  Transfer,
+  TransferInput,
   Transaction,
   TransactionFilters,
   TransactionInput,
@@ -127,6 +132,51 @@ function sanitizeSubcategoryPayload(payload: SubcategoryInput): Omit<Subcategory
 }
 
 function sanitizeTransactionPayload(payload: TransactionInput): Omit<TransactionInput, 'description' | 'notes'> & {
+  description: string | null
+  notes: string | null
+} {
+  return {
+    ...payload,
+    description: payload.description.trim() || null,
+    notes: payload.notes.trim() || null,
+  }
+}
+
+function sanitizeStatementPayload(payload: CreditCardStatementInput): {
+  instrumentId: number
+  cutOffDate: string
+  paymentDueDate: string | null
+  minimumPayment: number | null
+  noInterestPayment: number | null
+} {
+  return {
+    instrumentId: payload.instrumentId,
+    cutOffDate: payload.cutOffDate,
+    paymentDueDate: payload.paymentDueDate.trim() || null,
+    minimumPayment: payload.minimumPayment,
+    noInterestPayment: payload.noInterestPayment,
+  }
+}
+
+function sanitizeStatementUpdatePayload(payload: CreditCardStatementUpdateInput): {
+  paymentDueDate: string | null
+  minimumPayment: number | null
+  noInterestPayment: number | null
+  isPaid: boolean | null
+  paidAmount: number | null
+  paidDate: string | null
+} {
+  return {
+    paymentDueDate: payload.paymentDueDate.trim() || null,
+    minimumPayment: payload.minimumPayment,
+    noInterestPayment: payload.noInterestPayment,
+    isPaid: payload.isPaid,
+    paidAmount: payload.paidAmount,
+    paidDate: payload.paidDate.trim() || null,
+  }
+}
+
+function sanitizeTransferPayload(payload: TransferInput): Omit<TransferInput, 'description' | 'notes'> & {
   description: string | null
   notes: string | null
 } {
@@ -261,6 +311,48 @@ export const apiClient = {
     }),
   deleteTransaction: (id: number) =>
     request<{ id: number }>(`${ENDPOINTS.TRANSACTIONS}/${id}`, {
+      method: 'DELETE',
+    }),
+  getStatements: (instrumentId?: number) => {
+    if (!instrumentId) {
+      return request<CreditCardStatement[]>(ENDPOINTS.STATEMENTS, { method: 'GET' })
+    }
+
+    return request<CreditCardStatement[]>(`${ENDPOINTS.STATEMENTS}?instrument_id=${instrumentId}`, { method: 'GET' })
+  },
+  createStatement: (payload: CreditCardStatementInput) =>
+    request<CreditCardStatement>(ENDPOINTS.STATEMENTS, {
+      method: 'POST',
+      body: JSON.stringify(sanitizeStatementPayload(payload)),
+    }),
+  updateStatement: (id: number, payload: CreditCardStatementUpdateInput) =>
+    request<CreditCardStatement>(`${ENDPOINTS.STATEMENTS}/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(sanitizeStatementUpdatePayload(payload)),
+    }),
+  deleteStatement: (id: number) =>
+    request<{ id: number }>(`${ENDPOINTS.STATEMENTS}/${id}`, {
+      method: 'DELETE',
+    }),
+  getTransfers: (instrumentId?: number) => {
+    if (!instrumentId) {
+      return request<Transfer[]>(ENDPOINTS.TRANSFERS, { method: 'GET' })
+    }
+
+    return request<Transfer[]>(`${ENDPOINTS.TRANSFERS}?instrument_id=${instrumentId}`, { method: 'GET' })
+  },
+  createTransfer: (payload: TransferInput) =>
+    request<Transfer>(ENDPOINTS.TRANSFERS, {
+      method: 'POST',
+      body: JSON.stringify(sanitizeTransferPayload(payload)),
+    }),
+  updateTransfer: (id: number, payload: TransferInput) =>
+    request<Transfer>(`${ENDPOINTS.TRANSFERS}/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(sanitizeTransferPayload(payload)),
+    }),
+  deleteTransfer: (id: number) =>
+    request<{ id: number }>(`${ENDPOINTS.TRANSFERS}/${id}`, {
       method: 'DELETE',
     }),
 }

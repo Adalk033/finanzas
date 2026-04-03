@@ -8,18 +8,24 @@ import type {
   Category,
   CategoryInput,
   CategoryType,
+  CreditCardStatement,
+  CreditCardStatementInput,
+  CreditCardStatementUpdateInput,
   FinancialInstrument,
   FinancialInstrumentInput,
   InstrumentType,
   Subcategory,
   SubcategoryInput,
+  Transfer,
+  TransferInput,
+  TransferType,
   Transaction,
   TransactionFilters,
   TransactionInput,
   TransactionType,
 } from './types/domain'
 
-type AppSection = 'settings' | 'banks' | 'instruments' | 'categories' | 'transactions'
+type AppSection = 'settings' | 'banks' | 'instruments' | 'categories' | 'transactions' | 'creditCards'
 
 const EMPTY_BANK_FORM: BankInput = {
   name: '',
@@ -84,6 +90,36 @@ const EMPTY_TRANSACTION_FILTERS: TransactionFilters = {
   instrumentId: undefined,
   type: undefined,
   search: '',
+}
+
+const EMPTY_STATEMENT_FORM: CreditCardStatementInput = {
+  instrumentId: 0,
+  cutOffDate: TODAY_ISO,
+  paymentDueDate: '',
+  minimumPayment: null,
+  noInterestPayment: null,
+}
+
+const EMPTY_STATEMENT_UPDATE_FORM: CreditCardStatementUpdateInput = {
+  paymentDueDate: '',
+  minimumPayment: null,
+  noInterestPayment: null,
+  isPaid: null,
+  paidAmount: null,
+  paidDate: '',
+}
+
+const EMPTY_TRANSFER_FORM: TransferInput = {
+  sourceInstrumentId: 0,
+  destinationInstrumentId: 0,
+  amount: 0,
+  currencyId: 1,
+  transferDate: TODAY_ISO,
+  type: 'card_payment',
+  statementId: null,
+  loanId: null,
+  description: '',
+  notes: '',
 }
 
 const MSI_OPTIONS = [3, 6, 9, 12, 18, 24]
@@ -209,6 +245,20 @@ export function App() {
   const [transactionForm, setTransactionForm] = useState<TransactionInput>(EMPTY_TRANSACTION_FORM)
   const [transactionFilters, setTransactionFilters] = useState<TransactionFilters>(EMPTY_TRANSACTION_FILTERS)
 
+  const [statements, setStatements] = useState<CreditCardStatement[]>([])
+  const [isStatementsLoading, setIsStatementsLoading] = useState(false)
+  const [statementMessage, setStatementMessage] = useState('')
+  const [statementError, setStatementError] = useState('')
+  const [statementForm, setStatementForm] = useState<CreditCardStatementInput>(EMPTY_STATEMENT_FORM)
+  const [editingStatementId, setEditingStatementId] = useState<number | null>(null)
+  const [statementUpdateForm, setStatementUpdateForm] = useState<CreditCardStatementUpdateInput>(EMPTY_STATEMENT_UPDATE_FORM)
+
+  const [transfers, setTransfers] = useState<Transfer[]>([])
+  const [isTransfersLoading, setIsTransfersLoading] = useState(false)
+  const [transferMessage, setTransferMessage] = useState('')
+  const [transferError, setTransferError] = useState('')
+  const [transferForm, setTransferForm] = useState<TransferInput>(EMPTY_TRANSFER_FORM)
+
   const hasConfig = Boolean(config.apiKey.trim() && config.apiEndpoint.trim() && config.awsRegion.trim())
 
   const banksById = useMemo(() => {
@@ -253,6 +303,33 @@ export function App() {
   const activeMsiTransactions = useMemo(() => {
     return transactions.filter((transaction) => transaction.isMsi && (transaction.msiRemaining ?? 0) > 0)
   }, [transactions])
+
+  const creditCardInstruments = useMemo(() => {
+    return instruments.filter((instrument) => instrument.type === 'credit_card')
+  }, [instruments])
+
+  const sourceTransferInstruments = useMemo(() => {
+    return instruments.filter((instrument) => instrument.type !== 'credit_card')
+  }, [instruments])
+
+  const selectedStatementInstrumentId = statementForm.instrumentId === 0 ? (creditCardInstruments[0]?.id ?? 0) : statementForm.instrumentId
+  const selectedTransferSourceInstrumentId = transferForm.sourceInstrumentId === 0 ? (sourceTransferInstruments[0]?.id ?? 0) : transferForm.sourceInstrumentId
+  const selectedTransferDestinationInstrumentId = transferForm.destinationInstrumentId === 0 ? (creditCardInstruments[0]?.id ?? 0) : transferForm.destinationInstrumentId
+  const selectedTransferType = transferForm.type
+
+  const availableTransferDestinations = useMemo(() => {
+    const sourceId = selectedTransferSourceInstrumentId
+
+    if (selectedTransferType === 'card_payment') {
+      return creditCardInstruments.filter((instrument) => instrument.id !== sourceId)
+    }
+
+    if (selectedTransferType === 'inter_account') {
+      return sourceTransferInstruments.filter((instrument) => instrument.id !== sourceId)
+    }
+
+    return instruments.filter((instrument) => instrument.id !== sourceId)
+  }, [creditCardInstruments, instruments, selectedTransferSourceInstrumentId, selectedTransferType, sourceTransferInstruments])
 
   const loadBanks = async (): Promise<void> => {
     setIsBanksLoading(true)
@@ -316,6 +393,38 @@ export function App() {
 
     setTransactions(result.data ?? [])
     setIsTransactionsLoading(false)
+  }
+
+  const loadStatements = async (): Promise<void> => {
+    setIsStatementsLoading(true)
+    setStatementError('')
+
+    const result = await apiClient.getStatements()
+
+    if (!result.success) {
+      setStatementError(result.error ?? 'No se pudieron cargar los estados de cuenta.')
+      setIsStatementsLoading(false)
+      return
+    }
+
+    setStatements(result.data ?? [])
+    setIsStatementsLoading(false)
+  }
+
+  const loadTransfers = async (): Promise<void> => {
+    setIsTransfersLoading(true)
+    setTransferError('')
+
+    const result = await apiClient.getTransfers()
+
+    if (!result.success) {
+      setTransferError(result.error ?? 'No se pudieron cargar las transferencias.')
+      setIsTransfersLoading(false)
+      return
+    }
+
+    setTransfers(result.data ?? [])
+    setIsTransfersLoading(false)
   }
 
   const selectedBankId = instrumentForm.bankId === 0 ? (banks[0]?.id ?? 0) : instrumentForm.bankId
@@ -455,6 +564,13 @@ export function App() {
       void loadCategories()
       void loadInstruments()
       void loadTransactions()
+      return
+    }
+
+    if (nextSection === 'creditCards') {
+      void loadInstruments()
+      void loadStatements()
+      void loadTransfers()
     }
   }
 
@@ -722,6 +838,174 @@ export function App() {
     await loadTransactions(EMPTY_TRANSACTION_FILTERS)
   }
 
+  const resetStatementForm = (): void => {
+    setStatementForm({
+      ...EMPTY_STATEMENT_FORM,
+      instrumentId: creditCardInstruments[0]?.id ?? 0,
+    })
+  }
+
+  const resetStatementUpdateForm = (): void => {
+    setEditingStatementId(null)
+    setStatementUpdateForm(EMPTY_STATEMENT_UPDATE_FORM)
+  }
+
+  const handleStatementSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault()
+    setStatementError('')
+    setStatementMessage('')
+
+    const payload: CreditCardStatementInput = {
+      ...statementForm,
+      instrumentId: selectedStatementInstrumentId,
+      paymentDueDate: statementForm.paymentDueDate.trim(),
+    }
+
+    if (payload.instrumentId < 1) {
+      setStatementError('Selecciona una tarjeta de credito valida.')
+      return
+    }
+
+    if (!payload.cutOffDate) {
+      setStatementError('Selecciona una fecha de corte valida.')
+      return
+    }
+
+    const created = await apiClient.createStatement(payload)
+
+    if (!created.success) {
+      setStatementError(created.error ?? 'No se pudo crear el estado de cuenta.')
+      return
+    }
+
+    setStatementMessage('Estado de cuenta creado correctamente.')
+    resetStatementForm()
+    await loadStatements()
+  }
+
+  const startStatementEdit = (statement: CreditCardStatement): void => {
+    setEditingStatementId(statement.id)
+    setStatementUpdateForm({
+      paymentDueDate: statement.paymentDueDate,
+      minimumPayment: statement.minimumPayment,
+      noInterestPayment: statement.noInterestPayment,
+      isPaid: statement.isPaid,
+      paidAmount: statement.paidAmount,
+      paidDate: statement.paidDate ?? '',
+    })
+  }
+
+  const handleStatementUpdate = async (): Promise<void> => {
+    if (editingStatementId === null) {
+      return
+    }
+
+    setStatementError('')
+    setStatementMessage('')
+
+    const updated = await apiClient.updateStatement(editingStatementId, statementUpdateForm)
+
+    if (!updated.success) {
+      setStatementError(updated.error ?? 'No se pudo actualizar el estado de cuenta.')
+      return
+    }
+
+    setStatementMessage('Estado de cuenta actualizado correctamente.')
+    resetStatementUpdateForm()
+    await loadStatements()
+  }
+
+  const handleStatementDelete = async (id: number): Promise<void> => {
+    setStatementError('')
+    setStatementMessage('')
+
+    const deleted = await apiClient.deleteStatement(id)
+
+    if (!deleted.success) {
+      setStatementError(deleted.error ?? 'No se pudo eliminar el estado de cuenta.')
+      return
+    }
+
+    setStatementMessage('Estado de cuenta eliminado correctamente.')
+    if (editingStatementId === id) {
+      resetStatementUpdateForm()
+    }
+    await loadStatements()
+  }
+
+  const resetTransferForm = (): void => {
+    setTransferForm({
+      ...EMPTY_TRANSFER_FORM,
+      sourceInstrumentId: sourceTransferInstruments[0]?.id ?? 0,
+      destinationInstrumentId: creditCardInstruments[0]?.id ?? 0,
+    })
+  }
+
+  const handleTransferTypeChange = (nextType: TransferType): void => {
+    setTransferForm((previous) => ({
+      ...previous,
+      type: nextType,
+      statementId: nextType === 'card_payment' ? previous.statementId : null,
+    }))
+  }
+
+  const handleTransferSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault()
+    setTransferError('')
+    setTransferMessage('')
+
+    const payload: TransferInput = {
+      ...transferForm,
+      sourceInstrumentId: selectedTransferSourceInstrumentId,
+      destinationInstrumentId: selectedTransferDestinationInstrumentId,
+      description: transferForm.description.trim(),
+      notes: transferForm.notes.trim(),
+    }
+
+    if (payload.sourceInstrumentId < 1 || payload.destinationInstrumentId < 1) {
+      setTransferError('Selecciona instrumentos validos para la transferencia.')
+      return
+    }
+
+    if (payload.sourceInstrumentId === payload.destinationInstrumentId) {
+      setTransferError('El origen y destino deben ser distintos.')
+      return
+    }
+
+    if (payload.amount <= 0) {
+      setTransferError('Ingresa un monto mayor a cero.')
+      return
+    }
+
+    const created = await apiClient.createTransfer(payload)
+
+    if (!created.success) {
+      setTransferError(created.error ?? 'No se pudo crear la transferencia.')
+      return
+    }
+
+    setTransferMessage('Transferencia registrada correctamente.')
+    resetTransferForm()
+    await loadInstruments()
+    await loadTransfers()
+  }
+
+  const handleTransferDelete = async (id: number): Promise<void> => {
+    setTransferError('')
+    setTransferMessage('')
+
+    const deleted = await apiClient.deleteTransfer(id)
+
+    if (!deleted.success) {
+      setTransferError(deleted.error ?? 'No se pudo eliminar la transferencia.')
+      return
+    }
+
+    setTransferMessage('Transferencia eliminada correctamente.')
+    await loadInstruments()
+    await loadTransfers()
+  }
+
   if (isLoading) {
     return (
       <main className="settings-screen settings-screen--centered">
@@ -768,6 +1052,13 @@ export function App() {
           onClick={() => handleSectionChange('transactions')}
         >
           Transacciones
+        </button>
+        <button
+          className={`nav-button ${activeSection === 'creditCards' ? 'nav-button--active' : ''}`}
+          type="button"
+          onClick={() => handleSectionChange('creditCards')}
+        >
+          Tarjetas y Transferencias
         </button>
       </aside>
 
@@ -1811,6 +2102,364 @@ export function App() {
                           <td>{transaction.msiStartDate ?? '-'}</td>
                         </tr>
                       ))}
+                    </tbody>
+                  </table>
+                </div>
+              </article>
+            </div>
+          </section>
+        ) : null}
+
+        {activeSection === 'creditCards' ? (
+          <section className="card">
+            <header className="card__header">
+              <h2 className="card__title">Tarjetas de Credito y Transferencias</h2>
+              <p className="card__subtitle">Estados de cuenta por corte y registro de abonos/transferencias.</p>
+            </header>
+
+            <div className="transaction-layout">
+              <section className="mini-card">
+                <header className="mini-card__header">
+                  <h3 className="mini-card__title">Nuevo estado de cuenta</h3>
+                  <p className="mini-card__subtitle">El total se calcula automaticamente con las compras del periodo.</p>
+                </header>
+
+                <form className="form-grid" onSubmit={handleStatementSubmit}>
+                  <label className="form-grid__field" htmlFor="statementInstrument">Tarjeta</label>
+                  <select
+                    id="statementInstrument"
+                    className="form-grid__input"
+                    value={selectedStatementInstrumentId}
+                    onChange={(event) => setStatementForm({ ...statementForm, instrumentId: Number(event.target.value) })}
+                    required
+                  >
+                    <option value={0}>Selecciona tarjeta</option>
+                    {creditCardInstruments.map((instrument) => (
+                      <option key={instrument.id} value={instrument.id}>{instrument.name}</option>
+                    ))}
+                  </select>
+
+                  <label className="form-grid__field" htmlFor="statementCutOffDate">Fecha de corte</label>
+                  <input
+                    id="statementCutOffDate"
+                    className="form-grid__input"
+                    type="date"
+                    value={statementForm.cutOffDate}
+                    onChange={(event) => setStatementForm({ ...statementForm, cutOffDate: event.target.value })}
+                    required
+                  />
+
+                  <label className="form-grid__field" htmlFor="statementPaymentDueDate">Fecha de pago (opcional)</label>
+                  <input
+                    id="statementPaymentDueDate"
+                    className="form-grid__input"
+                    type="date"
+                    value={statementForm.paymentDueDate}
+                    onChange={(event) => setStatementForm({ ...statementForm, paymentDueDate: event.target.value })}
+                  />
+
+                  <div className="form-grid__actions">
+                    <button className="button button--primary" type="submit" disabled={!hasConfig || creditCardInstruments.length === 0}>
+                      Crear estado
+                    </button>
+                    <button className="button button--secondary" type="button" onClick={resetStatementForm}>
+                      Limpiar
+                    </button>
+                    <button
+                      className="button button--secondary"
+                      type="button"
+                      onClick={() => {
+                        void loadStatements()
+                      }}
+                    >
+                      Recargar
+                    </button>
+                  </div>
+                </form>
+              </section>
+
+              <section className="mini-card">
+                <header className="mini-card__header">
+                  <h3 className="mini-card__title">Nueva transferencia</h3>
+                  <p className="mini-card__subtitle">Abona tarjeta o mueve dinero entre cuentas propias.</p>
+                </header>
+
+                <form className="form-grid" onSubmit={handleTransferSubmit}>
+                  <label className="form-grid__field" htmlFor="transferType">Tipo</label>
+                  <select
+                    id="transferType"
+                    className="form-grid__input"
+                    value={transferForm.type}
+                    onChange={(event) => handleTransferTypeChange(event.target.value as TransferType)}
+                  >
+                    <option value="card_payment">Pago de tarjeta</option>
+                    <option value="inter_account">Entre cuentas</option>
+                    <option value="loan_payment">Pago de prestamo</option>
+                    <option value="other">Otro</option>
+                  </select>
+
+                  <label className="form-grid__field" htmlFor="transferSource">Origen</label>
+                  <select
+                    id="transferSource"
+                    className="form-grid__input"
+                    value={selectedTransferSourceInstrumentId}
+                    onChange={(event) => setTransferForm({ ...transferForm, sourceInstrumentId: Number(event.target.value) })}
+                    required
+                  >
+                    <option value={0}>Selecciona origen</option>
+                    {sourceTransferInstruments.map((instrument) => (
+                      <option key={instrument.id} value={instrument.id}>{instrument.name}</option>
+                    ))}
+                  </select>
+
+                  <label className="form-grid__field" htmlFor="transferDestination">Destino</label>
+                  <select
+                    id="transferDestination"
+                    className="form-grid__input"
+                    value={selectedTransferDestinationInstrumentId}
+                    onChange={(event) => setTransferForm({ ...transferForm, destinationInstrumentId: Number(event.target.value) })}
+                    required
+                  >
+                    <option value={0}>Selecciona destino</option>
+                    {availableTransferDestinations.map((instrument) => (
+                      <option key={instrument.id} value={instrument.id}>{instrument.name}</option>
+                    ))}
+                  </select>
+
+                  <label className="form-grid__field" htmlFor="transferAmount">Monto</label>
+                  <input
+                    id="transferAmount"
+                    className="form-grid__input"
+                    type="number"
+                    step="0.01"
+                    min={0.01}
+                    value={transferForm.amount}
+                    onChange={(event) => setTransferForm({ ...transferForm, amount: Number(event.target.value) })}
+                    required
+                  />
+
+                  <label className="form-grid__field" htmlFor="transferDate">Fecha</label>
+                  <input
+                    id="transferDate"
+                    className="form-grid__input"
+                    type="date"
+                    value={transferForm.transferDate}
+                    onChange={(event) => setTransferForm({ ...transferForm, transferDate: event.target.value })}
+                    required
+                  />
+
+                  <label className="form-grid__field" htmlFor="transferDescription">Descripcion</label>
+                  <input
+                    id="transferDescription"
+                    className="form-grid__input"
+                    type="text"
+                    value={transferForm.description}
+                    onChange={(event) => setTransferForm({ ...transferForm, description: event.target.value })}
+                    placeholder="Abono, movimiento interno, etc."
+                  />
+
+                  {transferForm.type === 'loan_payment' ? (
+                    <>
+                      <label className="form-grid__field" htmlFor="transferLoanId">ID de prestamo</label>
+                      <input
+                        id="transferLoanId"
+                        className="form-grid__input"
+                        type="number"
+                        min={1}
+                        value={transferForm.loanId ?? ''}
+                        onChange={(event) => {
+                          const rawValue = event.target.value
+                          setTransferForm({ ...transferForm, loanId: rawValue ? Number(rawValue) : null })
+                        }}
+                        required
+                      />
+                    </>
+                  ) : null}
+
+                  <div className="form-grid__actions">
+                    <button className="button button--primary" type="submit" disabled={!hasConfig || sourceTransferInstruments.length === 0}>
+                      Crear transferencia
+                    </button>
+                    <button className="button button--secondary" type="button" onClick={resetTransferForm}>
+                      Limpiar
+                    </button>
+                    <button
+                      className="button button--secondary"
+                      type="button"
+                      onClick={() => {
+                        void loadTransfers()
+                      }}
+                    >
+                      Recargar
+                    </button>
+                  </div>
+                </form>
+              </section>
+            </div>
+
+            {statementError ? <p className="message message--error">{statementError}</p> : null}
+            {statementMessage ? <p className="message message--success">{statementMessage}</p> : null}
+            {transferError ? <p className="message message--error">{transferError}</p> : null}
+            {transferMessage ? <p className="message message--success">{transferMessage}</p> : null}
+
+            <div className="category-list">
+              <article className="category-card">
+                <header className="category-card__header">
+                  <div>
+                    <h3 className="category-card__title">Estados de cuenta</h3>
+                    <p className="category-card__meta">Detalle por corte, fecha de pago y montos calculados.</p>
+                  </div>
+                </header>
+
+                <div className="table-wrap">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Tarjeta</th>
+                        <th>Corte</th>
+                        <th>Pago</th>
+                        <th>Total</th>
+                        <th>Minimo</th>
+                        <th>Sin intereses</th>
+                        <th>Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {isStatementsLoading ? (
+                        <tr>
+                          <td colSpan={7}>Cargando estados...</td>
+                        </tr>
+                      ) : null}
+
+                      {!isStatementsLoading && statements.length === 0 ? (
+                        <tr>
+                          <td colSpan={7}>No hay estados de cuenta registrados.</td>
+                        </tr>
+                      ) : null}
+
+                      {!isStatementsLoading
+                        ? statements.map((statement) => (
+                          <tr key={statement.id}>
+                            <td>{statement.instrumentName ?? '-'}</td>
+                            <td>{statement.cutOffDate}</td>
+                            <td>{statement.paymentDueDate}</td>
+                            <td>{formatCurrency(statement.totalAmount)}</td>
+                            <td>{formatCurrency(statement.minimumPayment)}</td>
+                            <td>{formatCurrency(statement.noInterestPayment)}</td>
+                            <td>
+                              <div className="table__actions">
+                                <button
+                                  className="button button--secondary"
+                                  type="button"
+                                  onClick={() => {
+                                    startStatementEdit(statement)
+                                  }}
+                                >
+                                  Editar pago
+                                </button>
+                                <button
+                                  className="button button--danger"
+                                  type="button"
+                                  onClick={() => {
+                                    void handleStatementDelete(statement.id)
+                                  }}
+                                >
+                                  Eliminar
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                        : null}
+                    </tbody>
+                  </table>
+                </div>
+
+                {editingStatementId !== null ? (
+                  <div className="form-grid statement-edit-form">
+                    <label className="form-grid__field" htmlFor="statementEditPaymentDueDate">Nueva fecha de pago</label>
+                    <input
+                      id="statementEditPaymentDueDate"
+                      className="form-grid__input"
+                      type="date"
+                      value={statementUpdateForm.paymentDueDate}
+                      onChange={(event) => setStatementUpdateForm({ ...statementUpdateForm, paymentDueDate: event.target.value })}
+                    />
+                    <div className="form-grid__actions">
+                      <button
+                        className="button button--primary"
+                        type="button"
+                        onClick={() => {
+                          void handleStatementUpdate()
+                        }}
+                      >
+                        Guardar fecha
+                      </button>
+                      <button className="button button--secondary" type="button" onClick={resetStatementUpdateForm}>
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </article>
+
+              <article className="category-card">
+                <header className="category-card__header">
+                  <div>
+                    <h3 className="category-card__title">Historial de transferencias</h3>
+                    <p className="category-card__meta">Pagos y movimientos entre instrumentos propios.</p>
+                  </div>
+                </header>
+
+                <div className="table-wrap">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Fecha</th>
+                        <th>Tipo</th>
+                        <th>Origen</th>
+                        <th>Destino</th>
+                        <th>Monto</th>
+                        <th>Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {isTransfersLoading ? (
+                        <tr>
+                          <td colSpan={6}>Cargando transferencias...</td>
+                        </tr>
+                      ) : null}
+
+                      {!isTransfersLoading && transfers.length === 0 ? (
+                        <tr>
+                          <td colSpan={6}>No hay transferencias registradas.</td>
+                        </tr>
+                      ) : null}
+
+                      {!isTransfersLoading
+                        ? transfers.map((transfer) => (
+                          <tr key={transfer.id}>
+                            <td>{transfer.transferDate}</td>
+                            <td>{transfer.type}</td>
+                            <td>{transfer.sourceInstrumentName ?? '-'}</td>
+                            <td>{transfer.destinationInstrumentName ?? '-'}</td>
+                            <td>{formatCurrency(transfer.amount)}</td>
+                            <td>
+                              <div className="table__actions">
+                                <button
+                                  className="button button--danger"
+                                  type="button"
+                                  onClick={() => {
+                                    void handleTransferDelete(transfer.id)
+                                  }}
+                                >
+                                  Eliminar
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                        : null}
                     </tbody>
                   </table>
                 </div>

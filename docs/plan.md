@@ -641,18 +641,18 @@ Lambda única de .mjs con conexión a la dB de postgreSQL
 
 ### Fase 4 — Módulo Tarjetas de Crédito (Estados de Cuenta + Pagos/Transferencias)
 
-- [ ]  **Backend:** CRUD estados de cuenta TDC
-- [ ]  **Backend:** Cálculo automático del total por período de corte
-- [ ]  **Backend:** CRUD transferencias (`/transfers`) con actualización automática de saldos en ambos instrumentos
-- [ ]  **Backend:** Tipos de transferencia: `card_payment`, `inter_account`, `loan_payment`, `other`
-- [ ]  **Backend:** Vinculación opcional de transferencia a estado de cuenta (`statement_id`) o préstamo (`loan_id`)
-- [ ]  **Frontend:** Página de TDC — vista por tarjeta con período actual
+- [x]  **Backend:** CRUD estados de cuenta TDC
+- [x]  **Backend:** Cálculo automático del total por período de corte
+- [x]  **Backend:** CRUD transferencias (`/transfers`) con actualización automática de saldos en ambos instrumentos
+- [x]  **Backend:** Tipos de transferencia: `card_payment`, `inter_account`, `loan_payment`, `other`
+- [x]  **Backend:** Vinculación opcional de transferencia a estado de cuenta (`statement_id`) o préstamo (`loan_id`)
+- [x]  **Frontend:** Página de TDC — vista por tarjeta con período actual
 - [ ]  **Frontend:** Detalle de estado de cuenta con desglose de movimientos
-- [ ]  **Frontend:** Edición de fecha de pago (override del default)
+- [x]  **Frontend:** Edición de fecha de pago (override del default)
 - [ ]  **Frontend:** Indicadores de crédito disponible y deuda total
-- [ ]  **Frontend:** Botón/formulario de "Abonar a tarjeta" desde cualquier cuenta/débito
-- [ ]  **Frontend:** Sección de transferencias entre cuentas propias
-- [ ]  **Frontend:** Historial de pagos/abonos por instrumento
+- [x]  **Frontend:** Botón/formulario de "Abonar a tarjeta" desde cualquier cuenta/débito
+- [x]  **Frontend:** Sección de transferencias entre cuentas propias
+- [x]  **Frontend:** Historial de pagos/abonos por instrumento
 
 ### Fase 5 — Módulo Préstamos
 
