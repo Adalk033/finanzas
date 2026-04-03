@@ -5,12 +5,17 @@ import { useLocalConfig } from './hooks/useLocalConfig'
 import type {
   Bank,
   BankInput,
+  Category,
+  CategoryInput,
+  CategoryType,
   FinancialInstrument,
   FinancialInstrumentInput,
   InstrumentType,
+  Subcategory,
+  SubcategoryInput,
 } from './types/domain'
 
-type AppSection = 'settings' | 'banks' | 'instruments'
+type AppSection = 'settings' | 'banks' | 'instruments' | 'categories'
 
 const EMPTY_BANK_FORM: BankInput = {
   name: '',
@@ -34,6 +39,21 @@ const EMPTY_INSTRUMENT_FORM: FinancialInstrumentInput = {
   annualRate: null,
   currentAmount: 0,
   notes: '',
+  isActive: true,
+}
+
+const EMPTY_CATEGORY_FORM: CategoryInput = {
+  name: '',
+  iconName: '',
+  color: '',
+  type: 'expense',
+  isActive: true,
+}
+
+const EMPTY_SUBCATEGORY_FORM: SubcategoryInput = {
+  categoryId: 0,
+  name: '',
+  iconName: '',
   isActive: true,
 }
 
@@ -66,6 +86,25 @@ function toEditableInstrument(instrument: FinancialInstrument): FinancialInstrum
   }
 }
 
+function toEditableCategory(category: Category): CategoryInput {
+  return {
+    name: category.name,
+    iconName: category.iconName ?? '',
+    color: category.color ?? '',
+    type: category.type,
+    isActive: category.isActive,
+  }
+}
+
+function toEditableSubcategory(subcategory: Subcategory): SubcategoryInput {
+  return {
+    categoryId: subcategory.categoryId,
+    name: subcategory.name,
+    iconName: subcategory.iconName ?? '',
+    isActive: subcategory.isActive,
+  }
+}
+
 function formatCurrency(amount: number | null): string {
   if (amount === null) {
     return '-'
@@ -77,6 +116,18 @@ function formatCurrency(amount: number | null): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(amount)
+}
+
+function getCategoryTypeLabel(type: CategoryType): string {
+  if (type === 'income') {
+    return 'Ingreso'
+  }
+
+  if (type === 'both') {
+    return 'Ambos'
+  }
+
+  return 'Gasto'
 }
 
 export function App() {
@@ -108,6 +159,18 @@ export function App() {
   const [instrumentForm, setInstrumentForm] = useState<FinancialInstrumentInput>(EMPTY_INSTRUMENT_FORM)
   const [editingInstrumentId, setEditingInstrumentId] = useState<number | null>(null)
 
+  const [categories, setCategories] = useState<Category[]>([])
+  const [isCategoriesLoading, setIsCategoriesLoading] = useState(false)
+  const [categoryMessage, setCategoryMessage] = useState('')
+  const [categoryError, setCategoryError] = useState('')
+  const [categoryForm, setCategoryForm] = useState<CategoryInput>(EMPTY_CATEGORY_FORM)
+  const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null)
+
+  const [subcategoryMessage, setSubcategoryMessage] = useState('')
+  const [subcategoryError, setSubcategoryError] = useState('')
+  const [subcategoryForm, setSubcategoryForm] = useState<SubcategoryInput>(EMPTY_SUBCATEGORY_FORM)
+  const [editingSubcategoryId, setEditingSubcategoryId] = useState<number | null>(null)
+
   const hasConfig = Boolean(config.apiKey.trim() && config.apiEndpoint.trim() && config.awsRegion.trim())
 
   const banksById = useMemo(() => {
@@ -131,6 +194,9 @@ export function App() {
       instruments: list,
     }))
   }, [banksById, instruments])
+
+  const categoryOptions = useMemo(() => categories.map((category) => ({ id: category.id, name: category.name })), [categories])
+  const selectedSubcategoryCategoryId = subcategoryForm.categoryId === 0 ? (categories[0]?.id ?? 0) : subcategoryForm.categoryId
 
   const loadBanks = async (): Promise<void> => {
     setIsBanksLoading(true)
@@ -162,6 +228,22 @@ export function App() {
 
     setInstruments(result.data ?? [])
     setIsInstrumentsLoading(false)
+  }
+
+  const loadCategories = async (): Promise<void> => {
+    setIsCategoriesLoading(true)
+    setCategoryError('')
+
+    const result = await apiClient.getCategories()
+
+    if (!result.success) {
+      setCategoryError(result.error ?? 'No se pudieron cargar las categorias.')
+      setIsCategoriesLoading(false)
+      return
+    }
+
+    setCategories(result.data ?? [])
+    setIsCategoriesLoading(false)
   }
 
   const selectedBankId = instrumentForm.bankId === 0 ? (banks[0]?.id ?? 0) : instrumentForm.bankId
@@ -261,6 +343,19 @@ export function App() {
     setEditingInstrumentId(null)
   }
 
+  const resetCategoryEditor = (): void => {
+    setCategoryForm(EMPTY_CATEGORY_FORM)
+    setEditingCategoryId(null)
+  }
+
+  const resetSubcategoryEditor = (): void => {
+    setSubcategoryForm({
+      ...EMPTY_SUBCATEGORY_FORM,
+      categoryId: categories[0]?.id ?? 0,
+    })
+    setEditingSubcategoryId(null)
+  }
+
   const handleSectionChange = (nextSection: AppSection): void => {
     setActiveSection(nextSection)
 
@@ -276,6 +371,11 @@ export function App() {
     if (nextSection === 'instruments') {
       void loadBanks()
       void loadInstruments()
+      return
+    }
+
+    if (nextSection === 'categories') {
+      void loadCategories()
     }
   }
 
@@ -348,6 +448,114 @@ export function App() {
     await loadInstruments()
   }
 
+  const handleCategorySubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault()
+    setCategoryError('')
+    setCategoryMessage('')
+
+    const payload = {
+      ...categoryForm,
+      name: categoryForm.name.trim(),
+    }
+
+    if (editingCategoryId === null) {
+      const created = await apiClient.createCategory(payload)
+      if (!created.success) {
+        setCategoryError(created.error ?? 'No se pudo crear la categoria.')
+        return
+      }
+
+      setCategoryMessage('Categoria creada correctamente.')
+    } else {
+      const updated = await apiClient.updateCategory(editingCategoryId, payload)
+      if (!updated.success) {
+        setCategoryError(updated.error ?? 'No se pudo actualizar la categoria.')
+        return
+      }
+
+      setCategoryMessage('Categoria actualizada correctamente.')
+    }
+
+    resetCategoryEditor()
+    await loadCategories()
+  }
+
+  const handleCategoryDelete = async (id: number): Promise<void> => {
+    setCategoryError('')
+    setCategoryMessage('')
+
+    const deleted = await apiClient.deleteCategory(id)
+
+    if (!deleted.success) {
+      setCategoryError(deleted.error ?? 'No se pudo eliminar la categoria.')
+      return
+    }
+
+    setCategoryMessage('Categoria eliminada correctamente.')
+    if (editingCategoryId === id) {
+      resetCategoryEditor()
+    }
+    if (subcategoryForm.categoryId === id) {
+      resetSubcategoryEditor()
+    }
+    await loadCategories()
+  }
+
+  const handleSubcategorySubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault()
+    setSubcategoryError('')
+    setSubcategoryMessage('')
+
+    if (subcategoryForm.categoryId < 1) {
+      setSubcategoryError('Selecciona una categoria valida.')
+      return
+    }
+
+    const payload = {
+      ...subcategoryForm,
+      name: subcategoryForm.name.trim(),
+    }
+
+    if (editingSubcategoryId === null) {
+      const created = await apiClient.createSubcategory(payload)
+      if (!created.success) {
+        setSubcategoryError(created.error ?? 'No se pudo crear la subcategoria.')
+        return
+      }
+
+      setSubcategoryMessage('Subcategoria creada correctamente.')
+    } else {
+      const updated = await apiClient.updateSubcategory(editingSubcategoryId, payload)
+      if (!updated.success) {
+        setSubcategoryError(updated.error ?? 'No se pudo actualizar la subcategoria.')
+        return
+      }
+
+      setSubcategoryMessage('Subcategoria actualizada correctamente.')
+    }
+
+    resetSubcategoryEditor()
+    await loadCategories()
+  }
+
+  const handleSubcategoryDelete = async (id: number): Promise<void> => {
+    setSubcategoryError('')
+    setSubcategoryMessage('')
+
+    const deleted = await apiClient.deleteSubcategory(id)
+
+    if (!deleted.success) {
+      setSubcategoryError(deleted.error ?? 'No se pudo eliminar la subcategoria.')
+      return
+    }
+
+    setSubcategoryMessage('Subcategoria eliminada correctamente.')
+    if (editingSubcategoryId === id) {
+      resetSubcategoryEditor()
+    }
+    await loadCategories()
+  }
+
   if (isLoading) {
     return (
       <main className="settings-screen settings-screen--centered">
@@ -380,6 +588,13 @@ export function App() {
           onClick={() => handleSectionChange('instruments')}
         >
           Instrumentos
+        </button>
+        <button
+          className={`nav-button ${activeSection === 'categories' ? 'nav-button--active' : ''}`}
+          type="button"
+          onClick={() => handleSectionChange('categories')}
+        >
+          Categorias
         </button>
       </aside>
 
@@ -791,6 +1006,254 @@ export function App() {
                           ))}
                         </tbody>
                       </table>
+                    </div>
+                  </article>
+                ))
+                : null}
+            </div>
+          </section>
+        ) : null}
+
+        {activeSection === 'categories' ? (
+          <section className="card">
+            <header className="card__header">
+              <h2 className="card__title">Categorias y Subcategorias</h2>
+              <p className="card__subtitle">CRUD de categorias con subcategorias anidadas y control de eliminacion.</p>
+            </header>
+
+            <div className="category-layout">
+              <section className="mini-card">
+                <header className="mini-card__header">
+                  <h3 className="mini-card__title">Categoria</h3>
+                  <p className="mini-card__subtitle">Define el grupo principal que se usara en gastos e ingresos.</p>
+                </header>
+
+                <form className="form-grid" onSubmit={handleCategorySubmit}>
+                  <label className="form-grid__field" htmlFor="categoryName">Nombre</label>
+                  <input
+                    id="categoryName"
+                    className="form-grid__input"
+                    type="text"
+                    value={categoryForm.name}
+                    onChange={(event) => setCategoryForm({ ...categoryForm, name: event.target.value })}
+                    placeholder="Alimentacion"
+                    required
+                  />
+
+                  <label className="form-grid__field" htmlFor="categoryType">Tipo</label>
+                  <select
+                    id="categoryType"
+                    className="form-grid__input"
+                    value={categoryForm.type}
+                    onChange={(event) => setCategoryForm({ ...categoryForm, type: event.target.value as CategoryType })}
+                  >
+                    <option value="expense">Gasto</option>
+                    <option value="income">Ingreso</option>
+                    <option value="both">Ambos</option>
+                  </select>
+
+                  <label className="form-grid__field" htmlFor="categoryIcon">Icono (Lucide)</label>
+                  <input
+                    id="categoryIcon"
+                    className="form-grid__input"
+                    type="text"
+                    value={categoryForm.iconName}
+                    onChange={(event) => setCategoryForm({ ...categoryForm, iconName: event.target.value })}
+                    placeholder="UtensilsCrossed"
+                  />
+
+                  <label className="form-grid__field" htmlFor="categoryColor">Color</label>
+                  <input
+                    id="categoryColor"
+                    className="form-grid__input"
+                    type="text"
+                    value={categoryForm.color}
+                    onChange={(event) => setCategoryForm({ ...categoryForm, color: event.target.value })}
+                    placeholder="#2d8f85"
+                  />
+
+                  <div className="form-grid__actions">
+                    <button className="button button--primary" type="submit" disabled={!hasConfig}>
+                      {editingCategoryId === null ? 'Crear categoria' : 'Guardar cambios'}
+                    </button>
+                    <button className="button button--secondary" type="button" onClick={resetCategoryEditor}>
+                      Limpiar
+                    </button>
+                    <button
+                      className="button button--secondary"
+                      type="button"
+                      disabled={!hasConfig}
+                      onClick={() => {
+                        void loadCategories()
+                      }}
+                    >
+                      Recargar
+                    </button>
+                  </div>
+                </form>
+
+                {categoryError ? <p className="message message--error">{categoryError}</p> : null}
+                {categoryMessage ? <p className="message message--success">{categoryMessage}</p> : null}
+              </section>
+
+              <section className="mini-card">
+                <header className="mini-card__header">
+                  <h3 className="mini-card__title">Subcategoria</h3>
+                  <p className="mini-card__subtitle">Cada subcategoria vive dentro de una categoria existente.</p>
+                </header>
+
+                <form className="form-grid" onSubmit={handleSubcategorySubmit}>
+                  <label className="form-grid__field" htmlFor="subcategoryCategory">Categoria</label>
+                  <select
+                    id="subcategoryCategory"
+                    className="form-grid__input"
+                    value={selectedSubcategoryCategoryId}
+                    onChange={(event) => setSubcategoryForm({ ...subcategoryForm, categoryId: Number(event.target.value) })}
+                    required
+                  >
+                    <option value={0}>Selecciona categoria</option>
+                    {categoryOptions.map((category) => (
+                      <option key={category.id} value={category.id}>{category.name}</option>
+                    ))}
+                  </select>
+
+                  <label className="form-grid__field" htmlFor="subcategoryName">Nombre</label>
+                  <input
+                    id="subcategoryName"
+                    className="form-grid__input"
+                    type="text"
+                    value={subcategoryForm.name}
+                    onChange={(event) => setSubcategoryForm({ ...subcategoryForm, name: event.target.value })}
+                    placeholder="Despensa"
+                    required
+                  />
+
+                  <label className="form-grid__field" htmlFor="subcategoryIcon">Icono (Lucide)</label>
+                  <input
+                    id="subcategoryIcon"
+                    className="form-grid__input"
+                    type="text"
+                    value={subcategoryForm.iconName}
+                    onChange={(event) => setSubcategoryForm({ ...subcategoryForm, iconName: event.target.value })}
+                    placeholder="ShoppingCart"
+                  />
+
+                  <div className="form-grid__actions">
+                    <button className="button button--primary" type="submit" disabled={!hasConfig || categories.length === 0}>
+                      {editingSubcategoryId === null ? 'Crear subcategoria' : 'Guardar cambios'}
+                    </button>
+                    <button className="button button--secondary" type="button" onClick={resetSubcategoryEditor}>
+                      Limpiar
+                    </button>
+                    <button
+                      className="button button--secondary"
+                      type="button"
+                      disabled={!hasConfig}
+                      onClick={() => {
+                        void loadCategories()
+                      }}
+                    >
+                      Recargar
+                    </button>
+                  </div>
+                </form>
+
+                {subcategoryError ? <p className="message message--error">{subcategoryError}</p> : null}
+                {subcategoryMessage ? <p className="message message--success">{subcategoryMessage}</p> : null}
+              </section>
+            </div>
+
+            <div className="category-list">
+              {isCategoriesLoading ? <p className="card__subtitle">Cargando categorias...</p> : null}
+              {!isCategoriesLoading && categories.length === 0 ? (
+                <p className="card__subtitle">No hay categorias registradas.</p>
+              ) : null}
+
+              {!isCategoriesLoading
+                ? categories.map((category) => (
+                  <article key={category.id} className="category-card">
+                    <header className="category-card__header">
+                      <div>
+                        <h3 className="category-card__title">{category.name}</h3>
+                        <p className="category-card__meta">
+                          {getCategoryTypeLabel(category.type)} · {category.subcategories.length} subcategorias
+                        </p>
+                      </div>
+                      <div className="category-card__badges">
+                        {category.isSystem ? <span className="badge badge--info">Sistema</span> : null}
+                        {category.canDelete ? <span className="badge badge--success">Eliminable</span> : <span className="badge badge--warning">Protegida</span>}
+                      </div>
+                    </header>
+
+                    <div className="table-wrap">
+                      <table className="table">
+                        <thead>
+                          <tr>
+                            <th>Subcategoria</th>
+                            <th>Icono</th>
+                            <th>Acciones</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {category.subcategories.length === 0 ? (
+                            <tr>
+                              <td colSpan={3}>No hay subcategorias en esta categoria.</td>
+                            </tr>
+                          ) : null}
+                          {category.subcategories.map((subcategory) => (
+                            <tr key={subcategory.id}>
+                              <td>{subcategory.name}</td>
+                              <td>{subcategory.iconName ?? '-'}</td>
+                              <td>
+                                <div className="table__actions">
+                                  <button
+                                    className="button button--secondary"
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingSubcategoryId(subcategory.id)
+                                      setSubcategoryForm(toEditableSubcategory(subcategory))
+                                    }}
+                                  >
+                                    Editar
+                                  </button>
+                                  <button
+                                    className="button button--danger"
+                                    type="button"
+                                    onClick={() => {
+                                      void handleSubcategoryDelete(subcategory.id)
+                                    }}
+                                  >
+                                    Eliminar
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="category-card__actions">
+                      <button
+                        className="button button--secondary"
+                        type="button"
+                        onClick={() => {
+                          setEditingCategoryId(category.id)
+                          setCategoryForm(toEditableCategory(category))
+                        }}
+                      >
+                        Editar categoria
+                      </button>
+                      <button
+                        className="button button--danger"
+                        type="button"
+                        disabled={!category.canDelete}
+                        onClick={() => {
+                          void handleCategoryDelete(category.id)
+                        }}
+                      >
+                        Eliminar categoria
+                      </button>
                     </div>
                   </article>
                 ))

@@ -3,8 +3,12 @@ import type { ApiResponse, LocalConfig } from '../types/config'
 import type {
   Bank,
   BankInput,
+  Category,
+  CategoryInput,
   FinancialInstrument,
   FinancialInstrumentInput,
+  Subcategory,
+  SubcategoryInput,
 } from '../types/domain'
 
 const CLIENT_VERSION = 'phase0'
@@ -99,6 +103,26 @@ function sanitizeInstrumentPayload(payload: FinancialInstrumentInput): Omit<Fina
   }
 }
 
+function sanitizeCategoryPayload(payload: CategoryInput): Omit<CategoryInput, 'iconName' | 'color'> & {
+  iconName: string | null
+  color: string | null
+} {
+  return {
+    ...payload,
+    iconName: payload.iconName.trim() || null,
+    color: payload.color.trim() || null,
+  }
+}
+
+function sanitizeSubcategoryPayload(payload: SubcategoryInput): Omit<SubcategoryInput, 'iconName'> & {
+  iconName: string | null
+} {
+  return {
+    ...payload,
+    iconName: payload.iconName.trim() || null,
+  }
+}
+
 export const apiClient = {
   health: () => request<{ status: string }>(ENDPOINTS.HEALTH, { method: 'GET' }),
   bootstrapPing: (message: string) =>
@@ -119,6 +143,42 @@ export const apiClient = {
     }),
   deleteBank: (id: number) =>
     request<{ id: number }>(`${ENDPOINTS.BANKS}/${id}`, {
+      method: 'DELETE',
+    }),
+  getCategories: () => request<Category[]>(ENDPOINTS.CATEGORIES, { method: 'GET' }),
+  createCategory: (payload: CategoryInput) =>
+    request<Category>(ENDPOINTS.CATEGORIES, {
+      method: 'POST',
+      body: JSON.stringify(sanitizeCategoryPayload(payload)),
+    }),
+  updateCategory: (id: number, payload: CategoryInput) =>
+    request<Category>(`${ENDPOINTS.CATEGORIES}/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(sanitizeCategoryPayload(payload)),
+    }),
+  deleteCategory: (id: number) =>
+    request<{ id: number }>(`${ENDPOINTS.CATEGORIES}/${id}`, {
+      method: 'DELETE',
+    }),
+  getSubcategories: (categoryId?: number) => {
+    if (!categoryId) {
+      return request<Subcategory[]>(ENDPOINTS.SUBCATEGORIES, { method: 'GET' })
+    }
+
+    return request<Subcategory[]>(`${ENDPOINTS.SUBCATEGORIES}?category_id=${categoryId}`, { method: 'GET' })
+  },
+  createSubcategory: (payload: SubcategoryInput) =>
+    request<Subcategory>(ENDPOINTS.SUBCATEGORIES, {
+      method: 'POST',
+      body: JSON.stringify(sanitizeSubcategoryPayload(payload)),
+    }),
+  updateSubcategory: (id: number, payload: SubcategoryInput) =>
+    request<Subcategory>(`${ENDPOINTS.SUBCATEGORIES}/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(sanitizeSubcategoryPayload(payload)),
+    }),
+  deleteSubcategory: (id: number) =>
+    request<{ id: number }>(`${ENDPOINTS.SUBCATEGORIES}/${id}`, {
       method: 'DELETE',
     }),
   getInstruments: (bankId?: number) => {

@@ -623,11 +623,11 @@ Lambda única de .mjs con conexión a la dB de postgreSQL
 
 ### Fase 2 — Módulo Categorías y Subcategorías
 
-- [ ]  **Backend:** CRUD categorías con validación de eliminación (fn_can_delete_category)
-- [ ]  **Backend:** CRUD subcategorías
-- [ ]  **Frontend:** Página de Categorías — CRUD con íconos Lucide y colores
-- [ ]  **Frontend:** Subcategorías anidadas dentro de cada categoría
-- [ ]  **Frontend:** Indicador visual de categorías no eliminables (asociadas a gastos)
+- [x]  **Backend:** CRUD categorías con validación de eliminación (fn_can_delete_category)
+- [x]  **Backend:** CRUD subcategorías
+- [x]  **Frontend:** Página de Categorías — CRUD con íconos Lucide y colores
+- [x]  **Frontend:** Subcategorías anidadas dentro de cada categoría
+- [x]  **Frontend:** Indicador visual de categorías no eliminables (asociadas a gastos)
 
 ### Fase 3 — Módulo Transacciones (Gastos e Ingresos)
 

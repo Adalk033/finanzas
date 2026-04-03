@@ -6,9 +6,11 @@ const API_KEY_HEADER = 'x-api-key';
 const CLIENT_VERSION_HEADER = 'x-client-version';
 const VALID_REGIONS = ['us-east-1', 'us-east-2', 'us-west-1', 'us-west-2'];
 const ALLOWED_BANK_ICON_PATTERN = /^[A-Za-z][A-Za-z0-9]*$/;
+const ALLOWED_CATEGORY_ICON_PATTERN = /^[A-Za-z][A-Za-z0-9]*$/;
 const ALLOWED_HEX_COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/;
 const ALLOWED_LAST_FOUR_PATTERN = /^\d{4}$/;
 const ALLOWED_INSTRUMENT_TYPES = new Set(['credit_card', 'debit_card', 'account']);
+const ALLOWED_CATEGORY_TYPES = new Set(['expense', 'income', 'both']);
 
 let pool;
 
@@ -116,6 +118,24 @@ function parseInteger(value) {
 }
 
 function parsePathParameters(path) {
+  const categoriesWithId = path.match(/^\/categories\/(\d+)$/);
+  if (categoriesWithId) {
+    return { resource: 'categories', id: Number.parseInt(categoriesWithId[1], 10) };
+  }
+
+  if (path === '/categories') {
+    return { resource: 'categories', id: null };
+  }
+
+  const subcategoriesWithId = path.match(/^\/subcategories\/(\d+)$/);
+  if (subcategoriesWithId) {
+    return { resource: 'subcategories', id: Number.parseInt(subcategoriesWithId[1], 10) };
+  }
+
+  if (path === '/subcategories') {
+    return { resource: 'subcategories', id: null };
+  }
+
   const banksWithId = path.match(/^\/banks\/(\d+)$/);
   if (banksWithId) {
     return { resource: 'banks', id: Number.parseInt(banksWithId[1], 10) };
@@ -204,6 +224,76 @@ function validateBankPayload(body) {
       name,
       shortName,
       color,
+      iconName,
+      isActive: body.isActive === undefined ? true : Boolean(body.isActive),
+    },
+  };
+}
+
+function validateCategoryPayload(body) {
+  if (!body || typeof body !== 'object') {
+    return { ok: false, error: 'Body invalido.' };
+  }
+
+  const name = normalizeText(body.name);
+  const iconName = normalizeNullableText(body.iconName);
+  const color = normalizeNullableText(body.color);
+  const type = normalizeText(body.type);
+
+  if (name.length < 2 || name.length > 100) {
+    return { ok: false, error: 'name debe tener entre 2 y 100 caracteres.' };
+  }
+
+  if (iconName && (iconName.length > 50 || !ALLOWED_CATEGORY_ICON_PATTERN.test(iconName))) {
+    return { ok: false, error: 'iconName invalido.' };
+  }
+
+  if (color && !ALLOWED_HEX_COLOR_PATTERN.test(color)) {
+    return { ok: false, error: 'color debe tener formato hexadecimal #RRGGBB.' };
+  }
+
+  if (!ALLOWED_CATEGORY_TYPES.has(type)) {
+    return { ok: false, error: 'type invalido.' };
+  }
+
+  return {
+    ok: true,
+    value: {
+      name,
+      iconName,
+      color,
+      type,
+      isActive: body.isActive === undefined ? true : Boolean(body.isActive),
+    },
+  };
+}
+
+function validateSubcategoryPayload(body) {
+  if (!body || typeof body !== 'object') {
+    return { ok: false, error: 'Body invalido.' };
+  }
+
+  const categoryId = normalizeNullableInteger(body.categoryId);
+  const name = normalizeText(body.name);
+  const iconName = normalizeNullableText(body.iconName);
+
+  if (!categoryId || categoryId < 1) {
+    return { ok: false, error: 'categoryId invalido.' };
+  }
+
+  if (name.length < 2 || name.length > 100) {
+    return { ok: false, error: 'name debe tener entre 2 y 100 caracteres.' };
+  }
+
+  if (iconName && (iconName.length > 50 || !ALLOWED_CATEGORY_ICON_PATTERN.test(iconName))) {
+    return { ok: false, error: 'iconName invalido.' };
+  }
+
+  return {
+    ok: true,
+    value: {
+      categoryId,
+      name,
       iconName,
       isActive: body.isActive === undefined ? true : Boolean(body.isActive),
     },
@@ -337,6 +427,35 @@ function mapInstrument(row) {
     isActive: row.is_active,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+function mapSubcategory(row) {
+  return {
+    id: row.id,
+    categoryId: row.category_id,
+    categoryName: row.category_name ?? null,
+    name: row.name,
+    iconName: row.icon_name,
+    isActive: row.is_active,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapCategory(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    iconName: row.icon_name,
+    color: row.color,
+    type: row.type,
+    isSystem: row.is_system,
+    isActive: row.is_active,
+    canDelete: row.can_delete,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    subcategories: Array.isArray(row.subcategories) ? row.subcategories.map(mapSubcategory) : [],
   };
 }
 
@@ -558,6 +677,211 @@ async function softDeleteInstrument(instrumentId) {
   return result.rows.length > 0;
 }
 
+async function listCategories() {
+  const result = await query(
+    `
+    SELECT
+      c.id,
+      c.name,
+      c.icon_name,
+      c.color,
+      c.type,
+      c.is_system,
+      c.is_active,
+      c.created_at,
+      c.updated_at,
+      fn_can_delete_category(c.id) AS can_delete,
+      COALESCE(subcategories.subcategories, '[]'::json) AS subcategories
+    FROM app_gastos.categories c
+    LEFT JOIN LATERAL (
+      SELECT json_agg(
+        json_build_object(
+          'id', sc.id,
+          'category_id', sc.category_id,
+          'category_name', c.name,
+          'name', sc.name,
+          'icon_name', sc.icon_name,
+          'is_active', sc.is_active,
+          'created_at', sc.created_at,
+          'updated_at', sc.updated_at
+        ) ORDER BY sc.name ASC
+      ) AS subcategories
+      FROM app_gastos.subcategories sc
+      WHERE sc.category_id = c.id
+        AND sc.is_active = TRUE
+    ) subcategories ON TRUE
+    WHERE c.is_active = TRUE
+    ORDER BY c.name ASC
+    `,
+  );
+
+  return result.rows.map(mapCategory);
+}
+
+async function createCategory(payload) {
+  const result = await query(
+    `
+    INSERT INTO app_gastos.categories (name, icon_name, color, type, is_system, is_active)
+    VALUES ($1, $2, $3, $4, FALSE, $5)
+    RETURNING id, name, icon_name, color, type, is_system, is_active, created_at, updated_at
+    `,
+    [payload.name, payload.iconName, payload.color, payload.type, payload.isActive],
+  );
+
+  return mapCategory({
+    ...result.rows[0],
+    can_delete: true,
+    subcategories: [],
+  });
+}
+
+async function updateCategory(categoryId, payload) {
+  const result = await query(
+    `
+    UPDATE app_gastos.categories
+    SET name = $1,
+        icon_name = $2,
+        color = $3,
+        type = $4,
+        is_active = $5,
+        updated_at = NOW()
+    WHERE id = $6
+    RETURNING id, name, icon_name, color, type, is_system, is_active, created_at, updated_at
+    `,
+    [payload.name, payload.iconName, payload.color, payload.type, payload.isActive, categoryId],
+  );
+
+  if (result.rows.length === 0) {
+    return null;
+  }
+
+  const canDeleteResult = await query('SELECT fn_can_delete_category($1) AS can_delete', [categoryId]);
+
+  return mapCategory({
+    ...result.rows[0],
+    can_delete: canDeleteResult.rows[0]?.can_delete ?? false,
+    subcategories: [],
+  });
+}
+
+async function softDeleteCategory(categoryId) {
+  const canDeleteResult = await query('SELECT fn_can_delete_category($1) AS can_delete', [categoryId]);
+  const canDelete = Boolean(canDeleteResult.rows[0]?.can_delete);
+
+  if (!canDelete) {
+    return { deleted: false, blocked: true };
+  }
+
+  const result = await query(
+    `
+    UPDATE app_gastos.categories
+    SET is_active = FALSE,
+        updated_at = NOW()
+    WHERE id = $1
+    RETURNING id
+    `,
+    [categoryId],
+  );
+
+  return { deleted: result.rows.length > 0, blocked: false };
+}
+
+async function listSubcategories(categoryId) {
+  const values = [];
+  let categoryFilter = '';
+
+  if (categoryId) {
+    values.push(categoryId);
+    categoryFilter = 'AND sc.category_id = $1';
+  }
+
+  const result = await query(
+    `
+    SELECT sc.id, sc.category_id, c.name AS category_name, sc.name, sc.icon_name, sc.is_active, sc.created_at, sc.updated_at
+    FROM app_gastos.subcategories sc
+    INNER JOIN app_gastos.categories c ON c.id = sc.category_id
+    WHERE sc.is_active = TRUE
+    ${categoryFilter}
+    ORDER BY c.name ASC, sc.name ASC
+    `,
+    values,
+  );
+
+  return result.rows.map(mapSubcategory);
+}
+
+async function createSubcategory(payload) {
+  const categoryCheck = await query('SELECT id FROM app_gastos.categories WHERE id = $1 AND is_active = TRUE', [payload.categoryId]);
+
+  if (categoryCheck.rows.length === 0) {
+    return null;
+  }
+
+  const result = await query(
+    `
+    INSERT INTO app_gastos.subcategories (category_id, name, icon_name, is_active)
+    VALUES ($1, $2, $3, $4)
+    RETURNING id, category_id, name, icon_name, is_active, created_at, updated_at
+    `,
+    [payload.categoryId, payload.name, payload.iconName, payload.isActive],
+  );
+
+  const categoryResult = await query('SELECT name FROM app_gastos.categories WHERE id = $1', [payload.categoryId]);
+
+  return mapSubcategory({
+    ...result.rows[0],
+    category_name: categoryResult.rows[0]?.name ?? null,
+  });
+}
+
+async function updateSubcategory(subcategoryId, payload) {
+  const categoryCheck = await query('SELECT id FROM app_gastos.categories WHERE id = $1 AND is_active = TRUE', [payload.categoryId]);
+
+  if (categoryCheck.rows.length === 0) {
+    return null;
+  }
+
+  const result = await query(
+    `
+    UPDATE app_gastos.subcategories
+    SET category_id = $1,
+        name = $2,
+        icon_name = $3,
+        is_active = $4,
+        updated_at = NOW()
+    WHERE id = $5
+    RETURNING id, category_id, name, icon_name, is_active, created_at, updated_at
+    `,
+    [payload.categoryId, payload.name, payload.iconName, payload.isActive, subcategoryId],
+  );
+
+  if (result.rows.length === 0) {
+    return null;
+  }
+
+  const categoryResult = await query('SELECT name FROM app_gastos.categories WHERE id = $1', [payload.categoryId]);
+
+  return mapSubcategory({
+    ...result.rows[0],
+    category_name: categoryResult.rows[0]?.name ?? null,
+  });
+}
+
+async function softDeleteSubcategory(subcategoryId) {
+  const result = await query(
+    `
+    UPDATE app_gastos.subcategories
+    SET is_active = FALSE,
+        updated_at = NOW()
+    WHERE id = $1
+    RETURNING id
+    `,
+    [subcategoryId],
+  );
+
+  return result.rows.length > 0;
+}
+
 async function handleBanksRoute(method, path, event) {
   const { id } = parsePathParameters(path);
 
@@ -681,6 +1005,130 @@ async function handleInstrumentsRoute(method, path, event) {
   return null;
 }
 
+async function handleCategoriesRoute(method, path, event) {
+  const { id } = parsePathParameters(path);
+
+  if (method === 'GET' && id === null) {
+    const data = await listCategories();
+    return jsonResponse(200, { success: true, data });
+  }
+
+  if (method === 'POST' && id === null) {
+    const bodyResult = parseJsonBody(event);
+    if (!bodyResult.ok) {
+      return jsonResponse(400, { success: false, error: bodyResult.error });
+    }
+
+    const validated = validateCategoryPayload(bodyResult.value);
+    if (!validated.ok) {
+      return jsonResponse(400, { success: false, error: validated.error });
+    }
+
+    const created = await createCategory(validated.value);
+    return jsonResponse(201, { success: true, data: created });
+  }
+
+  if (method === 'PUT' && id !== null) {
+    const bodyResult = parseJsonBody(event);
+    if (!bodyResult.ok) {
+      return jsonResponse(400, { success: false, error: bodyResult.error });
+    }
+
+    const validated = validateCategoryPayload(bodyResult.value);
+    if (!validated.ok) {
+      return jsonResponse(400, { success: false, error: validated.error });
+    }
+
+    const updated = await updateCategory(id, validated.value);
+    if (!updated) {
+      return jsonResponse(404, { success: false, error: 'Categoria no encontrada.' });
+    }
+
+    return jsonResponse(200, { success: true, data: updated });
+  }
+
+  if (method === 'DELETE' && id !== null) {
+    const deletion = await softDeleteCategory(id);
+
+    if (deletion.blocked) {
+      return jsonResponse(409, { success: false, error: 'La categoria tiene movimientos asociados o es del sistema.' });
+    }
+
+    if (!deletion.deleted) {
+      return jsonResponse(404, { success: false, error: 'Categoria no encontrada.' });
+    }
+
+    return jsonResponse(200, { success: true, data: { id } });
+  }
+
+  return null;
+}
+
+async function handleSubcategoriesRoute(method, path, event) {
+  const { id } = parsePathParameters(path);
+
+  if (method === 'GET' && id === null) {
+    const categoryIdRaw = getQueryParam(event, 'category_id');
+    const categoryId = categoryIdRaw ? parseInteger(categoryIdRaw) : null;
+
+    if (categoryIdRaw && !categoryId) {
+      return jsonResponse(400, { success: false, error: 'category_id invalido.' });
+    }
+
+    const data = await listSubcategories(categoryId);
+    return jsonResponse(200, { success: true, data });
+  }
+
+  if (method === 'POST' && id === null) {
+    const bodyResult = parseJsonBody(event);
+    if (!bodyResult.ok) {
+      return jsonResponse(400, { success: false, error: bodyResult.error });
+    }
+
+    const validated = validateSubcategoryPayload(bodyResult.value);
+    if (!validated.ok) {
+      return jsonResponse(400, { success: false, error: validated.error });
+    }
+
+    const created = await createSubcategory(validated.value);
+    if (!created) {
+      return jsonResponse(404, { success: false, error: 'Categoria no encontrada.' });
+    }
+
+    return jsonResponse(201, { success: true, data: created });
+  }
+
+  if (method === 'PUT' && id !== null) {
+    const bodyResult = parseJsonBody(event);
+    if (!bodyResult.ok) {
+      return jsonResponse(400, { success: false, error: bodyResult.error });
+    }
+
+    const validated = validateSubcategoryPayload(bodyResult.value);
+    if (!validated.ok) {
+      return jsonResponse(400, { success: false, error: validated.error });
+    }
+
+    const updated = await updateSubcategory(id, validated.value);
+    if (!updated) {
+      return jsonResponse(404, { success: false, error: 'Subcategoria no encontrada.' });
+    }
+
+    return jsonResponse(200, { success: true, data: updated });
+  }
+
+  if (method === 'DELETE' && id !== null) {
+    const deleted = await softDeleteSubcategory(id);
+    if (!deleted) {
+      return jsonResponse(404, { success: false, error: 'Subcategoria no encontrada.' });
+    }
+
+    return jsonResponse(200, { success: true, data: { id } });
+  }
+
+  return null;
+}
+
 export async function handler(event) {
   if (event.requestContext?.http?.method === 'OPTIONS' || event.httpMethod === 'OPTIONS') {
     return jsonResponse(204, { success: true });
@@ -735,8 +1183,22 @@ export async function handler(event) {
   const { resource } = parsePathParameters(path);
 
   try {
+    if (resource === 'categories') {
+      const response = await handleCategoriesRoute(method, path, event);
+      if (response) {
+        return response;
+      }
+    }
+
     if (resource === 'banks') {
       const response = await handleBanksRoute(method, path, event);
+      if (response) {
+        return response;
+      }
+    }
+
+    if (resource === 'subcategories') {
+      const response = await handleSubcategoriesRoute(method, path, event);
       if (response) {
         return response;
       }
@@ -748,7 +1210,14 @@ export async function handler(event) {
         return response;
       }
     }
-  } catch {
+  } catch (error) {
+    if (error?.code === '23505') {
+      return jsonResponse(409, {
+        success: false,
+        error: 'Ya existe un registro con esos datos.',
+      });
+    }
+
     return jsonResponse(500, {
       success: false,
       error: 'Error interno al procesar la solicitud.',
