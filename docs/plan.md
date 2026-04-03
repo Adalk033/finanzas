@@ -614,12 +614,12 @@ Lambda única de .mjs con conexión a la dB de postgreSQL
 
 ### Fase 1 — Módulo Bancos e Instrumentos Financieros
 
-- [ ]  **Backend:** CRUD bancos (`POST/GET/PUT/DELETE /banks`)
-- [ ]  **Backend:** CRUD instrumentos financieros (`/instruments`)
-- [ ]  **Frontend:** Página de Bancos — listado, crear, editar, eliminar
-- [ ]  **Frontend:** Página de Instrumentos — alta de TDC, TDD, cuentas por banco
-- [ ]  **Frontend:** Detalle de TDC con fecha de corte, pago, límite, saldo
-- [ ]  **Frontend:** Vista agrupada por banco con todos sus instrumentos
+- [x]  **Backend:** CRUD bancos (`POST/GET/PUT/DELETE /banks`)
+- [x]  **Backend:** CRUD instrumentos financieros (`/instruments`)
+- [x]  **Frontend:** Página de Bancos — listado, crear, editar, eliminar
+- [x]  **Frontend:** Página de Instrumentos — alta de TDC, TDD, cuentas por banco
+- [x]  **Frontend:** Detalle de TDC con fecha de corte, pago, límite, saldo
+- [x]  **Frontend:** Vista agrupada por banco con todos sus instrumentos
 
 ### Fase 2 — Módulo Categorías y Subcategorías
 

@@ -1,5 +1,11 @@
 import { ENDPOINTS } from './endpoints'
 import type { ApiResponse, LocalConfig } from '../types/config'
+import type {
+  Bank,
+  BankInput,
+  FinancialInstrument,
+  FinancialInstrumentInput,
+} from '../types/domain'
 
 const CLIENT_VERSION = 'phase0'
 
@@ -69,11 +75,71 @@ async function request<T>(
   }
 }
 
+function sanitizeBankPayload(payload: BankInput): Omit<BankInput, 'shortName' | 'color' | 'iconName'> & {
+  shortName: string | null
+  color: string | null
+  iconName: string | null
+} {
+  return {
+    ...payload,
+    shortName: payload.shortName.trim() || null,
+    color: payload.color.trim() || null,
+    iconName: payload.iconName.trim() || null,
+  }
+}
+
+function sanitizeInstrumentPayload(payload: FinancialInstrumentInput): Omit<FinancialInstrumentInput, 'lastFour' | 'notes'> & {
+  lastFour: string | null
+  notes: string | null
+} {
+  return {
+    ...payload,
+    lastFour: payload.lastFour.trim() || null,
+    notes: payload.notes.trim() || null,
+  }
+}
+
 export const apiClient = {
   health: () => request<{ status: string }>(ENDPOINTS.HEALTH, { method: 'GET' }),
   bootstrapPing: (message: string) =>
     request<{ message: string }>(ENDPOINTS.BOOTSTRAP_PING, {
       method: 'POST',
       body: JSON.stringify({ message }),
+    }),
+  getBanks: () => request<Bank[]>(ENDPOINTS.BANKS, { method: 'GET' }),
+  createBank: (payload: BankInput) =>
+    request<Bank>(ENDPOINTS.BANKS, {
+      method: 'POST',
+      body: JSON.stringify(sanitizeBankPayload(payload)),
+    }),
+  updateBank: (id: number, payload: BankInput) =>
+    request<Bank>(`${ENDPOINTS.BANKS}/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(sanitizeBankPayload(payload)),
+    }),
+  deleteBank: (id: number) =>
+    request<{ id: number }>(`${ENDPOINTS.BANKS}/${id}`, {
+      method: 'DELETE',
+    }),
+  getInstruments: (bankId?: number) => {
+    if (!bankId) {
+      return request<FinancialInstrument[]>(ENDPOINTS.INSTRUMENTS, { method: 'GET' })
+    }
+
+    return request<FinancialInstrument[]>(`${ENDPOINTS.INSTRUMENTS}?bank_id=${bankId}`, { method: 'GET' })
+  },
+  createInstrument: (payload: FinancialInstrumentInput) =>
+    request<FinancialInstrument>(ENDPOINTS.INSTRUMENTS, {
+      method: 'POST',
+      body: JSON.stringify(sanitizeInstrumentPayload(payload)),
+    }),
+  updateInstrument: (id: number, payload: FinancialInstrumentInput) =>
+    request<FinancialInstrument>(`${ENDPOINTS.INSTRUMENTS}/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(sanitizeInstrumentPayload(payload)),
+    }),
+  deleteInstrument: (id: number) =>
+    request<{ id: number }>(`${ENDPOINTS.INSTRUMENTS}/${id}`, {
+      method: 'DELETE',
     }),
 }
