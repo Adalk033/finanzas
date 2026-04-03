@@ -264,6 +264,7 @@ lambda-backend/
 - Creating an expense on a credit card increases `current_balance` and decreases `available_credit`.
 - Creating an expense on a debit card/account decreases `current_amount`.
 - Income on a debit card/account increases `current_amount`.
+- **Paying a credit card or moving money between accounts is a Transfer, not a Transaction.** See Transfers section.
 
 ### MSI (Meses Sin Intereses)
 
@@ -273,6 +274,19 @@ lambda-backend/
 - `msi_remaining` tracks how many installments are left.
 - MSI options: 3, 6, 9, 12, 18, 24 months.
 - Each MSI installment appears in the corresponding credit card statement period.
+
+### Transfers
+
+- Transfers represent money movements between two financial instruments. They are NOT transactions.
+- Types: `card_payment` (pay credit card from debit/account), `inter_account` (move between own accounts), `loan_payment` (pay loan installment from account), `other`.
+- Creating a transfer updates both instrument balances atomically:
+    - Source (debit/account): `current_amount -= amount`.
+    - Destination (credit card): `current_balance -= amount`, `available_credit += amount`.
+    - Destination (debit/account): `current_amount += amount`.
+- Card payments are independent from purchases (MSI, contado, MCI). The user can make partial, total, or advance payments at any time.
+- A transfer can optionally link to a `credit_card_statement` (via `statement_id`) or a `loan` (via `loan_id`).
+- Deleting a transfer reverses the balance changes on both instruments.
+- Source and destination instruments must be different (enforced by CHECK constraint).
 
 ### Credit Card Statements
 

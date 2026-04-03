@@ -374,6 +374,32 @@ CREATE TABLE credit_card_statements (
 );
 
 -- ============================================
+-- TABLA: transfers (pagos a TDC, transferencias entre cuentas)
+-- ============================================
+CREATE TABLE transfers (
+    id                      SERIAL PRIMARY KEY,
+    source_instrument_id    INT NOT NULL REFERENCES financial_instruments(id),
+    destination_instrument_id INT NOT NULL REFERENCES financial_instruments(id),
+    amount                  NUMERIC(12,2) NOT NULL,
+    currency_id             INT NOT NULL REFERENCES currencies(id),
+    transfer_date           DATE NOT NULL,
+    type                    VARCHAR(20) NOT NULL
+                            CHECK (type IN ('card_payment', 'inter_account', 'loan_payment', 'other')),
+    statement_id            INT REFERENCES credit_card_statements(id), -- Pago vinculado a estado de cuenta
+    loan_id                 INT REFERENCES loans(id),                  -- Pago vinculado a préstamo
+    description             VARCHAR(255),
+    notes                   TEXT,
+    created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CHECK (source_instrument_id != destination_instrument_id)
+);
+
+CREATE INDEX idx_transfers_source ON transfers(source_instrument_id);
+CREATE INDEX idx_transfers_destination ON transfers(destination_instrument_id);
+CREATE INDEX idx_transfers_date ON transfers(transfer_date);
+CREATE INDEX idx_transfers_type ON transfers(type);
+
+-- ============================================
 -- VISTAS ÚTILES
 -- ============================================
 
@@ -574,7 +600,7 @@ Lambda única de .mjs con conexión a la dB de postgreSQL
 ### Fase 0 — Setup e Infraestructura
 
 - [ ]  Inicializar proyecto Electron + React + Vite + TypeScript
-- [ ]  Configurar CSS nativo con variables de tema oscuro, vas a tener que editar un poco el archivo DESING.md para hacerlo full modo oscuro unicamente.
+- [ ]  Configurar CSS nativo con variables de tema oscuro
 - [ ]  Configurar better-sqlite3 en main process para config local
 - [ ]  Crear preload bridge seguro (contextBridge)
 - [ ]  Pantalla de Settings: captura de API Key, endpoint y región
@@ -595,8 +621,6 @@ Lambda única de .mjs con conexión a la dB de postgreSQL
 
 ### Fase 2 — Módulo Categorías y Subcategorías
 
-*Duración estimada: 2-3 días*
-
 - [ ]  **Backend:** CRUD categorías con validación de eliminación (fn_can_delete_category)
 - [ ]  **Backend:** CRUD subcategorías
 - [ ]  **Frontend:** Página de Categorías — CRUD con íconos Lucide y colores
@@ -604,8 +628,6 @@ Lambda única de .mjs con conexión a la dB de postgreSQL
 - [ ]  **Frontend:** Indicador visual de categorías no eliminables (asociadas a gastos)
 
 ### Fase 3 — Módulo Transacciones (Gastos e Ingresos)
-
-*Duración estimada: 5-6 días*
 
 - [ ]  **Backend:** CRUD transacciones con filtros (fecha, categoría, instrumento, tipo)
 - [ ]  **Backend:** Lógica MSI — cálculo automático de monto mensual y fechas
@@ -615,20 +637,22 @@ Lambda única de .mjs con conexión a la dB de postgreSQL
 - [ ]  **Frontend:** Opción MSI en formulario de gasto a TDC (3, 6, 9, 12, 18, 24 meses)
 - [ ]  **Frontend:** Vista de compras MSI activas con desglose por mes
 
-### Fase 4 — Módulo Tarjetas de Crédito (Estados de Cuenta)
-
-*Duración estimada: 3-4 días*
+### Fase 4 — Módulo Tarjetas de Crédito (Estados de Cuenta + Pagos/Transferencias)
 
 - [ ]  **Backend:** CRUD estados de cuenta TDC
 - [ ]  **Backend:** Cálculo automático del total por período de corte
+- [ ]  **Backend:** CRUD transferencias (`/transfers`) con actualización automática de saldos en ambos instrumentos
+- [ ]  **Backend:** Tipos de transferencia: `card_payment`, `inter_account`, `loan_payment`, `other`
+- [ ]  **Backend:** Vinculación opcional de transferencia a estado de cuenta (`statement_id`) o préstamo (`loan_id`)
 - [ ]  **Frontend:** Página de TDC — vista por tarjeta con período actual
 - [ ]  **Frontend:** Detalle de estado de cuenta con desglose de movimientos
 - [ ]  **Frontend:** Edición de fecha de pago (override del default)
 - [ ]  **Frontend:** Indicadores de crédito disponible y deuda total
+- [ ]  **Frontend:** Botón/formulario de "Abonar a tarjeta" desde cualquier cuenta/débito
+- [ ]  **Frontend:** Sección de transferencias entre cuentas propias
+- [ ]  **Frontend:** Historial de pagos/abonos por instrumento
 
 ### Fase 5 — Módulo Préstamos
-
-*Duración estimada: 4-5 días*
 
 - [ ]  **Backend:** CRUD préstamos
 - [ ]  **Backend:** Generación de tabla de amortización (fija y variable)
@@ -640,8 +664,6 @@ Lambda única de .mjs con conexión a la dB de postgreSQL
 
 ### Fase 6 — Módulo Suscripciones y Gastos Fijos
 
-*Duración estimada: 3-4 días*
-
 - [ ]  **Backend:** CRUD suscripciones
 - [ ]  **Backend:** CRUD gastos fijos + historial de pagos
 - [ ]  **Frontend:** Página de Suscripciones — listado con montos y ciclos
@@ -649,8 +671,6 @@ Lambda única de .mjs con conexión a la dB de postgreSQL
 - [ ]  **Frontend:** Registro de pago mensual de gastos fijos
 
 ### Fase 7 — Dashboard Principal
-
-*Duración estimada: 5-6 días*
 
 - [ ]  **Backend:** Endpoints de resumen financiero (vista v_financial_summary)
 - [ ]  **Backend:** Endpoints de agregados para gráficas
@@ -667,8 +687,6 @@ Lambda única de .mjs con conexión a la dB de postgreSQL
 
 ### Fase 8 — Módulo Presupuestos y Simulador
 
-*Duración estimada: 4-5 días*
-
 - [ ]  **Backend:** CRUD presupuestos mensuales por categoría
 - [ ]  **Backend:** Lógica de simulación financiera (snapshot + cálculo)
 - [ ]  **Frontend:** Página de Presupuestos — definir topes por categoría y mes
@@ -681,8 +699,6 @@ Lambda única de .mjs con conexión a la dB de postgreSQL
 
 ### Fase 9 — Módulo Recordatorios
 
-*Duración estimada: 2-3 días*
-
 - [ ]  **Backend:** CRUD recordatorios
 - [ ]  **Backend:** Endpoint de recordatorios pendientes (no leídos)
 - [ ]  **Frontend:** Página/sección de Recordatorios con badges de no leídos
@@ -690,8 +706,6 @@ Lambda única de .mjs con conexión a la dB de postgreSQL
 - [ ]  **Frontend:** Marcar como leído/descartado
 
 ### Fase 10 — Pulido, Testing y Build
-
-*Duración estimada: 4-5 días*
 
 - [ ]  Revisión completa de flujos y edge cases
 - [ ]  Manejo de errores global (frontend + backend)
@@ -703,32 +717,6 @@ Lambda única de .mjs con conexión a la dB de postgreSQL
 
 ---
 
-## ⏱️ Estimación Total
-
-| Fase | Módulo | Días estimados |
-| --- | --- | --- |
-| 0 | Setup e Infraestructura | 3-4 |
-| 1 | Bancos e Instrumentos | 4-5 |
-| 2 | Categorías y Subcategorías | 2-3 |
-| 3 | Transacciones + MSI | 5-6 |
-| 4 | Tarjetas de Crédito | 3-4 |
-| 5 | Préstamos | 4-5 |
-| 6 | Suscripciones y Gastos Fijos | 3-4 |
-| 7 | Dashboard + Gráficas | 5-6 |
-| 8 | Presupuestos y Simulador | 4-5 |
-| 9 | Recordatorios | 2-3 |
-| 10 | Pulido, Testing y Build | 4-5 |
-| **Total** | **Todas las fases** | **~40-50 días** |
-
-<aside>
-💡
-
-**Nota:** Las estimaciones asumen trabajo de una persona dedicada ~6-8 hrs/día. Si trabajas en paralelo backend/frontend o tienes tiempo parcial, ajusta proporcionalmente.
-
-</aside>
-
----
-
 ## 📌 Decisiones Técnicas Clave
 
 1. **API Key como auth** — Sencillo para single-user. Se almacena en SQLite local y se envía en header `x-api-key` en cada request.
@@ -737,3 +725,4 @@ Lambda única de .mjs con conexión a la dB de postgreSQL
 4. **MSI como campo en transactions** — No como tabla separada. Cada transacción MSI tiene sus campos de desglose.
 5. **Simulaciones con snapshot** — Se guarda el estado financiero al momento de la simulación en JSONB para poder revisarlo después.
 6. **Categorías protegidas** — Función SQL `fn_can_delete_category` garantiza que no se borren categorías en uso.
+7. **Transfers independientes de transacciones** — Los pagos a TDC y movimientos entre cuentas son `transfers`, no `transactions`. Esto permite que el pago de una tarjeta sea independiente de las compras (contado, MSI, MCI). El usuario puede hacer abonos parciales, totales o adelantados a cualquier TDC en cualquier momento.
