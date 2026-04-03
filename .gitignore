@@ -13,6 +13,7 @@ dist-electron
 dist-ssr
 release
 *.local
+.nycrc
 
 # SQLite database files (runtime data, not source)
 *.db

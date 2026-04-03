@@ -9,6 +9,9 @@ import type {
   FinancialInstrumentInput,
   Subcategory,
   SubcategoryInput,
+  Transaction,
+  TransactionFilters,
+  TransactionInput,
 } from '../types/domain'
 
 const CLIENT_VERSION = 'phase0'
@@ -123,6 +126,48 @@ function sanitizeSubcategoryPayload(payload: SubcategoryInput): Omit<Subcategory
   }
 }
 
+function sanitizeTransactionPayload(payload: TransactionInput): Omit<TransactionInput, 'description' | 'notes'> & {
+  description: string | null
+  notes: string | null
+} {
+  return {
+    ...payload,
+    description: payload.description.trim() || null,
+    notes: payload.notes.trim() || null,
+  }
+}
+
+function buildTransactionQuery(filters: TransactionFilters): string {
+  const params = new URLSearchParams()
+
+  if (filters.fromDate) {
+    params.set('from_date', filters.fromDate)
+  }
+
+  if (filters.toDate) {
+    params.set('to_date', filters.toDate)
+  }
+
+  if (filters.categoryId) {
+    params.set('category_id', String(filters.categoryId))
+  }
+
+  if (filters.instrumentId) {
+    params.set('instrument_id', String(filters.instrumentId))
+  }
+
+  if (filters.type) {
+    params.set('type', filters.type)
+  }
+
+  if (filters.search && filters.search.trim().length > 0) {
+    params.set('search', filters.search.trim())
+  }
+
+  const query = params.toString()
+  return query.length > 0 ? `?${query}` : ''
+}
+
 export const apiClient = {
   health: () => request<{ status: string }>(ENDPOINTS.HEALTH, { method: 'GET' }),
   bootstrapPing: (message: string) =>
@@ -200,6 +245,22 @@ export const apiClient = {
     }),
   deleteInstrument: (id: number) =>
     request<{ id: number }>(`${ENDPOINTS.INSTRUMENTS}/${id}`, {
+      method: 'DELETE',
+    }),
+  getTransactions: (filters: TransactionFilters = {}) =>
+    request<Transaction[]>(`${ENDPOINTS.TRANSACTIONS}${buildTransactionQuery(filters)}`, { method: 'GET' }),
+  createTransaction: (payload: TransactionInput) =>
+    request<Transaction>(ENDPOINTS.TRANSACTIONS, {
+      method: 'POST',
+      body: JSON.stringify(sanitizeTransactionPayload(payload)),
+    }),
+  updateTransaction: (id: number, payload: TransactionInput) =>
+    request<Transaction>(`${ENDPOINTS.TRANSACTIONS}/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(sanitizeTransactionPayload(payload)),
+    }),
+  deleteTransaction: (id: number) =>
+    request<{ id: number }>(`${ENDPOINTS.TRANSACTIONS}/${id}`, {
       method: 'DELETE',
     }),
 }

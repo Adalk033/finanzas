@@ -631,13 +631,13 @@ Lambda única de .mjs con conexión a la dB de postgreSQL
 
 ### Fase 3 — Módulo Transacciones (Gastos e Ingresos)
 
-- [ ]  **Backend:** CRUD transacciones con filtros (fecha, categoría, instrumento, tipo)
-- [ ]  **Backend:** Lógica MSI — cálculo automático de monto mensual y fechas
-- [ ]  **Backend:** Al crear transacción, actualizar saldo del instrumento
-- [ ]  **Frontend:** Página de Transacciones — listado con filtros y búsqueda
-- [ ]  **Frontend:** Formulario de nueva transacción con selector de instrumento y categoría
-- [ ]  **Frontend:** Opción MSI en formulario de gasto a TDC (3, 6, 9, 12, 18, 24 meses)
-- [ ]  **Frontend:** Vista de compras MSI activas con desglose por mes
+- [x]  **Backend:** CRUD transacciones con filtros (fecha, categoría, instrumento, tipo)
+- [x]  **Backend:** Lógica MSI — cálculo automático de monto mensual y fechas
+- [x]  **Backend:** Al crear transacción, actualizar saldo del instrumento
+- [x]  **Frontend:** Página de Transacciones — listado con filtros y búsqueda
+- [x]  **Frontend:** Formulario de nueva transacción con selector de instrumento y categoría
+- [x]  **Frontend:** Opción MSI en formulario de gasto a TDC (3, 6, 9, 12, 18, 24 meses)
+- [x]  **Frontend:** Vista de compras MSI activas con desglose por mes
 
 ### Fase 4 — Módulo Tarjetas de Crédito (Estados de Cuenta + Pagos/Transferencias)
 

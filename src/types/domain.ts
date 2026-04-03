@@ -1,5 +1,6 @@
 export type InstrumentType = 'credit_card' | 'debit_card' | 'account'
 export type CategoryType = 'expense' | 'income' | 'both'
+export type TransactionType = 'expense' | 'income'
 
 export interface Bank {
   id: number
@@ -96,4 +97,51 @@ export interface SubcategoryInput {
   name: string
   iconName: string
   isActive: boolean
+}
+
+export interface Transaction {
+  id: number
+  instrumentId: number
+  instrumentName: string | null
+  instrumentType: InstrumentType | null
+  categoryId: number | null
+  categoryName: string | null
+  subcategoryId: number | null
+  subcategoryName: string | null
+  currencyId: number
+  type: TransactionType
+  amount: number
+  description: string | null
+  transactionDate: string
+  notes: string | null
+  isMsi: boolean
+  msiMonths: number | null
+  msiMonthlyAmount: number | null
+  msiStartDate: string | null
+  msiRemaining: number | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface TransactionInput {
+  instrumentId: number
+  categoryId: number | null
+  subcategoryId: number | null
+  currencyId: number
+  type: TransactionType
+  amount: number
+  description: string
+  transactionDate: string
+  notes: string
+  isMsi: boolean
+  msiMonths: number | null
+}
+
+export interface TransactionFilters {
+  fromDate?: string
+  toDate?: string
+  categoryId?: number
+  instrumentId?: number
+  type?: TransactionType
+  search?: string
 }

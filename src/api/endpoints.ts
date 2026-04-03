@@ -5,4 +5,5 @@ export const ENDPOINTS = {
   BANKS: '/banks',
   INSTRUMENTS: '/instruments',
   SUBCATEGORIES: '/subcategories',
+  TRANSACTIONS: '/transactions',
 } as const
