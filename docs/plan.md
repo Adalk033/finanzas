@@ -601,16 +601,16 @@ Lambda única de .mjs con conexión a la dB de postgreSQL
 
 ### Fase 0 — Setup e Infraestructura
 
-- [ ]  Inicializar proyecto Electron + React + Vite + TypeScript
-- [ ]  Configurar CSS nativo con variables de tema oscuro
-- [ ]  Configurar better-sqlite3 en main process para config local
-- [ ]  Crear preload bridge seguro (contextBridge)
-- [ ]  Pantalla de Settings: captura de API Key, endpoint y región
+- [x]  Inicializar proyecto Electron + React + Vite + TypeScript
+- [x]  Configurar CSS nativo con variables de tema oscuro
+- [x]  Configurar better-sqlite3 en main process para config local
+- [x]  Crear preload bridge seguro (contextBridge)
+- [x]  Pantalla de Settings: captura de API Key, endpoint y región
 - [ ]  Configurar proyecto Lambda en AWS (API Gateway + Lambda + RDS PostgreSQL)
 - [ ]  Ejecutar esquema SQL completo en RDS
-- [ ]  Crear `api/client.ts` con fetch wrapper (headers, API key, error handling)
-- [ ]  crear código de lambda
-- [ ]  Middleware de autenticación por API key
+- [x]  Crear `api/client.ts` con fetch wrapper (headers, API key, error handling)
+- [x]  crear código de lambda
+- [x]  Middleware de autenticación por API key
 
 ### Fase 1 — Módulo Bancos e Instrumentos Financieros
 
