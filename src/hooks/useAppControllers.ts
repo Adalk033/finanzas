@@ -23,7 +23,7 @@ export function useAppControllers() {
       && configController.config.awsRegion.trim(),
   )
 
-  const settingsPingController = useSettingsPing()
+  const settingsPingController = useSettingsPing(hasConfig)
   const dashboardController = useDashboardController()
   const instrumentsController = useInstrumentsController()
   const banksController = useBanksController({ loadInstruments: instrumentsController.loadInstruments })

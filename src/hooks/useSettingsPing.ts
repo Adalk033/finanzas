@@ -4,13 +4,19 @@ import { getLocalConfigBridge } from '../app/localConfigBridge'
 
 export type CloudConnectionStatus = 'unconfigured' | 'checking' | 'connected' | 'disconnected'
 
-export function useSettingsPing() {
+export function useSettingsPing(hasConfig: boolean) {
   const [pingResponse, setPingResponse] = useState('')
   const [pingError, setPingError] = useState('')
   const [isPinging, setIsPinging] = useState(false)
   const [cloudConnectionStatus, setCloudConnectionStatus] = useState<CloudConnectionStatus>('unconfigured')
 
   const refreshCloudConnection = useCallback(async (): Promise<void> => {
+    if (!hasConfig) {
+      setPingError('')
+      setCloudConnectionStatus('unconfigured')
+      return
+    }
+
     setPingError('')
     setCloudConnectionStatus('checking')
 
@@ -36,7 +42,7 @@ export function useSettingsPing() {
     }
 
     setCloudConnectionStatus('connected')
-  }, [])
+  }, [hasConfig])
 
   const handlePing = async (): Promise<void> => {
     setIsPinging(true)
@@ -67,6 +73,11 @@ export function useSettingsPing() {
   }
 
   useEffect(() => {
+    if (!hasConfig) {
+      setCloudConnectionStatus('unconfigured')
+      return
+    }
+
     void refreshCloudConnection()
 
     const intervalId = window.setInterval(() => {

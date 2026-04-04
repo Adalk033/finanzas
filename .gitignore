@@ -49,3 +49,4 @@ release
 .bash_history
 apigw-enforce-method-security.sh
 *.sh
+*.rendered.json

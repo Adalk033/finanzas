@@ -359,10 +359,30 @@ export const apiClient = {
   bootstrapPing: async (message: string) => {
     const config = await getStoredConfig()
 
-    return request<{ message: string }>(ENDPOINTS.BOOTSTRAP_PING, {
+    const primaryResponse = await request<{ message: string }>(ENDPOINTS.BOOTSTRAP_PING, {
       method: 'POST',
       body: JSON.stringify({
         awsRegion: config.awsRegion,
+        message,
+      }),
+    })
+
+    if (primaryResponse.success) {
+      return primaryResponse
+    }
+
+    const shouldRetryWithLegacyRegion =
+      typeof primaryResponse.error === 'string'
+      && primaryResponse.error.toLowerCase().includes('invalid request body')
+
+    if (!shouldRetryWithLegacyRegion) {
+      return primaryResponse
+    }
+
+    return request<{ message: string }>(ENDPOINTS.BOOTSTRAP_PING, {
+      method: 'POST',
+      body: JSON.stringify({
+        awsRegion: 'us-east-1',
         message,
       }),
     })
