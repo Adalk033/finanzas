@@ -23,10 +23,6 @@ import {
   EMPTY_TRANSACTION_FORM,
   EMPTY_TRANSFER_FORM,
   MSI_OPTIONS,
-  formatCurrency,
-  getBudgetStatusLabel,
-  getReminderTypeLabel,
-  getSimulationScenarioLabel,
   toEditableBank,
   toEditableCategory,
   toEditableFixedExpense,
@@ -78,7 +74,6 @@ import type {
   TransactionFilters,
   TransactionInput,
   TransactionType,
-  ReminderType,
 } from './types/domain'
 
 const DashboardSection = lazy(() => import('./components/sections/DashboardSection').then((module) => ({ default: module.DashboardSection })))
@@ -91,6 +86,9 @@ const CreditCardsSection = lazy(() => import('./components/sections/CreditCardsS
 const SubscriptionsSection = lazy(() => import('./components/sections/SubscriptionsSection').then((module) => ({ default: module.SubscriptionsSection })))
 const FixedExpensesSection = lazy(() => import('./components/sections/FixedExpensesSection').then((module) => ({ default: module.FixedExpensesSection })))
 const LoansSection = lazy(() => import('./components/sections/LoansSection').then((module) => ({ default: module.LoansSection })))
+const BudgetsSection = lazy(() => import('./components/sections/BudgetsSection').then((module) => ({ default: module.BudgetsSection })))
+const SimulatorSection = lazy(() => import('./components/sections/SimulatorSection').then((module) => ({ default: module.SimulatorSection })))
+const RemindersSection = lazy(() => import('./components/sections/RemindersSection').then((module) => ({ default: module.RemindersSection })))
 
 export function App() {
   const {
@@ -2249,715 +2247,81 @@ export function App() {
         ) : null}
 
         {activeSection === 'budgets' ? (
-          <section className="card">
-            <header className="card__header">
-              <h2 className="card__title">Presupuestos mensuales</h2>
-              <p className="card__subtitle">Define topes por categoria y monitorea el avance contra tus gastos reales.</p>
-            </header>
-
-            {budgetMessage ? <p className="message message--success">{budgetMessage}</p> : null}
-            {budgetError ? <p className="message message--error">{budgetError}</p> : null}
-
-            <div className="phase8-layout">
-              <article className="mini-card">
-                <header className="mini-card__header">
-                  <h3 className="mini-card__title">{editingBudgetId === null ? 'Nuevo presupuesto' : 'Editar presupuesto'}</h3>
-                </header>
-
-                <form className="form-grid" onSubmit={handleBudgetSubmit}>
-                  <label className="form-grid__field" htmlFor="budgetCategory">Categoria</label>
-                  <select
-                    id="budgetCategory"
-                    className="form-grid__input"
-                    value={budgetForm.categoryId ?? 0}
-                    onChange={(event) => {
-                      const value = Number.parseInt(event.target.value, 10)
-                      setBudgetForm((previous) => ({
-                        ...previous,
-                        categoryId: value === 0 ? null : value,
-                      }))
-                    }}
-                  >
-                    <option value={0}>Global (todas las categorias)</option>
-                    {expenseCategoryOptions.map((category) => (
-                      <option key={category.id} value={category.id}>{category.name}</option>
-                    ))}
-                  </select>
-
-                  <label className="form-grid__field" htmlFor="budgetAmount">Monto mensual</label>
-                  <input
-                    id="budgetAmount"
-                    className="form-grid__input"
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={budgetForm.amount}
-                    onChange={(event) => {
-                      setBudgetForm((previous) => ({ ...previous, amount: Number(event.target.value) }))
-                    }}
-                  />
-
-                  <label className="form-grid__field" htmlFor="budgetMonth">Mes</label>
-                  <input
-                    id="budgetMonth"
-                    className="form-grid__input"
-                    type="number"
-                    min={1}
-                    max={12}
-                    value={budgetForm.month}
-                    onChange={(event) => {
-                      setBudgetForm((previous) => ({ ...previous, month: Number(event.target.value) }))
-                    }}
-                  />
-
-                  <label className="form-grid__field" htmlFor="budgetYear">Anio</label>
-                  <input
-                    id="budgetYear"
-                    className="form-grid__input"
-                    type="number"
-                    min={2000}
-                    max={2200}
-                    value={budgetForm.year}
-                    onChange={(event) => {
-                      setBudgetForm((previous) => ({ ...previous, year: Number(event.target.value) }))
-                    }}
-                  />
-
-                  <label className="form-grid__field" htmlFor="budgetNotes">Notas</label>
-                  <textarea
-                    id="budgetNotes"
-                    className="form-grid__input"
-                    rows={3}
-                    value={budgetForm.notes}
-                    onChange={(event) => {
-                      setBudgetForm((previous) => ({ ...previous, notes: event.target.value }))
-                    }}
-                  />
-
-                  <div className="form-grid__actions">
-                    <button className="button button--primary" type="submit" disabled={!hasConfig || isBudgetsLoading}>
-                      {editingBudgetId === null ? 'Guardar presupuesto' : 'Actualizar presupuesto'}
-                    </button>
-                    <button
-                      className="button button--secondary"
-                      type="button"
-                      onClick={() => {
-                        resetBudgetEditor()
-                      }}
-                    >
-                      Limpiar
-                    </button>
-                  </div>
-                </form>
-              </article>
-
-              <article className="mini-card">
-                <header className="mini-card__header">
-                  <h3 className="mini-card__title">Listado y progreso</h3>
-                </header>
-
-                <div className="form-grid form-grid--inline">
-                  <label className="form-grid__field" htmlFor="budgetFilterMonth">Mes filtro</label>
-                  <input
-                    id="budgetFilterMonth"
-                    className="form-grid__input"
-                    type="number"
-                    min={1}
-                    max={12}
-                    value={budgetFilterMonth}
-                    onChange={(event) => {
-                      setBudgetFilterMonth(Number(event.target.value))
-                    }}
-                  />
-
-                  <label className="form-grid__field" htmlFor="budgetFilterYear">Anio filtro</label>
-                  <input
-                    id="budgetFilterYear"
-                    className="form-grid__input"
-                    type="number"
-                    min={2000}
-                    max={2200}
-                    value={budgetFilterYear}
-                    onChange={(event) => {
-                      setBudgetFilterYear(Number(event.target.value))
-                    }}
-                  />
-
-                  <div className="form-grid__actions">
-                    <button
-                      className="button button--secondary"
-                      type="button"
-                      disabled={!hasConfig || isBudgetsLoading}
-                      onClick={() => {
-                        void loadBudgets(budgetFilterMonth, budgetFilterYear)
-                      }}
-                    >
-                      {isBudgetsLoading ? 'Cargando...' : 'Aplicar filtro'}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="table-wrap">
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th>Categoria</th>
-                        <th>Periodo</th>
-                        <th>Presupuesto</th>
-                        <th>Gastado</th>
-                        <th>Avance</th>
-                        <th>Estado</th>
-                        <th>Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {isBudgetsLoading ? (
-                        <tr>
-                          <td colSpan={7}>Cargando presupuestos...</td>
-                        </tr>
-                      ) : null}
-
-                      {!isBudgetsLoading && budgets.length === 0 ? (
-                        <tr>
-                          <td colSpan={7}>No hay presupuestos para este periodo.</td>
-                        </tr>
-                      ) : null}
-
-                      {!isBudgetsLoading
-                        ? budgets.map((budget) => (
-                          <tr key={budget.id}>
-                            <td>{budget.categoryName ?? 'Global'}</td>
-                            <td>{String(budget.month).padStart(2, '0')}/{budget.year}</td>
-                            <td>{formatCurrency(budget.amount)}</td>
-                            <td>{formatCurrency(budget.spentAmount)}</td>
-                            <td>
-                              <div className="progress">
-                                <div
-                                  className={`progress__bar ${budget.status === 'exceeded' ? 'progress__bar--error' : budget.status === 'warning' ? 'progress__bar--warning' : 'progress__bar--success'}`}
-                                  style={{ width: `${Math.min(100, budget.progressPercent)}%` }}
-                                />
-                              </div>
-                              <p className="category-card__meta">{budget.progressPercent.toFixed(2)}%</p>
-                            </td>
-                            <td>
-                              <span className={`badge ${budget.status === 'exceeded' ? 'badge--warning' : budget.status === 'warning' ? 'badge--info' : 'badge--success'}`}>
-                                {getBudgetStatusLabel(budget.status)}
-                              </span>
-                            </td>
-                            <td>
-                              <div className="table__actions">
-                                <button
-                                  className="button button--secondary"
-                                  type="button"
-                                  onClick={() => {
-                                    startBudgetEdit(budget)
-                                  }}
-                                >
-                                  Editar
-                                </button>
-                                <button
-                                  className="button button--danger"
-                                  type="button"
-                                  onClick={() => {
-                                    void handleBudgetDelete(budget.id)
-                                  }}
-                                >
-                                  Eliminar
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                        : null}
-                    </tbody>
-                  </table>
-                </div>
-              </article>
-            </div>
-          </section>
+          <BudgetsSection
+            hasConfig={hasConfig}
+            expenseCategoryOptions={expenseCategoryOptions}
+            budgetMessage={budgetMessage}
+            budgetError={budgetError}
+            editingBudgetId={editingBudgetId}
+            budgetForm={budgetForm}
+            isBudgetsLoading={isBudgetsLoading}
+            budgetFilterMonth={budgetFilterMonth}
+            budgetFilterYear={budgetFilterYear}
+            budgets={budgets}
+            onBudgetFormChange={setBudgetForm}
+            onBudgetFilterMonthChange={setBudgetFilterMonth}
+            onBudgetFilterYearChange={setBudgetFilterYear}
+            onSubmit={handleBudgetSubmit}
+            onReset={resetBudgetEditor}
+            onApplyFilter={() => {
+              void loadBudgets(budgetFilterMonth, budgetFilterYear)
+            }}
+            onEditBudget={startBudgetEdit}
+            onDeleteBudget={(budgetId) => {
+              void handleBudgetDelete(budgetId)
+            }}
+          />
         ) : null}
 
         {activeSection === 'simulator' ? (
-          <section className="card">
-            <header className="card__header">
-              <h2 className="card__title">Simulador financiero</h2>
-              <p className="card__subtitle">Analiza escenarios antes de comprometer tu flujo financiero.</p>
-            </header>
-
-            {simulationMessage ? <p className="message message--success">{simulationMessage}</p> : null}
-            {simulationError ? <p className="message message--error">{simulationError}</p> : null}
-
-            <div className="phase8-layout">
-              <article className="mini-card">
-                <header className="mini-card__header">
-                  <h3 className="mini-card__title">Nueva simulacion</h3>
-                </header>
-
-                <form className="form-grid" onSubmit={handleSimulationSubmit}>
-                  <label className="form-grid__field" htmlFor="simulationName">Nombre</label>
-                  <input
-                    id="simulationName"
-                    className="form-grid__input"
-                    type="text"
-                    value={simulationForm.name}
-                    onChange={(event) => {
-                      setSimulationForm((previous) => ({ ...previous, name: event.target.value }))
-                    }}
-                  />
-
-                  <label className="form-grid__field" htmlFor="simulationDate">Fecha</label>
-                  <input
-                    id="simulationDate"
-                    className="form-grid__input"
-                    type="date"
-                    value={simulationForm.simulationDate}
-                    onChange={(event) => {
-                      setSimulationForm((previous) => ({ ...previous, simulationDate: event.target.value }))
-                    }}
-                  />
-
-                  <label className="form-grid__field" htmlFor="simulationType">Escenario</label>
-                  <select
-                    id="simulationType"
-                    className="form-grid__input"
-                    value={simulationForm.scenarioType}
-                    onChange={(event) => {
-                      handleSimulationScenarioTypeChange(event.target.value as SimulationScenarioType)
-                    }}
-                  >
-                    <option value="direct_purchase">Compra directa</option>
-                    <option value="msi">Compra MSI</option>
-                    <option value="loan">Prestamo</option>
-                  </select>
-
-                  {simulationForm.scenarioType !== 'loan' ? (
-                    <>
-                      <label className="form-grid__field" htmlFor="simulationInstrument">Instrumento</label>
-                      <select
-                        id="simulationInstrument"
-                        className="form-grid__input"
-                        value={simulationForm.instrumentId ?? 0}
-                        onChange={(event) => {
-                          const value = Number.parseInt(event.target.value, 10)
-                          setSimulationForm((previous) => ({
-                            ...previous,
-                            instrumentId: value === 0 ? null : value,
-                          }))
-                        }}
-                      >
-                        <option value={0}>Seleccionar instrumento</option>
-                        {simulationInstrumentOptions.map((instrument) => (
-                          <option key={instrument.id} value={instrument.id}>{instrument.name}</option>
-                        ))}
-                      </select>
-                    </>
-                  ) : null}
-
-                  <label className="form-grid__field" htmlFor="simulationAmount">Monto</label>
-                  <input
-                    id="simulationAmount"
-                    className="form-grid__input"
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={simulationForm.amount}
-                    onChange={(event) => {
-                      setSimulationForm((previous) => ({ ...previous, amount: Number(event.target.value) }))
-                    }}
-                  />
-
-                  {simulationForm.scenarioType === 'msi' ? (
-                    <>
-                      <label className="form-grid__field" htmlFor="simulationMsiMonths">Meses MSI</label>
-                      <select
-                        id="simulationMsiMonths"
-                        className="form-grid__input"
-                        value={simulationForm.msiMonths ?? MSI_OPTIONS[0]}
-                        onChange={(event) => {
-                          setSimulationForm((previous) => ({ ...previous, msiMonths: Number.parseInt(event.target.value, 10) }))
-                        }}
-                      >
-                        {MSI_OPTIONS.map((months) => (
-                          <option key={months} value={months}>{months} meses</option>
-                        ))}
-                      </select>
-                    </>
-                  ) : null}
-
-                  {simulationForm.scenarioType === 'loan' ? (
-                    <>
-                      <label className="form-grid__field" htmlFor="simulationLoanMonths">Plazo (meses)</label>
-                      <input
-                        id="simulationLoanMonths"
-                        className="form-grid__input"
-                        type="number"
-                        min={1}
-                        max={600}
-                        value={simulationForm.loanMonths ?? 12}
-                        onChange={(event) => {
-                          setSimulationForm((previous) => ({ ...previous, loanMonths: Number(event.target.value) }))
-                        }}
-                      />
-
-                      <label className="form-grid__field" htmlFor="simulationAnnualRate">Tasa anual (%)</label>
-                      <input
-                        id="simulationAnnualRate"
-                        className="form-grid__input"
-                        type="number"
-                        min={0}
-                        max={100}
-                        step="0.01"
-                        value={simulationForm.annualRate ?? 0}
-                        onChange={(event) => {
-                          setSimulationForm((previous) => ({ ...previous, annualRate: Number(event.target.value) }))
-                        }}
-                      />
-                    </>
-                  ) : null}
-
-                  <label className="form-grid__field" htmlFor="simulationDescription">Descripcion</label>
-                  <textarea
-                    id="simulationDescription"
-                    className="form-grid__input"
-                    rows={3}
-                    value={simulationForm.description}
-                    onChange={(event) => {
-                      setSimulationForm((previous) => ({ ...previous, description: event.target.value }))
-                    }}
-                  />
-
-                  <div className="form-grid__actions">
-                    <button className="button button--primary" type="submit" disabled={!hasConfig || isSimulationsLoading}>
-                      Guardar simulacion
-                    </button>
-                    <button
-                      className="button button--secondary"
-                      type="button"
-                      onClick={() => {
-                        resetSimulationForm()
-                      }}
-                    >
-                      Limpiar
-                    </button>
-                  </div>
-                </form>
-              </article>
-
-              <article className="mini-card">
-                <header className="mini-card__header">
-                  <h3 className="mini-card__title">Historial</h3>
-                </header>
-
-                <div className="form-grid__actions">
-                  <button
-                    className="button button--secondary"
-                    type="button"
-                    disabled={!hasConfig || isSimulationsLoading}
-                    onClick={() => {
-                      void loadSimulations()
-                    }}
-                  >
-                    {isSimulationsLoading ? 'Cargando...' : 'Recargar historial'}
-                  </button>
-                </div>
-
-                <div className="table-wrap">
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th>Fecha</th>
-                        <th>Nombre</th>
-                        <th>Escenario</th>
-                        <th>Monto</th>
-                        <th>Compromiso mensual</th>
-                        <th>Balance neto proyectado</th>
-                        <th>Viabilidad</th>
-                        <th>Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {isSimulationsLoading ? (
-                        <tr>
-                          <td colSpan={8}>Cargando simulaciones...</td>
-                        </tr>
-                      ) : null}
-
-                      {!isSimulationsLoading && simulations.length === 0 ? (
-                        <tr>
-                          <td colSpan={8}>No hay simulaciones registradas.</td>
-                        </tr>
-                      ) : null}
-
-                      {!isSimulationsLoading
-                        ? simulations.map((simulation) => {
-                          const result = simulation.resultJson as {
-                            scenarioType?: SimulationScenarioType
-                            amount?: number
-                            monthlyCommitmentIncrease?: number
-                            projectedSummary?: {
-                              netBalance?: number
-                            }
-                          }
-
-                          const scenarioType = result.scenarioType ?? 'direct_purchase'
-                          const amount = result.amount ?? 0
-                          const monthlyCommitmentIncrease = result.monthlyCommitmentIncrease ?? 0
-                          const projectedNetBalance = result.projectedSummary?.netBalance ?? 0
-
-                          return (
-                            <tr key={simulation.id}>
-                              <td>{simulation.simulationDate}</td>
-                              <td>{simulation.name}</td>
-                              <td>{getSimulationScenarioLabel(scenarioType)}</td>
-                              <td>{formatCurrency(amount)}</td>
-                              <td>{formatCurrency(monthlyCommitmentIncrease)}</td>
-                              <td>{formatCurrency(projectedNetBalance)}</td>
-                              <td>
-                                <span className={`badge ${simulation.isFavorable ? 'badge--success' : 'badge--warning'}`}>
-                                  {simulation.isFavorable ? 'Favorable' : 'No favorable'}
-                                </span>
-                              </td>
-                              <td>
-                                <div className="table__actions">
-                                  <button
-                                    className="button button--danger"
-                                    type="button"
-                                    onClick={() => {
-                                      void handleSimulationDelete(simulation.id)
-                                    }}
-                                  >
-                                    Eliminar
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          )
-                        })
-                        : null}
-                    </tbody>
-                  </table>
-                </div>
-              </article>
-            </div>
-          </section>
+          <SimulatorSection
+            hasConfig={hasConfig}
+            simulationMessage={simulationMessage}
+            simulationError={simulationError}
+            simulationForm={simulationForm}
+            simulationInstrumentOptions={simulationInstrumentOptions}
+            simulations={simulations}
+            isSimulationsLoading={isSimulationsLoading}
+            onSimulationFormChange={setSimulationForm}
+            onScenarioTypeChange={handleSimulationScenarioTypeChange}
+            onSubmit={handleSimulationSubmit}
+            onReset={resetSimulationForm}
+            onReload={() => {
+              void loadSimulations()
+            }}
+            onDelete={(simulationId) => {
+              void handleSimulationDelete(simulationId)
+            }}
+          />
         ) : null}
 
         {activeSection === 'reminders' ? (
-          <section className="card">
-            <header className="card__header">
-              <h2 className="card__title">Recordatorios</h2>
-              <p className="card__subtitle">Gestiona alertas de pago, corte, suscripciones, prestamos y personalizadas.</p>
-            </header>
-
-            {reminderMessage ? <p className="message message--success">{reminderMessage}</p> : null}
-            {reminderError ? <p className="message message--error">{reminderError}</p> : null}
-
-            <div className="phase8-layout">
-              <article className="mini-card">
-                <header className="mini-card__header">
-                  <h3 className="mini-card__title">{editingReminderId === null ? 'Nuevo recordatorio' : 'Editar recordatorio'}</h3>
-                </header>
-
-                <form className="form-grid" onSubmit={handleReminderSubmit}>
-                  <label className="form-grid__field" htmlFor="reminderTitle">Titulo</label>
-                  <input
-                    id="reminderTitle"
-                    className="form-grid__input"
-                    type="text"
-                    value={reminderForm.title}
-                    onChange={(event) => {
-                      setReminderForm((previous) => ({ ...previous, title: event.target.value }))
-                    }}
-                  />
-
-                  <label className="form-grid__field" htmlFor="reminderDate">Fecha</label>
-                  <input
-                    id="reminderDate"
-                    className="form-grid__input"
-                    type="date"
-                    value={reminderForm.reminderDate}
-                    onChange={(event) => {
-                      setReminderForm((previous) => ({ ...previous, reminderDate: event.target.value }))
-                    }}
-                  />
-
-                  <label className="form-grid__field" htmlFor="reminderType">Tipo</label>
-                  <select
-                    id="reminderType"
-                    className="form-grid__input"
-                    value={reminderForm.type}
-                    onChange={(event) => {
-                      setReminderForm((previous) => ({ ...previous, type: event.target.value as ReminderType }))
-                    }}
-                  >
-                    <option value="payment">Pago TDC</option>
-                    <option value="cutoff">Corte</option>
-                    <option value="subscription">Suscripcion</option>
-                    <option value="loan">Prestamo</option>
-                    <option value="custom">Custom</option>
-                  </select>
-
-                  <label className="form-grid__field" htmlFor="reminderReferenceId">Reference ID (opcional)</label>
-                  <input
-                    id="reminderReferenceId"
-                    className="form-grid__input"
-                    type="number"
-                    min={1}
-                    value={reminderForm.referenceId ?? ''}
-                    onChange={(event) => {
-                      const value = event.target.value
-                      setReminderForm((previous) => ({
-                        ...previous,
-                        referenceId: value ? Number.parseInt(value, 10) : null,
-                      }))
-                    }}
-                  />
-
-                  <label className="form-grid__field" htmlFor="reminderReferenceType">Reference Type (opcional)</label>
-                  <input
-                    id="reminderReferenceType"
-                    className="form-grid__input"
-                    type="text"
-                    value={reminderForm.referenceType}
-                    onChange={(event) => {
-                      setReminderForm((previous) => ({ ...previous, referenceType: event.target.value }))
-                    }}
-                  />
-
-                  <label className="form-grid__field" htmlFor="reminderDescription">Descripcion</label>
-                  <textarea
-                    id="reminderDescription"
-                    className="form-grid__input"
-                    rows={3}
-                    value={reminderForm.description}
-                    onChange={(event) => {
-                      setReminderForm((previous) => ({ ...previous, description: event.target.value }))
-                    }}
-                  />
-
-                  <div className="form-grid__actions">
-                    <button className="button button--primary" type="submit" disabled={!hasConfig || isRemindersLoading}>
-                      {editingReminderId === null ? 'Guardar recordatorio' : 'Actualizar recordatorio'}
-                    </button>
-                    <button className="button button--secondary" type="button" onClick={resetReminderEditor}>
-                      Limpiar
-                    </button>
-                  </div>
-                </form>
-              </article>
-
-              <article className="mini-card">
-                <header className="mini-card__header">
-                  <h3 className="mini-card__title">Pendientes y acciones</h3>
-                  <p className="mini-card__subtitle">Pendientes no leidos: {pendingRemindersCount}</p>
-                </header>
-
-                <div className="form-grid__actions">
-                  <button
-                    className="button button--secondary"
-                    type="button"
-                    disabled={!hasConfig || isRemindersLoading}
-                    onClick={() => {
-                      void loadReminders()
-                    }}
-                  >
-                    {isRemindersLoading ? 'Cargando...' : 'Recargar'}
-                  </button>
-                </div>
-
-                <div className="table-wrap">
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th>Fecha</th>
-                        <th>Titulo</th>
-                        <th>Tipo</th>
-                        <th>Estado</th>
-                        <th>Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {isRemindersLoading ? (
-                        <tr>
-                          <td colSpan={5}>Cargando recordatorios...</td>
-                        </tr>
-                      ) : null}
-
-                      {!isRemindersLoading && reminders.length === 0 ? (
-                        <tr>
-                          <td colSpan={5}>No hay recordatorios registrados.</td>
-                        </tr>
-                      ) : null}
-
-                      {!isRemindersLoading
-                        ? reminders.map((reminder) => (
-                          <tr key={reminder.id}>
-                            <td>{reminder.reminderDate}</td>
-                            <td>
-                              <p>{reminder.title}</p>
-                              {reminder.description ? <p className="category-card__meta">{reminder.description}</p> : null}
-                            </td>
-                            <td>{getReminderTypeLabel(reminder.type)}</td>
-                            <td>
-                              {reminder.isDismissed ? (
-                                <span className="badge badge--warning">Descartado</span>
-                              ) : reminder.isRead ? (
-                                <span className="badge badge--success">Leido</span>
-                              ) : (
-                                <span className="badge badge--info">Pendiente</span>
-                              )}
-                            </td>
-                            <td>
-                              <div className="table__actions">
-                                <button
-                                  className="button button--secondary"
-                                  type="button"
-                                  onClick={() => {
-                                    startReminderEdit(reminder)
-                                  }}
-                                >
-                                  Editar
-                                </button>
-                                <button
-                                  className="button button--secondary"
-                                  type="button"
-                                  disabled={reminder.isRead}
-                                  onClick={() => {
-                                    void handleReminderMarkAsRead(reminder)
-                                  }}
-                                >
-                                  Marcar leido
-                                </button>
-                                <button
-                                  className="button button--secondary"
-                                  type="button"
-                                  disabled={reminder.isDismissed}
-                                  onClick={() => {
-                                    void handleReminderDismiss(reminder)
-                                  }}
-                                >
-                                  Descartar
-                                </button>
-                                <button
-                                  className="button button--danger"
-                                  type="button"
-                                  onClick={() => {
-                                    void handleReminderDelete(reminder.id)
-                                  }}
-                                >
-                                  Eliminar
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                        : null}
-                    </tbody>
-                  </table>
-                </div>
-              </article>
-            </div>
-          </section>
+          <RemindersSection
+            hasConfig={hasConfig}
+            reminderMessage={reminderMessage}
+            reminderError={reminderError}
+            editingReminderId={editingReminderId}
+            reminderForm={reminderForm}
+            reminders={reminders}
+            isRemindersLoading={isRemindersLoading}
+            pendingRemindersCount={pendingRemindersCount}
+            onReminderFormChange={setReminderForm}
+            onSubmit={handleReminderSubmit}
+            onReset={resetReminderEditor}
+            onReload={() => {
+              void loadReminders()
+            }}
+            onEdit={startReminderEdit}
+            onMarkAsRead={(reminder) => {
+              void handleReminderMarkAsRead(reminder)
+            }}
+            onDismiss={(reminder) => {
+              void handleReminderDismiss(reminder)
+            }}
+            onDelete={(reminderId) => {
+              void handleReminderDelete(reminderId)
+            }}
+          />
         ) : null}
         </Suspense>
       </section>
