@@ -3795,7 +3795,7 @@ async function listCategories() {
       c.is_active,
       c.created_at,
       c.updated_at,
-      fn_can_delete_category(c.id) AS can_delete,
+      app_gastos.fn_can_delete_category(c.id) AS can_delete,
       COALESCE(subcategories.subcategories, '[]'::json) AS subcategories
     FROM app_gastos.categories c
     LEFT JOIN LATERAL (
@@ -3859,7 +3859,7 @@ async function updateCategory(categoryId, payload) {
     return null;
   }
 
-  const canDeleteResult = await query('SELECT fn_can_delete_category($1) AS can_delete', [categoryId]);
+  const canDeleteResult = await query('SELECT app_gastos.fn_can_delete_category($1) AS can_delete', [categoryId]);
 
   return mapCategory({
     ...result.rows[0],
@@ -3869,7 +3869,7 @@ async function updateCategory(categoryId, payload) {
 }
 
 async function softDeleteCategory(categoryId) {
-  const canDeleteResult = await query('SELECT fn_can_delete_category($1) AS can_delete', [categoryId]);
+  const canDeleteResult = await query('SELECT app_gastos.fn_can_delete_category($1) AS can_delete', [categoryId]);
   const canDelete = Boolean(canDeleteResult.rows[0]?.can_delete);
 
   if (!canDelete) {

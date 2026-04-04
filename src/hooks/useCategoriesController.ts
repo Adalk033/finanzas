@@ -21,20 +21,30 @@ export function useCategoriesController() {
   const [subcategoryForm, setSubcategoryForm] = useState<SubcategoryInput>(EMPTY_SUBCATEGORY_FORM)
   const [editingSubcategoryId, setEditingSubcategoryId] = useState<number | null>(null)
 
-  const loadCategories = async (): Promise<void> => {
+  const loadCategoriesInternal = async (showError: boolean): Promise<boolean> => {
     setIsCategoriesLoading(true)
-    setCategoryError('')
+
+    if (showError) {
+      setCategoryError('')
+    }
 
     const result = await apiClient.getCategories()
 
     if (!result.success) {
-      setCategoryError(result.error ?? 'No se pudieron cargar las categorias.')
+      if (showError) {
+        setCategoryError(result.error ?? 'No se pudieron cargar las categorias.')
+      }
       setIsCategoriesLoading(false)
-      return
+      return false
     }
 
     setCategories(result.data ?? [])
     setIsCategoriesLoading(false)
+    return true
+  }
+
+  const loadCategories = async (): Promise<void> => {
+    await loadCategoriesInternal(true)
   }
 
   const categoryOptions = useMemo(() => categories.map((category) => ({ id: category.id, name: category.name })), [categories])
@@ -80,7 +90,12 @@ export function useCategoriesController() {
         return
       }
 
-      setCategoryMessage('Categoria creada correctamente.')
+      const reloaded = await loadCategoriesInternal(false)
+      setCategoryMessage(
+        reloaded
+          ? 'Categoria creada correctamente.'
+          : 'Categoria creada correctamente. No se pudo refrescar la lista, presiona Recargar.',
+      )
     } else {
       const updated = await apiClient.updateCategory(editingCategoryId, payload)
       if (!updated.success) {
@@ -88,11 +103,15 @@ export function useCategoriesController() {
         return
       }
 
-      setCategoryMessage('Categoria actualizada correctamente.')
+      const reloaded = await loadCategoriesInternal(false)
+      setCategoryMessage(
+        reloaded
+          ? 'Categoria actualizada correctamente.'
+          : 'Categoria actualizada correctamente. No se pudo refrescar la lista, presiona Recargar.',
+      )
     }
 
     resetCategoryEditor()
-    await loadCategories()
   }
 
   const handleCategoryDelete = async (id: number): Promise<void> => {
@@ -106,14 +125,18 @@ export function useCategoriesController() {
       return
     }
 
-    setCategoryMessage('Categoria eliminada correctamente.')
+    const reloaded = await loadCategoriesInternal(false)
+    setCategoryMessage(
+      reloaded
+        ? 'Categoria eliminada correctamente.'
+        : 'Categoria eliminada correctamente. No se pudo refrescar la lista, presiona Recargar.',
+    )
     if (editingCategoryId === id) {
       resetCategoryEditor()
     }
     if (subcategoryForm.categoryId === id) {
       resetSubcategoryEditor()
     }
-    await loadCategories()
   }
 
   const handleSubcategorySubmit = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
@@ -138,7 +161,12 @@ export function useCategoriesController() {
         return
       }
 
-      setSubcategoryMessage('Subcategoria creada correctamente.')
+      const reloaded = await loadCategoriesInternal(false)
+      setSubcategoryMessage(
+        reloaded
+          ? 'Subcategoria creada correctamente.'
+          : 'Subcategoria creada correctamente. No se pudo refrescar la lista, presiona Recargar.',
+      )
     } else {
       const updated = await apiClient.updateSubcategory(editingSubcategoryId, payload)
       if (!updated.success) {
@@ -146,11 +174,15 @@ export function useCategoriesController() {
         return
       }
 
-      setSubcategoryMessage('Subcategoria actualizada correctamente.')
+      const reloaded = await loadCategoriesInternal(false)
+      setSubcategoryMessage(
+        reloaded
+          ? 'Subcategoria actualizada correctamente.'
+          : 'Subcategoria actualizada correctamente. No se pudo refrescar la lista, presiona Recargar.',
+      )
     }
 
     resetSubcategoryEditor()
-    await loadCategories()
   }
 
   const handleSubcategoryDelete = async (id: number): Promise<void> => {
@@ -164,11 +196,15 @@ export function useCategoriesController() {
       return
     }
 
-    setSubcategoryMessage('Subcategoria eliminada correctamente.')
+    const reloaded = await loadCategoriesInternal(false)
+    setSubcategoryMessage(
+      reloaded
+        ? 'Subcategoria eliminada correctamente.'
+        : 'Subcategoria eliminada correctamente. No se pudo refrescar la lista, presiona Recargar.',
+    )
     if (editingSubcategoryId === id) {
       resetSubcategoryEditor()
     }
-    await loadCategories()
   }
 
   return {
