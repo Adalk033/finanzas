@@ -701,11 +701,11 @@ Lambda única de .mjs con conexión a la dB de postgreSQL
 
 ### Fase 9 — Módulo Recordatorios
 
-- [ ]  **Backend:** CRUD recordatorios
-- [ ]  **Backend:** Endpoint de recordatorios pendientes (no leídos)
-- [ ]  **Frontend:** Página/sección de Recordatorios con badges de no leídos
-- [ ]  **Frontend:** Tipos de recordatorio: pago TDC, corte, suscripción, préstamo, custom
-- [ ]  **Frontend:** Marcar como leído/descartado
+- [x]  **Backend:** CRUD recordatorios
+- [x]  **Backend:** Endpoint de recordatorios pendientes (no leídos)
+- [x]  **Frontend:** Página/sección de Recordatorios con badges de no leídos
+- [x]  **Frontend:** Tipos de recordatorio: pago TDC, corte, suscripción, préstamo, custom
+- [x]  **Frontend:** Marcar como leído/descartado
 
 ### Fase 10 — Pulido, Testing y Build
 

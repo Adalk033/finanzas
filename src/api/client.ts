@@ -31,6 +31,8 @@ import type {
   DashboardExpenseByCategory,
   DashboardFutureExpensePoint,
   DashboardSummary,
+  Reminder,
+  ReminderInput,
   Transfer,
   TransferInput,
   Transaction,
@@ -279,6 +281,17 @@ function sanitizeSimulationPayload(payload: SimulationInput): Omit<SimulationInp
     ...payload,
     description: payload.description.trim() || null,
     simulationDate: payload.simulationDate.trim() || null,
+  }
+}
+
+function sanitizeReminderPayload(payload: ReminderInput): Omit<ReminderInput, 'description' | 'referenceType'> & {
+  description: string | null
+  referenceType: string | null
+} {
+  return {
+    ...payload,
+    description: payload.description.trim() || null,
+    referenceType: payload.referenceType.trim() || null,
   }
 }
 
@@ -568,6 +581,22 @@ export const apiClient = {
     }),
   deleteSimulation: (id: number) =>
     request<{ id: number }>(`${ENDPOINTS.SIMULATIONS}/${id}`, {
+      method: 'DELETE',
+    }),
+  getReminders: () => request<Reminder[]>(ENDPOINTS.REMINDERS, { method: 'GET' }),
+  getPendingReminders: () => request<Reminder[]>(ENDPOINTS.REMINDERS_PENDING, { method: 'GET' }),
+  createReminder: (payload: ReminderInput) =>
+    request<Reminder>(ENDPOINTS.REMINDERS, {
+      method: 'POST',
+      body: JSON.stringify(sanitizeReminderPayload(payload)),
+    }),
+  updateReminder: (id: number, payload: ReminderInput) =>
+    request<Reminder>(`${ENDPOINTS.REMINDERS}/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(sanitizeReminderPayload(payload)),
+    }),
+  deleteReminder: (id: number) =>
+    request<{ id: number }>(`${ENDPOINTS.REMINDERS}/${id}`, {
       method: 'DELETE',
     }),
 }

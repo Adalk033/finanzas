@@ -6,6 +6,7 @@ export type LoanPaymentType = 'fixed' | 'variable'
 export type SubscriptionBillingCycle = 'monthly' | 'yearly' | 'weekly'
 export type BudgetStatus = 'under' | 'warning' | 'exceeded'
 export type SimulationScenarioType = 'direct_purchase' | 'msi' | 'loan'
+export type ReminderType = 'payment' | 'cutoff' | 'subscription' | 'loan' | 'custom'
 
 export interface Bank {
   id: number
@@ -454,4 +455,29 @@ export interface DashboardFutureExpensePoint {
   fixedExpenses: number
   loanPayments: number
   total: number
+}
+
+export interface Reminder {
+  id: number
+  title: string
+  description: string | null
+  reminderDate: string
+  type: ReminderType
+  referenceId: number | null
+  referenceType: string | null
+  isRead: boolean
+  isDismissed: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ReminderInput {
+  title: string
+  description: string
+  reminderDate: string
+  type: ReminderType
+  referenceId: number | null
+  referenceType: string
+  isRead: boolean
+  isDismissed: boolean
 }

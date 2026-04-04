@@ -46,6 +46,10 @@
   font: 500 14px/1 var(--font-base);
   cursor: pointer;
   transition: border-color 120ms ease, background-color 120ms ease;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1);
 }
 
 .nav-button:hover {
@@ -55,6 +59,25 @@
 .nav-button--active {
   border-color: var(--color-primary);
   background: rgba(45, 143, 133, 0.14);
+}
+
+.nav-button__label {
+  display: inline-flex;
+  align-items: center;
+}
+
+.nav-button__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  padding: 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffffff;
+  background: var(--color-error);
 }
 
 .app-shell__content {

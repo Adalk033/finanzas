@@ -47,6 +47,9 @@ import type {
   LoanInput,
   LoanPayment,
   LoanPaymentRegisterInput,
+  Reminder,
+  ReminderInput,
+  ReminderType,
   LoanPaymentType,
   Subscription,
   SubscriptionBillingCycle,
@@ -65,7 +68,7 @@ import type {
   TransactionType,
 } from './types/domain'
 
-type AppSection = 'dashboard' | 'settings' | 'banks' | 'instruments' | 'categories' | 'transactions' | 'creditCards' | 'subscriptions' | 'fixedExpenses' | 'loans' | 'budgets' | 'simulator'
+type AppSection = 'dashboard' | 'settings' | 'banks' | 'instruments' | 'categories' | 'transactions' | 'creditCards' | 'subscriptions' | 'fixedExpenses' | 'loans' | 'budgets' | 'reminders' | 'simulator'
 
 const EMPTY_BANK_FORM: BankInput = {
   name: '',
@@ -242,6 +245,17 @@ const EMPTY_SIMULATION_FORM: SimulationInput = {
   annualRate: null,
 }
 
+const EMPTY_REMINDER_FORM: ReminderInput = {
+  title: '',
+  description: '',
+  reminderDate: TODAY_ISO,
+  type: 'custom',
+  referenceId: null,
+  referenceType: '',
+  isRead: false,
+  isDismissed: false,
+}
+
 const MSI_OPTIONS = [3, 6, 9, 12, 18, 24]
 const DASHBOARD_CHART_COLORS = ['#57A6D8', '#2D8F85', '#F4C95D', '#E6A23C', '#F87171', '#A78BFA']
 const EMPTY_DASHBOARD_SUMMARY: DashboardSummary = {
@@ -380,6 +394,26 @@ function getSimulationScenarioLabel(type: SimulationScenarioType): string {
   return 'Compra directa'
 }
 
+function getReminderTypeLabel(type: ReminderType): string {
+  if (type === 'payment') {
+    return 'Pago'
+  }
+
+  if (type === 'cutoff') {
+    return 'Corte'
+  }
+
+  if (type === 'subscription') {
+    return 'Suscripcion'
+  }
+
+  if (type === 'loan') {
+    return 'Prestamo'
+  }
+
+  return 'Custom'
+}
+
 export function App() {
   const {
     config,
@@ -499,6 +533,14 @@ export function App() {
   const [simulationMessage, setSimulationMessage] = useState('')
   const [simulationError, setSimulationError] = useState('')
   const [simulationForm, setSimulationForm] = useState<SimulationInput>(EMPTY_SIMULATION_FORM)
+
+  const [reminders, setReminders] = useState<Reminder[]>([])
+  const [isRemindersLoading, setIsRemindersLoading] = useState(false)
+  const [reminderMessage, setReminderMessage] = useState('')
+  const [reminderError, setReminderError] = useState('')
+  const [reminderForm, setReminderForm] = useState<ReminderInput>(EMPTY_REMINDER_FORM)
+  const [editingReminderId, setEditingReminderId] = useState<number | null>(null)
+  const [pendingRemindersCount, setPendingRemindersCount] = useState(0)
 
   const hasConfig = Boolean(config.apiKey.trim() && config.apiEndpoint.trim() && config.awsRegion.trim())
 
@@ -915,6 +957,32 @@ export function App() {
     setIsSimulationsLoading(false)
   }
 
+  const loadReminders = async (): Promise<void> => {
+    setIsRemindersLoading(true)
+    setReminderError('')
+
+    const [allResult, pendingResult] = await Promise.all([
+      apiClient.getReminders(),
+      apiClient.getPendingReminders(),
+    ])
+
+    if (!allResult.success) {
+      setReminderError(allResult.error ?? 'No se pudieron cargar los recordatorios.')
+      setIsRemindersLoading(false)
+      return
+    }
+
+    if (!pendingResult.success) {
+      setReminderError(pendingResult.error ?? 'No se pudieron cargar los recordatorios pendientes.')
+      setIsRemindersLoading(false)
+      return
+    }
+
+    setReminders(allResult.data ?? [])
+    setPendingRemindersCount((pendingResult.data ?? []).length)
+    setIsRemindersLoading(false)
+  }
+
   const selectedBankId = instrumentForm.bankId === 0 ? (banks[0]?.id ?? 0) : instrumentForm.bankId
 
   const handleSave = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
@@ -1090,6 +1158,11 @@ export function App() {
     if (nextSection === 'budgets') {
       void loadCategories()
       void loadBudgets()
+      return
+    }
+
+    if (nextSection === 'reminders') {
+      void loadReminders()
       return
     }
 
@@ -2021,6 +2094,127 @@ export function App() {
     await loadSimulations()
   }
 
+  const resetReminderEditor = (): void => {
+    setReminderForm(EMPTY_REMINDER_FORM)
+    setEditingReminderId(null)
+  }
+
+  const startReminderEdit = (reminder: Reminder): void => {
+    setEditingReminderId(reminder.id)
+    setReminderForm({
+      title: reminder.title,
+      description: reminder.description ?? '',
+      reminderDate: reminder.reminderDate,
+      type: reminder.type,
+      referenceId: reminder.referenceId,
+      referenceType: reminder.referenceType ?? '',
+      isRead: reminder.isRead,
+      isDismissed: reminder.isDismissed,
+    })
+  }
+
+  const handleReminderSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault()
+    setReminderError('')
+    setReminderMessage('')
+
+    if (reminderForm.title.trim().length < 2) {
+      setReminderError('El titulo debe tener al menos 2 caracteres.')
+      return
+    }
+
+    const payload: ReminderInput = {
+      ...reminderForm,
+      title: reminderForm.title.trim(),
+      description: reminderForm.description.trim(),
+      referenceType: reminderForm.referenceType.trim(),
+    }
+
+    if (editingReminderId === null) {
+      const created = await apiClient.createReminder(payload)
+      if (!created.success) {
+        setReminderError(created.error ?? 'No se pudo crear el recordatorio.')
+        return
+      }
+      setReminderMessage('Recordatorio creado correctamente.')
+    } else {
+      const updated = await apiClient.updateReminder(editingReminderId, payload)
+      if (!updated.success) {
+        setReminderError(updated.error ?? 'No se pudo actualizar el recordatorio.')
+        return
+      }
+      setReminderMessage('Recordatorio actualizado correctamente.')
+    }
+
+    resetReminderEditor()
+    await loadReminders()
+  }
+
+  const handleReminderDelete = async (reminderId: number): Promise<void> => {
+    setReminderError('')
+    setReminderMessage('')
+
+    const deleted = await apiClient.deleteReminder(reminderId)
+    if (!deleted.success) {
+      setReminderError(deleted.error ?? 'No se pudo eliminar el recordatorio.')
+      return
+    }
+
+    setReminderMessage('Recordatorio eliminado correctamente.')
+    if (editingReminderId === reminderId) {
+      resetReminderEditor()
+    }
+    await loadReminders()
+  }
+
+  const handleReminderMarkAsRead = async (reminder: Reminder): Promise<void> => {
+    setReminderError('')
+    setReminderMessage('')
+
+    const updated = await apiClient.updateReminder(reminder.id, {
+      title: reminder.title,
+      description: reminder.description ?? '',
+      reminderDate: reminder.reminderDate,
+      type: reminder.type,
+      referenceId: reminder.referenceId,
+      referenceType: reminder.referenceType ?? '',
+      isRead: true,
+      isDismissed: reminder.isDismissed,
+    })
+
+    if (!updated.success) {
+      setReminderError(updated.error ?? 'No se pudo marcar como leido.')
+      return
+    }
+
+    setReminderMessage('Recordatorio marcado como leido.')
+    await loadReminders()
+  }
+
+  const handleReminderDismiss = async (reminder: Reminder): Promise<void> => {
+    setReminderError('')
+    setReminderMessage('')
+
+    const updated = await apiClient.updateReminder(reminder.id, {
+      title: reminder.title,
+      description: reminder.description ?? '',
+      reminderDate: reminder.reminderDate,
+      type: reminder.type,
+      referenceId: reminder.referenceId,
+      referenceType: reminder.referenceType ?? '',
+      isRead: reminder.isRead,
+      isDismissed: true,
+    })
+
+    if (!updated.success) {
+      setReminderError(updated.error ?? 'No se pudo descartar el recordatorio.')
+      return
+    }
+
+    setReminderMessage('Recordatorio descartado correctamente.')
+    await loadReminders()
+  }
+
   if (isLoading) {
     return (
       <main className="settings-screen settings-screen--centered">
@@ -2109,6 +2303,16 @@ export function App() {
           onClick={() => handleSectionChange('budgets')}
         >
           Presupuestos
+        </button>
+        <button
+          className={`nav-button ${activeSection === 'reminders' ? 'nav-button--active' : ''}`}
+          type="button"
+          onClick={() => handleSectionChange('reminders')}
+        >
+          <span className="nav-button__label">Recordatorios</span>
+          {pendingRemindersCount > 0 ? (
+            <span className="nav-button__badge">{pendingRemindersCount}</span>
+          ) : null}
         </button>
         <button
           className={`nav-button ${activeSection === 'simulator' ? 'nav-button--active' : ''}`}
@@ -5224,6 +5428,224 @@ export function App() {
                             </tr>
                           )
                         })
+                        : null}
+                    </tbody>
+                  </table>
+                </div>
+              </article>
+            </div>
+          </section>
+        ) : null}
+
+        {activeSection === 'reminders' ? (
+          <section className="card">
+            <header className="card__header">
+              <h2 className="card__title">Recordatorios</h2>
+              <p className="card__subtitle">Gestiona alertas de pago, corte, suscripciones, prestamos y personalizadas.</p>
+            </header>
+
+            {reminderMessage ? <p className="message message--success">{reminderMessage}</p> : null}
+            {reminderError ? <p className="message message--error">{reminderError}</p> : null}
+
+            <div className="phase8-layout">
+              <article className="mini-card">
+                <header className="mini-card__header">
+                  <h3 className="mini-card__title">{editingReminderId === null ? 'Nuevo recordatorio' : 'Editar recordatorio'}</h3>
+                </header>
+
+                <form className="form-grid" onSubmit={handleReminderSubmit}>
+                  <label className="form-grid__field" htmlFor="reminderTitle">Titulo</label>
+                  <input
+                    id="reminderTitle"
+                    className="form-grid__input"
+                    type="text"
+                    value={reminderForm.title}
+                    onChange={(event) => {
+                      setReminderForm((previous) => ({ ...previous, title: event.target.value }))
+                    }}
+                  />
+
+                  <label className="form-grid__field" htmlFor="reminderDate">Fecha</label>
+                  <input
+                    id="reminderDate"
+                    className="form-grid__input"
+                    type="date"
+                    value={reminderForm.reminderDate}
+                    onChange={(event) => {
+                      setReminderForm((previous) => ({ ...previous, reminderDate: event.target.value }))
+                    }}
+                  />
+
+                  <label className="form-grid__field" htmlFor="reminderType">Tipo</label>
+                  <select
+                    id="reminderType"
+                    className="form-grid__input"
+                    value={reminderForm.type}
+                    onChange={(event) => {
+                      setReminderForm((previous) => ({ ...previous, type: event.target.value as ReminderType }))
+                    }}
+                  >
+                    <option value="payment">Pago TDC</option>
+                    <option value="cutoff">Corte</option>
+                    <option value="subscription">Suscripcion</option>
+                    <option value="loan">Prestamo</option>
+                    <option value="custom">Custom</option>
+                  </select>
+
+                  <label className="form-grid__field" htmlFor="reminderReferenceId">Reference ID (opcional)</label>
+                  <input
+                    id="reminderReferenceId"
+                    className="form-grid__input"
+                    type="number"
+                    min={1}
+                    value={reminderForm.referenceId ?? ''}
+                    onChange={(event) => {
+                      const value = event.target.value
+                      setReminderForm((previous) => ({
+                        ...previous,
+                        referenceId: value ? Number.parseInt(value, 10) : null,
+                      }))
+                    }}
+                  />
+
+                  <label className="form-grid__field" htmlFor="reminderReferenceType">Reference Type (opcional)</label>
+                  <input
+                    id="reminderReferenceType"
+                    className="form-grid__input"
+                    type="text"
+                    value={reminderForm.referenceType}
+                    onChange={(event) => {
+                      setReminderForm((previous) => ({ ...previous, referenceType: event.target.value }))
+                    }}
+                  />
+
+                  <label className="form-grid__field" htmlFor="reminderDescription">Descripcion</label>
+                  <textarea
+                    id="reminderDescription"
+                    className="form-grid__input"
+                    rows={3}
+                    value={reminderForm.description}
+                    onChange={(event) => {
+                      setReminderForm((previous) => ({ ...previous, description: event.target.value }))
+                    }}
+                  />
+
+                  <div className="form-grid__actions">
+                    <button className="button button--primary" type="submit" disabled={!hasConfig || isRemindersLoading}>
+                      {editingReminderId === null ? 'Guardar recordatorio' : 'Actualizar recordatorio'}
+                    </button>
+                    <button className="button button--secondary" type="button" onClick={resetReminderEditor}>
+                      Limpiar
+                    </button>
+                  </div>
+                </form>
+              </article>
+
+              <article className="mini-card">
+                <header className="mini-card__header">
+                  <h3 className="mini-card__title">Pendientes y acciones</h3>
+                  <p className="mini-card__subtitle">Pendientes no leidos: {pendingRemindersCount}</p>
+                </header>
+
+                <div className="form-grid__actions">
+                  <button
+                    className="button button--secondary"
+                    type="button"
+                    disabled={!hasConfig || isRemindersLoading}
+                    onClick={() => {
+                      void loadReminders()
+                    }}
+                  >
+                    {isRemindersLoading ? 'Cargando...' : 'Recargar'}
+                  </button>
+                </div>
+
+                <div className="table-wrap">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Fecha</th>
+                        <th>Titulo</th>
+                        <th>Tipo</th>
+                        <th>Estado</th>
+                        <th>Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {isRemindersLoading ? (
+                        <tr>
+                          <td colSpan={5}>Cargando recordatorios...</td>
+                        </tr>
+                      ) : null}
+
+                      {!isRemindersLoading && reminders.length === 0 ? (
+                        <tr>
+                          <td colSpan={5}>No hay recordatorios registrados.</td>
+                        </tr>
+                      ) : null}
+
+                      {!isRemindersLoading
+                        ? reminders.map((reminder) => (
+                          <tr key={reminder.id}>
+                            <td>{reminder.reminderDate}</td>
+                            <td>
+                              <p>{reminder.title}</p>
+                              {reminder.description ? <p className="category-card__meta">{reminder.description}</p> : null}
+                            </td>
+                            <td>{getReminderTypeLabel(reminder.type)}</td>
+                            <td>
+                              {reminder.isDismissed ? (
+                                <span className="badge badge--warning">Descartado</span>
+                              ) : reminder.isRead ? (
+                                <span className="badge badge--success">Leido</span>
+                              ) : (
+                                <span className="badge badge--info">Pendiente</span>
+                              )}
+                            </td>
+                            <td>
+                              <div className="table__actions">
+                                <button
+                                  className="button button--secondary"
+                                  type="button"
+                                  onClick={() => {
+                                    startReminderEdit(reminder)
+                                  }}
+                                >
+                                  Editar
+                                </button>
+                                <button
+                                  className="button button--secondary"
+                                  type="button"
+                                  disabled={reminder.isRead}
+                                  onClick={() => {
+                                    void handleReminderMarkAsRead(reminder)
+                                  }}
+                                >
+                                  Marcar leido
+                                </button>
+                                <button
+                                  className="button button--secondary"
+                                  type="button"
+                                  disabled={reminder.isDismissed}
+                                  onClick={() => {
+                                    void handleReminderDismiss(reminder)
+                                  }}
+                                >
+                                  Descartar
+                                </button>
+                                <button
+                                  className="button button--danger"
+                                  type="button"
+                                  onClick={() => {
+                                    void handleReminderDelete(reminder.id)
+                                  }}
+                                >
+                                  Eliminar
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
                         : null}
                     </tbody>
                   </table>

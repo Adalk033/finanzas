@@ -17,6 +17,7 @@ const ALLOWED_TRANSFER_TYPES = new Set(['card_payment', 'inter_account', 'loan_p
 const ALLOWED_LOAN_PAYMENT_TYPES = new Set(['fixed', 'variable']);
 const ALLOWED_SUBSCRIPTION_BILLING_CYCLES = new Set(['monthly', 'yearly', 'weekly']);
 const ALLOWED_SIMULATION_SCENARIO_TYPES = new Set(['direct_purchase', 'msi', 'loan']);
+const ALLOWED_REMINDER_TYPES = new Set(['payment', 'cutoff', 'subscription', 'loan', 'custom']);
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 let pool;
@@ -293,6 +294,19 @@ function parsePathParameters(path) {
 
   if (path === '/simulations') {
     return { resource: 'simulations', id: null };
+  }
+
+  if (path === '/reminders/pending') {
+    return { resource: 'remindersPending', id: null };
+  }
+
+  const remindersWithId = path.match(/^\/reminders\/(\d+)$/);
+  if (remindersWithId) {
+    return { resource: 'reminders', id: Number.parseInt(remindersWithId[1], 10) };
+  }
+
+  if (path === '/reminders') {
+    return { resource: 'reminders', id: null };
   }
 
   return { resource: null, id: null };
@@ -1223,6 +1237,59 @@ function validateSimulationPayload(body) {
   };
 }
 
+function validateReminderPayload(body) {
+  if (!body || typeof body !== 'object') {
+    return { ok: false, error: 'Body invalido.' };
+  }
+
+  const title = normalizeText(body.title);
+  const description = normalizeNullableText(body.description);
+  const reminderDate = normalizeNullableDate(body.reminderDate);
+  const type = normalizeText(body.type);
+  const referenceId = normalizeNullableInteger(body.referenceId);
+  const referenceType = normalizeNullableText(body.referenceType);
+  const isRead = body.isRead === undefined ? false : Boolean(body.isRead);
+  const isDismissed = body.isDismissed === undefined ? false : Boolean(body.isDismissed);
+
+  if (title.length < 2 || title.length > 200) {
+    return { ok: false, error: 'title debe tener entre 2 y 200 caracteres.' };
+  }
+
+  if (description && description.length > 500) {
+    return { ok: false, error: 'description no puede exceder 500 caracteres.' };
+  }
+
+  if (!reminderDate) {
+    return { ok: false, error: 'reminderDate invalida. Usa YYYY-MM-DD.' };
+  }
+
+  if (!ALLOWED_REMINDER_TYPES.has(type)) {
+    return { ok: false, error: 'type invalido.' };
+  }
+
+  if (referenceId !== null && referenceId < 1) {
+    return { ok: false, error: 'referenceId invalido.' };
+  }
+
+  if (referenceType && referenceType.length > 30) {
+    return { ok: false, error: 'referenceType no puede exceder 30 caracteres.' };
+  }
+
+  return {
+    ok: true,
+    value: {
+      title,
+      description,
+      reminderDate,
+      type,
+      referenceId,
+      referenceType,
+      isRead,
+      isDismissed,
+    },
+  };
+}
+
 function mapBank(row) {
   return {
     id: row.id,
@@ -1486,6 +1553,22 @@ function mapSimulation(row) {
     resultJson: row.result_json,
     isFavorable: row.is_favorable,
     createdAt: row.created_at,
+  };
+}
+
+function mapReminder(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    reminderDate: row.reminder_date,
+    type: row.type,
+    referenceId: row.reference_id,
+    referenceType: row.reference_type,
+    isRead: row.is_read,
+    isDismissed: row.is_dismissed,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -4599,6 +4682,140 @@ async function deleteSimulation(simulationId) {
   return result.rows.length > 0;
 }
 
+async function getReminderById(reminderId) {
+  const result = await query(
+    `
+    SELECT
+      id,
+      title,
+      description,
+      reminder_date,
+      type,
+      reference_id,
+      reference_type,
+      is_read,
+      is_dismissed,
+      created_at,
+      updated_at
+    FROM app_gastos.reminders
+    WHERE id = $1
+    `,
+    [reminderId],
+  );
+
+  return result.rows[0] ?? null;
+}
+
+async function listReminders(pendingOnly = false) {
+  const whereClause = pendingOnly
+    ? 'WHERE r.is_read = FALSE AND r.is_dismissed = FALSE'
+    : '';
+
+  const result = await query(
+    `
+    SELECT
+      r.id,
+      r.title,
+      r.description,
+      r.reminder_date,
+      r.type,
+      r.reference_id,
+      r.reference_type,
+      r.is_read,
+      r.is_dismissed,
+      r.created_at,
+      r.updated_at
+    FROM app_gastos.reminders r
+    ${whereClause}
+    ORDER BY r.reminder_date ASC, r.id DESC
+    `,
+  );
+
+  return result.rows.map(mapReminder);
+}
+
+async function createReminder(payload) {
+  const insertResult = await query(
+    `
+    INSERT INTO app_gastos.reminders (
+      title,
+      description,
+      reminder_date,
+      type,
+      reference_id,
+      reference_type,
+      is_read,
+      is_dismissed
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    RETURNING id
+    `,
+    [
+      payload.title,
+      payload.description,
+      payload.reminderDate,
+      payload.type,
+      payload.referenceId,
+      payload.referenceType,
+      payload.isRead,
+      payload.isDismissed,
+    ],
+  );
+
+  const created = await getReminderById(insertResult.rows[0].id);
+  return { error: null, data: mapReminder(created) };
+}
+
+async function updateReminder(reminderId, payload) {
+  const existing = await getReminderById(reminderId);
+  if (!existing) {
+    return { notFound: true, error: null, data: null };
+  }
+
+  await query(
+    `
+    UPDATE app_gastos.reminders
+    SET title = $1,
+        description = $2,
+        reminder_date = $3,
+        type = $4,
+        reference_id = $5,
+        reference_type = $6,
+        is_read = $7,
+        is_dismissed = $8,
+        updated_at = NOW()
+    WHERE id = $9
+    `,
+    [
+      payload.title,
+      payload.description,
+      payload.reminderDate,
+      payload.type,
+      payload.referenceId,
+      payload.referenceType,
+      payload.isRead,
+      payload.isDismissed,
+      reminderId,
+    ],
+  );
+
+  const updated = await getReminderById(reminderId);
+  return { notFound: false, error: null, data: mapReminder(updated) };
+}
+
+async function deleteReminder(reminderId) {
+  const result = await query(
+    `
+    DELETE FROM app_gastos.reminders
+    WHERE id = $1
+    RETURNING id
+    `,
+    [reminderId],
+  );
+
+  return result.rows.length > 0;
+}
+
 async function getDashboardSummary() {
   const result = await query(
     `
@@ -5782,6 +5999,73 @@ async function handleSimulationsRoute(method, path, event) {
   return null;
 }
 
+async function handleRemindersRoute(method, path, event) {
+  const parsed = parsePathParameters(path);
+
+  if (method === 'GET' && parsed.resource === 'reminders' && parsed.id === null) {
+    const data = await listReminders(false);
+    return jsonResponse(200, { success: true, data });
+  }
+
+  if (method === 'GET' && parsed.resource === 'remindersPending') {
+    const data = await listReminders(true);
+    return jsonResponse(200, { success: true, data });
+  }
+
+  if (method === 'POST' && parsed.resource === 'reminders' && parsed.id === null) {
+    const bodyResult = parseJsonBody(event);
+    if (!bodyResult.ok) {
+      return jsonResponse(400, { success: false, error: bodyResult.error });
+    }
+
+    const validated = validateReminderPayload(bodyResult.value);
+    if (!validated.ok) {
+      return jsonResponse(400, { success: false, error: validated.error });
+    }
+
+    const created = await createReminder(validated.value);
+    if (created.error) {
+      return jsonResponse(400, { success: false, error: created.error });
+    }
+
+    return jsonResponse(201, { success: true, data: created.data });
+  }
+
+  if (method === 'PUT' && parsed.resource === 'reminders' && parsed.id !== null) {
+    const bodyResult = parseJsonBody(event);
+    if (!bodyResult.ok) {
+      return jsonResponse(400, { success: false, error: bodyResult.error });
+    }
+
+    const validated = validateReminderPayload(bodyResult.value);
+    if (!validated.ok) {
+      return jsonResponse(400, { success: false, error: validated.error });
+    }
+
+    const updated = await updateReminder(parsed.id, validated.value);
+    if (updated.notFound) {
+      return jsonResponse(404, { success: false, error: 'Recordatorio no encontrado.' });
+    }
+
+    if (updated.error) {
+      return jsonResponse(400, { success: false, error: updated.error });
+    }
+
+    return jsonResponse(200, { success: true, data: updated.data });
+  }
+
+  if (method === 'DELETE' && parsed.resource === 'reminders' && parsed.id !== null) {
+    const deleted = await deleteReminder(parsed.id);
+    if (!deleted) {
+      return jsonResponse(404, { success: false, error: 'Recordatorio no encontrado.' });
+    }
+
+    return jsonResponse(200, { success: true, data: { id: parsed.id } });
+  }
+
+  return null;
+}
+
 export async function handler(event) {
   if (event.requestContext?.http?.method === 'OPTIONS' || event.httpMethod === 'OPTIONS') {
     return jsonResponse(204, { success: true });
@@ -5935,6 +6219,13 @@ export async function handler(event) {
 
     if (resource === 'simulations') {
       const response = await handleSimulationsRoute(method, path, event);
+      if (response) {
+        return response;
+      }
+    }
+
+    if (resource === 'reminders' || resource === 'remindersPending') {
+      const response = await handleRemindersRoute(method, path, event);
       if (response) {
         return response;
       }
