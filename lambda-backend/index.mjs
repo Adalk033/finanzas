@@ -4,7 +4,7 @@ const { Pool } = pg;
 
 const API_KEY_HEADER = 'x-api-key';
 const CLIENT_VERSION_HEADER = 'x-client-version';
-const VALID_REGIONS = ['us-east-1', 'us-east-2', 'us-west-1', 'us-west-2'];
+const VALID_REGIONS = ['us-east-1', 'us-east-2', 'us-west-1', 'us-west-2', 'mx-central-1'];
 const ALLOWED_BANK_ICON_PATTERN = /^[A-Za-z][A-Za-z0-9]*$/;
 const ALLOWED_CATEGORY_ICON_PATTERN = /^[A-Za-z][A-Za-z0-9]*$/;
 const ALLOWED_HEX_COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/;

@@ -867,7 +867,7 @@
       "properties": {
         "awsRegion": {
           "type": "string",
-          "enum": ["us-east-1", "us-east-2", "us-west-1", "us-west-2"]
+          "enum": ["us-east-1", "us-east-2", "us-west-1", "us-west-2", "mx-central-1"]
         },
         "message": {
           "type": "string",
