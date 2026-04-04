@@ -1,6 +1,7 @@
 import { ENDPOINTS } from './endpoints'
 import type { ApiResponse, LocalConfig } from '../types/config'
 import {
+  getApiProxyBridge,
   getLocalConfigBridge,
   MISSING_ELECTRON_BRIDGE_MESSAGE,
 } from '../app/localConfigBridge'
@@ -81,6 +82,64 @@ async function request<T>(
   path: string,
   init: RequestInit = {},
 ): Promise<ApiResponse<T>> {
+  const bridge = getApiProxyBridge()
+
+  if (bridge) {
+    try {
+      const method = (init.method ?? 'GET').toUpperCase()
+      const headers =
+        init.headers && typeof init.headers === 'object' && !Array.isArray(init.headers)
+          ? (init.headers as Record<string, string>)
+          : {}
+      const body = typeof init.body === 'string' ? init.body : undefined
+
+      const response = await bridge.request({
+        path,
+        method,
+        headers,
+        body,
+      })
+
+      let data: ApiResponse<T> | null = null
+
+      if (response.bodyText) {
+        try {
+          data = JSON.parse(response.bodyText) as ApiResponse<T>
+        } catch {
+          data = null
+        }
+      }
+
+      if (!response.ok) {
+        const apiError =
+          data && typeof data === 'object'
+            ? (data.error ?? ((data as { message?: string }).message ?? null))
+            : null
+
+        return {
+          success: false,
+          error: apiError ?? `Error HTTP ${response.status} al llamar la API.`,
+        }
+      }
+
+      if (!data) {
+        return {
+          success: false,
+          error: 'La API respondio en un formato inesperado.',
+        }
+      }
+
+      return data
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Error de red desconocido.'
+      console.error('[apiClient] proxy request failed', { path, error: errorMessage })
+      return {
+        success: false,
+        error: `No se pudo conectar con el API Gateway. ${errorMessage}`,
+      }
+    }
+  }
+
   const config = await getStoredConfig()
   const baseUrl = config.apiEndpoint.replace(/\/$/, '')
 

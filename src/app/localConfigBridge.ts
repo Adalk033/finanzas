@@ -5,12 +5,32 @@ export type LocalConfigBridge = {
   saveConfig: (config: LocalConfigInput) => Promise<LocalConfig>
 }
 
+export type ApiProxyRequestPayload = {
+  path: string
+  method?: string
+  headers?: Record<string, string>
+  body?: string
+}
+
+export type ApiProxyResponsePayload = {
+  ok: boolean
+  status: number
+  bodyText: string
+}
+
+export type ApiProxyBridge = {
+  request: (payload: ApiProxyRequestPayload) => Promise<ApiProxyResponsePayload>
+}
+
 type LegacyWindow = Window & {
+  apiProxy?: ApiProxyBridge
   electronAPI?: {
     localConfig?: LocalConfigBridge
+    apiProxy?: ApiProxyBridge
   }
   electron?: {
     localConfig?: LocalConfigBridge
+    apiProxy?: ApiProxyBridge
   }
 }
 
@@ -30,6 +50,24 @@ export function getLocalConfigBridge(): LocalConfigBridge | null {
 
   if (maybeWindow.electron?.localConfig) {
     return maybeWindow.electron.localConfig
+  }
+
+  return null
+}
+
+export function getApiProxyBridge(): ApiProxyBridge | null {
+  const maybeWindow = window as LegacyWindow
+
+  if (maybeWindow.apiProxy) {
+    return maybeWindow.apiProxy
+  }
+
+  if (maybeWindow.electronAPI?.apiProxy) {
+    return maybeWindow.electronAPI.apiProxy
+  }
+
+  if (maybeWindow.electron?.apiProxy) {
+    return maybeWindow.electron.apiProxy
   }
 
   return null
