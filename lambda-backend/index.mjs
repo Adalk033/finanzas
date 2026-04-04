@@ -3795,7 +3795,18 @@ async function listCategories() {
       c.is_active,
       c.created_at,
       c.updated_at,
-      app_gastos.fn_can_delete_category(c.id) AS can_delete,
+      (
+        NOT c.is_system
+        AND NOT EXISTS (
+          SELECT 1 FROM app_gastos.transactions t WHERE t.category_id = c.id
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM app_gastos.subscriptions s WHERE s.category_id = c.id
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM app_gastos.fixed_expenses fe WHERE fe.category_id = c.id
+        )
+      ) AS can_delete,
       COALESCE(subcategories.subcategories, '[]'::json) AS subcategories
     FROM app_gastos.categories c
     LEFT JOIN LATERAL (
@@ -3820,6 +3831,31 @@ async function listCategories() {
   );
 
   return result.rows.map(mapCategory);
+}
+
+async function canDeleteCategory(categoryId) {
+  const result = await query(
+    `
+    SELECT
+      (
+        NOT c.is_system
+        AND NOT EXISTS (
+          SELECT 1 FROM app_gastos.transactions t WHERE t.category_id = c.id
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM app_gastos.subscriptions s WHERE s.category_id = c.id
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM app_gastos.fixed_expenses fe WHERE fe.category_id = c.id
+        )
+      ) AS can_delete
+    FROM app_gastos.categories c
+    WHERE c.id = $1
+    `,
+    [categoryId],
+  );
+
+  return Boolean(result.rows[0]?.can_delete);
 }
 
 async function createCategory(payload) {
@@ -3859,18 +3895,17 @@ async function updateCategory(categoryId, payload) {
     return null;
   }
 
-  const canDeleteResult = await query('SELECT app_gastos.fn_can_delete_category($1) AS can_delete', [categoryId]);
+  const canDelete = await canDeleteCategory(categoryId);
 
   return mapCategory({
     ...result.rows[0],
-    can_delete: canDeleteResult.rows[0]?.can_delete ?? false,
+    can_delete: canDelete,
     subcategories: [],
   });
 }
 
 async function softDeleteCategory(categoryId) {
-  const canDeleteResult = await query('SELECT app_gastos.fn_can_delete_category($1) AS can_delete', [categoryId]);
-  const canDelete = Boolean(canDeleteResult.rows[0]?.can_delete);
+  const canDelete = await canDeleteCategory(categoryId);
 
   if (!canDelete) {
     return { deleted: false, blocked: true };
