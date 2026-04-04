@@ -67,6 +67,45 @@ export function useInstrumentsController() {
       return
     }
 
+    if (instrumentForm.type === 'credit_card') {
+      if (typeof instrumentForm.creditLimit !== 'number' || !Number.isFinite(instrumentForm.creditLimit) || instrumentForm.creditLimit < 0) {
+        setInstrumentError('Ingresa un limite de credito valido.')
+        return
+      }
+
+      if (instrumentForm.currentBalance !== null && (typeof instrumentForm.currentBalance !== 'number' || !Number.isFinite(instrumentForm.currentBalance) || instrumentForm.currentBalance < 0)) {
+        setInstrumentError('Ingresa un saldo actual valido para la tarjeta.')
+        return
+      }
+
+      if (
+        typeof instrumentForm.cutOffDay !== 'number'
+        || !Number.isInteger(instrumentForm.cutOffDay)
+        || instrumentForm.cutOffDay < 1
+        || instrumentForm.cutOffDay > 31
+      ) {
+        setInstrumentError('Ingresa un dia de corte valido (1-31).')
+        return
+      }
+
+      if (
+        typeof instrumentForm.paymentDueDay !== 'number'
+        || !Number.isInteger(instrumentForm.paymentDueDay)
+        || instrumentForm.paymentDueDay < 1
+        || instrumentForm.paymentDueDay > 31
+      ) {
+        setInstrumentError('Ingresa un dia de pago valido (1-31).')
+        return
+      }
+    } else if (
+      typeof instrumentForm.currentAmount !== 'number'
+      || !Number.isFinite(instrumentForm.currentAmount)
+      || instrumentForm.currentAmount < 0
+    ) {
+      setInstrumentError('Ingresa un saldo actual valido.')
+      return
+    }
+
     const payload = {
       ...instrumentForm,
       name: instrumentForm.name.trim(),

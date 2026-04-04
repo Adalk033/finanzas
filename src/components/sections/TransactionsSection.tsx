@@ -1,5 +1,5 @@
 import { useEffect, useState, type SyntheticEvent } from 'react'
-import { MSI_OPTIONS, formatCurrency } from '../../app/appHelpers'
+import { formatCurrency } from '../../app/appHelpers'
 import type {
   Category,
   FinancialInstrument,
@@ -11,6 +11,7 @@ import type {
 
 const AUTO_ADJUSTMENT_NOTE_PREFIX = 'AUTO_ADJUSTMENT_TRANSFER:'
 const AUTO_ADJUSTMENT_DESCRIPTION = 'Otros (por ajuste)'
+const NO_BALANCE_IMPACT_NOTE_PREFIX = 'NO_BALANCE_IMPACT:'
 
 type TransactionsSectionProps = {
   hasConfig: boolean
@@ -23,6 +24,7 @@ type TransactionsSectionProps = {
   selectedTransactionInstrument: FinancialInstrument | null
   transactionSubcategoryOptions: Category['subcategories']
   transactionFilters: TransactionFilters
+  excludeFromBalance: boolean
   showAutoAdjustmentsOnly: boolean
   autoAdjustmentCount: number
   transactions: Transaction[]
@@ -37,6 +39,7 @@ type TransactionsSectionProps = {
   onTransactionDelete: (transactionId: number) => void
   onResetTransactionForm: () => void
   onFiltersChange: (nextFilters: TransactionFilters) => void
+  onExcludeFromBalanceChange: (nextValue: boolean) => void
   onToggleAutoAdjustmentsOnly: (nextValue: boolean) => void
   onFiltersSubmit: (event: SyntheticEvent<HTMLFormElement>) => void
   onClearFilters: () => void
@@ -54,6 +57,7 @@ export function TransactionsSection({
   selectedTransactionInstrument,
   transactionSubcategoryOptions,
   transactionFilters,
+  excludeFromBalance,
   showAutoAdjustmentsOnly,
   autoAdjustmentCount,
   transactions,
@@ -68,6 +72,7 @@ export function TransactionsSection({
   onTransactionDelete,
   onResetTransactionForm,
   onFiltersChange,
+  onExcludeFromBalanceChange,
   onToggleAutoAdjustmentsOnly,
   onFiltersSubmit,
   onClearFilters,
@@ -87,6 +92,10 @@ export function TransactionsSection({
     const description = transaction.description ?? ''
 
     return notes.startsWith(AUTO_ADJUSTMENT_NOTE_PREFIX) || description === AUTO_ADJUSTMENT_DESCRIPTION
+  }
+
+  const isNoBalanceImpactTransaction = (transaction: Transaction): boolean => {
+    return (transaction.notes ?? '').startsWith(NO_BALANCE_IMPACT_NOTE_PREFIX)
   }
 
   return (
@@ -221,6 +230,17 @@ export function TransactionsSection({
 
             {transactionForm.type === 'expense' && selectedTransactionInstrument?.type === 'credit_card' ? (
               <>
+                <label className="form-grid__field" htmlFor="excludeFromBalance">Saldo actual</label>
+                <label className="form-grid__input" htmlFor="excludeFromBalance">
+                  <input
+                    id="excludeFromBalance"
+                    type="checkbox"
+                    checked={excludeFromBalance}
+                    onChange={(event) => onExcludeFromBalanceChange(event.target.checked)}
+                  />
+                  {' '}No afectar saldo actual (gasto historico ya incluido en saldo inicial)
+                </label>
+
                 <label className="form-grid__field" htmlFor="transactionIsMsi">MSI</label>
                 <select
                   id="transactionIsMsi"
@@ -231,7 +251,7 @@ export function TransactionsSection({
                     onTransactionFormChange({
                       ...transactionForm,
                       isMsi: enabled,
-                      msiMonths: enabled ? (transactionForm.msiMonths ?? MSI_OPTIONS[0]) : null,
+                      msiMonths: enabled ? (transactionForm.msiMonths ?? 3) : null,
                     })
                   }}
                 >
@@ -428,7 +448,13 @@ export function TransactionsSection({
                     {transaction.subcategoryName ? ` / ${transaction.subcategoryName}` : ''}
                   </td>
                   <td>{transaction.isMsi ? `${transaction.msiMonths ?? '-'} meses` : '-'}</td>
-                  <td>{isAutoAdjustmentTransaction(transaction) ? 'Ajuste automatico' : 'Manual'}</td>
+                  <td>
+                    {isAutoAdjustmentTransaction(transaction)
+                      ? 'Ajuste automatico'
+                      : isNoBalanceImpactTransaction(transaction)
+                        ? 'Historico (sin impacto saldo)'
+                        : 'Manual'}
+                  </td>
                   <td>
                     <div className="table__actions">
                       <button className="button button--secondary" type="button" onClick={() => onTransactionEdit(transaction)}>

@@ -203,6 +203,10 @@ function setTrimmedIfPresent(target: Record<string, unknown>, key: string, value
 }
 
 function setIfNotNull(target: Record<string, unknown>, key: string, value: unknown): void {
+  if (typeof value === 'number' && !Number.isFinite(value)) {
+    return
+  }
+
   if (value !== null && value !== undefined) {
     target[key] = value
   }
@@ -245,6 +249,33 @@ function sanitizeInstrumentPayload(payload: FinancialInstrumentInput): Record<st
   }
 
   return sanitized
+}
+
+function sanitizeInstrumentLegacyPayload(payload: FinancialInstrumentInput): Record<string, unknown> {
+  const sanitized: Record<string, unknown> = {
+    bankId: payload.bankId,
+    name: payload.name.trim(),
+    type: payload.type,
+    currencyId: payload.currencyId,
+  }
+
+  setTrimmedIfPresent(sanitized, 'lastFour', payload.lastFour)
+  setTrimmedIfPresent(sanitized, 'notes', payload.notes)
+
+  if (payload.type === 'credit_card') {
+    setIfNotNull(sanitized, 'creditLimit', payload.creditLimit)
+    setIfNotNull(sanitized, 'currentBalance', payload.currentBalance)
+    setIfNotNull(sanitized, 'cutOffDay', payload.cutOffDay)
+    setIfNotNull(sanitized, 'paymentDueDay', payload.paymentDueDay)
+  } else {
+    setIfNotNull(sanitized, 'currentAmount', payload.currentAmount)
+  }
+
+  return sanitized
+}
+
+function isInvalidRequestBodyError(error: string | undefined): boolean {
+  return typeof error === 'string' && error.toLowerCase().includes('invalid request body')
 }
 
 function sanitizeCategoryPayload(payload: CategoryInput): Record<string, unknown> {
@@ -596,11 +627,29 @@ export const apiClient = {
     request<FinancialInstrument>(ENDPOINTS.INSTRUMENTS, {
       method: 'POST',
       body: JSON.stringify(sanitizeInstrumentPayload(payload)),
+    }).then((primaryResponse) => {
+      if (primaryResponse.success || !isInvalidRequestBodyError(primaryResponse.error)) {
+        return primaryResponse
+      }
+
+      return request<FinancialInstrument>(ENDPOINTS.INSTRUMENTS, {
+        method: 'POST',
+        body: JSON.stringify(sanitizeInstrumentLegacyPayload(payload)),
+      })
     }),
   updateInstrument: (id: number, payload: FinancialInstrumentInput) =>
     request<FinancialInstrument>(`${ENDPOINTS.INSTRUMENTS}/${id}`, {
       method: 'PUT',
       body: JSON.stringify(sanitizeInstrumentPayload(payload)),
+    }).then((primaryResponse) => {
+      if (primaryResponse.success || !isInvalidRequestBodyError(primaryResponse.error)) {
+        return primaryResponse
+      }
+
+      return request<FinancialInstrument>(`${ENDPOINTS.INSTRUMENTS}/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(sanitizeInstrumentLegacyPayload(payload)),
+      })
     }),
   deleteInstrument: (id: number) =>
     request<{ id: number }>(`${ENDPOINTS.INSTRUMENTS}/${id}`, {

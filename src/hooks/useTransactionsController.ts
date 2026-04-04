@@ -21,6 +21,7 @@ type UseTransactionsControllerParams = {
 
 const AUTO_ADJUSTMENT_NOTE_PREFIX = 'AUTO_ADJUSTMENT_TRANSFER:'
 const AUTO_ADJUSTMENT_DESCRIPTION = 'Otros (por ajuste)'
+const NO_BALANCE_IMPACT_NOTE_PREFIX = 'NO_BALANCE_IMPACT:'
 
 function isAutoAdjustmentTransaction(transaction: Transaction): boolean {
   const notes = transaction.notes ?? ''
@@ -42,6 +43,31 @@ export function useTransactionsController({
   const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null)
   const [transactionFilters, setTransactionFilters] = useState<TransactionFilters>(EMPTY_TRANSACTION_FILTERS)
   const [showAutoAdjustmentsOnly, setShowAutoAdjustmentsOnly] = useState(false)
+  const [excludeFromBalance, setExcludeFromBalance] = useState(false)
+
+  const stripNoBalancePrefix = (notes: string): string => {
+    if (!notes.startsWith(NO_BALANCE_IMPACT_NOTE_PREFIX)) {
+      return notes
+    }
+
+    return notes.slice(NO_BALANCE_IMPACT_NOTE_PREFIX.length).trimStart()
+  }
+
+  const buildNotesWithBalanceFlag = (notes: string, excluded: boolean): string => {
+    const cleanNotes = stripNoBalancePrefix(notes.trim())
+
+    if (!excluded) {
+      return cleanNotes
+    }
+
+    return cleanNotes.length > 0
+      ? `${NO_BALANCE_IMPACT_NOTE_PREFIX} ${cleanNotes}`
+      : NO_BALANCE_IMPACT_NOTE_PREFIX
+  }
+
+  const isExcludedByNotes = (notes: string | null): boolean => {
+    return (notes ?? '').startsWith(NO_BALANCE_IMPACT_NOTE_PREFIX)
+  }
 
   const selectedTransactionInstrumentId = transactionForm.instrumentId === 0 ? (instruments[0]?.id ?? 0) : transactionForm.instrumentId
   const selectedTransactionCategoryId = transactionForm.categoryId
@@ -92,6 +118,7 @@ export function useTransactionsController({
 
   const resetTransactionForm = (): void => {
     setEditingTransactionId(null)
+    setExcludeFromBalance(false)
     setTransactionForm({
       ...EMPTY_TRANSACTION_FORM,
       instrumentId: instruments[0]?.id ?? 0,
@@ -101,6 +128,7 @@ export function useTransactionsController({
 
   const startTransactionEdit = (transaction: Transaction): void => {
     setEditingTransactionId(transaction.id)
+    setExcludeFromBalance(isExcludedByNotes(transaction.notes))
     setTransactionForm({
       instrumentId: transaction.instrumentId,
       categoryId: transaction.categoryId,
@@ -110,7 +138,7 @@ export function useTransactionsController({
       amount: transaction.amount,
       description: transaction.description ?? '',
       transactionDate: transaction.transactionDate,
-      notes: transaction.notes ?? '',
+      notes: stripNoBalancePrefix(transaction.notes ?? ''),
       isMsi: transaction.isMsi,
       msiMonths: transaction.msiMonths,
     })
@@ -123,6 +151,10 @@ export function useTransactionsController({
       isMsi: nextType === 'expense' ? previous.isMsi : false,
       msiMonths: nextType === 'expense' ? previous.msiMonths : null,
     }))
+
+    if (nextType !== 'expense') {
+      setExcludeFromBalance(false)
+    }
   }
 
   const handleTransactionSubmit = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
@@ -130,13 +162,15 @@ export function useTransactionsController({
     setTransactionError('')
     setTransactionMessage('')
 
+    const canExcludeFromBalance = transactionForm.type === 'expense' && selectedTransactionInstrument?.type === 'credit_card'
+
     const payload: TransactionInput = {
       ...transactionForm,
       instrumentId: selectedTransactionInstrumentId,
       categoryId: selectedTransactionCategoryId,
       subcategoryId: transactionForm.subcategoryId,
       description: transactionForm.description.trim(),
-      notes: transactionForm.notes.trim(),
+      notes: buildNotesWithBalanceFlag(transactionForm.notes, canExcludeFromBalance && excludeFromBalance),
       isMsi: transactionForm.type === 'expense' ? transactionForm.isMsi : false,
       msiMonths: transactionForm.type === 'expense' && transactionForm.isMsi ? transactionForm.msiMonths : null,
     }
@@ -226,7 +260,9 @@ export function useTransactionsController({
     activeMsiTransactions,
     autoAdjustmentCount,
     showAutoAdjustmentsOnly,
+    excludeFromBalance,
     setTransactionForm,
+    setExcludeFromBalance,
     setTransactionFilters,
     setShowAutoAdjustmentsOnly,
     loadTransactions,
