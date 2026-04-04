@@ -9,16 +9,22 @@ import type {
   TransactionType,
 } from '../../types/domain'
 
+const AUTO_ADJUSTMENT_NOTE_PREFIX = 'AUTO_ADJUSTMENT_TRANSFER:'
+const AUTO_ADJUSTMENT_DESCRIPTION = 'Otros (por ajuste)'
+
 type TransactionsSectionProps = {
   hasConfig: boolean
   instruments: FinancialInstrument[]
   categories: Category[]
   transactionForm: TransactionInput
+  editingTransactionId: number | null
   selectedTransactionInstrumentId: number
   selectedTransactionCategoryId: number | null
   selectedTransactionInstrument: FinancialInstrument | null
   transactionSubcategoryOptions: Category['subcategories']
   transactionFilters: TransactionFilters
+  showAutoAdjustmentsOnly: boolean
+  autoAdjustmentCount: number
   transactions: Transaction[]
   activeMsiTransactions: Transaction[]
   isTransactionsLoading: boolean
@@ -27,9 +33,11 @@ type TransactionsSectionProps = {
   onTransactionFormChange: (nextForm: TransactionInput) => void
   onTransactionTypeChange: (nextType: TransactionType) => void
   onTransactionSubmit: (event: FormEvent<HTMLFormElement>) => void
+  onTransactionEdit: (transaction: Transaction) => void
   onTransactionDelete: (transactionId: number) => void
   onResetTransactionForm: () => void
   onFiltersChange: (nextFilters: TransactionFilters) => void
+  onToggleAutoAdjustmentsOnly: (nextValue: boolean) => void
   onFiltersSubmit: (event: FormEvent<HTMLFormElement>) => void
   onClearFilters: () => void
   onReload: () => void
@@ -40,11 +48,14 @@ export function TransactionsSection({
   instruments,
   categories,
   transactionForm,
+  editingTransactionId,
   selectedTransactionInstrumentId,
   selectedTransactionCategoryId,
   selectedTransactionInstrument,
   transactionSubcategoryOptions,
   transactionFilters,
+  showAutoAdjustmentsOnly,
+  autoAdjustmentCount,
   transactions,
   activeMsiTransactions,
   isTransactionsLoading,
@@ -53,13 +64,22 @@ export function TransactionsSection({
   onTransactionFormChange,
   onTransactionTypeChange,
   onTransactionSubmit,
+  onTransactionEdit,
   onTransactionDelete,
   onResetTransactionForm,
   onFiltersChange,
+  onToggleAutoAdjustmentsOnly,
   onFiltersSubmit,
   onClearFilters,
   onReload,
 }: TransactionsSectionProps) {
+  const isAutoAdjustmentTransaction = (transaction: Transaction): boolean => {
+    const notes = transaction.notes ?? ''
+    const description = transaction.description ?? ''
+
+    return notes.startsWith(AUTO_ADJUSTMENT_NOTE_PREFIX) || description === AUTO_ADJUSTMENT_DESCRIPTION
+  }
+
   return (
     <section className="card">
       <header className="card__header">
@@ -70,7 +90,7 @@ export function TransactionsSection({
       <div className="transaction-layout">
         <section className="mini-card">
           <header className="mini-card__header">
-            <h3 className="mini-card__title">Nueva transaccion</h3>
+            <h3 className="mini-card__title">{editingTransactionId === null ? 'Nueva transaccion' : 'Editar transaccion'}</h3>
             <p className="mini-card__subtitle">Crea gastos o ingresos asociados a instrumento y categoria.</p>
           </header>
 
@@ -219,10 +239,10 @@ export function TransactionsSection({
 
             <div className="form-grid__actions">
               <button className="button button--primary" type="submit" disabled={!hasConfig || instruments.length === 0}>
-                Crear transaccion
+                {editingTransactionId === null ? 'Crear transaccion' : 'Guardar cambios'}
               </button>
               <button className="button button--secondary" type="button" onClick={onResetTransactionForm}>
-                Limpiar
+                {editingTransactionId === null ? 'Limpiar' : 'Cancelar edicion'}
               </button>
             </div>
           </form>
@@ -310,6 +330,17 @@ export function TransactionsSection({
               placeholder="Descripcion, categoria o instrumento"
             />
 
+            <label className="form-grid__field" htmlFor="filterAutoAdjustmentsOnly">Ajustes automáticos</label>
+            <label className="form-grid__input" htmlFor="filterAutoAdjustmentsOnly">
+              <input
+                id="filterAutoAdjustmentsOnly"
+                type="checkbox"
+                checked={showAutoAdjustmentsOnly}
+                onChange={(event) => onToggleAutoAdjustmentsOnly(event.target.checked)}
+              />
+              {' '}Solo mostrar Otros (por ajuste)
+            </label>
+
             <div className="form-grid__actions">
               <button className="button button--primary" type="submit" disabled={!hasConfig}>
                 Aplicar filtros
@@ -327,6 +358,7 @@ export function TransactionsSection({
 
       {transactionError ? <p className="message message--error">{transactionError}</p> : null}
       {transactionMessage ? <p className="message message--success">{transactionMessage}</p> : null}
+      <p className="card__subtitle">Ajustes automáticos detectados: {autoAdjustmentCount}</p>
 
       <div className="table-wrap">
         <table className="table">
@@ -338,19 +370,20 @@ export function TransactionsSection({
               <th>Instrumento</th>
               <th>Categoria</th>
               <th>MSI</th>
+              <th>Origen</th>
               <th>Acciones</th>
             </tr>
           </thead>
           <tbody>
             {isTransactionsLoading ? (
               <tr>
-                <td colSpan={7}>Cargando transacciones...</td>
+                <td colSpan={8}>Cargando transacciones...</td>
               </tr>
             ) : null}
 
             {!isTransactionsLoading && transactions.length === 0 ? (
               <tr>
-                <td colSpan={7}>No hay transacciones registradas.</td>
+                <td colSpan={8}>No hay transacciones registradas.</td>
               </tr>
             ) : null}
 
@@ -366,8 +399,12 @@ export function TransactionsSection({
                     {transaction.subcategoryName ? ` / ${transaction.subcategoryName}` : ''}
                   </td>
                   <td>{transaction.isMsi ? `${transaction.msiMonths ?? '-'} meses` : '-'}</td>
+                  <td>{isAutoAdjustmentTransaction(transaction) ? 'Ajuste automatico' : 'Manual'}</td>
                   <td>
                     <div className="table__actions">
+                      <button className="button button--secondary" type="button" onClick={() => onTransactionEdit(transaction)}>
+                        Editar
+                      </button>
                       <button className="button button--danger" type="button" onClick={() => onTransactionDelete(transaction.id)}>
                         Eliminar
                       </button>

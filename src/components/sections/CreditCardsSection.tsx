@@ -21,12 +21,14 @@ type CreditCardsSectionProps = {
   selectedStatementInstrumentId: number
   selectedTransferSourceInstrumentId: number
   selectedTransferDestinationInstrumentId: number
+  selectedTransferStatementId: number | null
   statementForm: CreditCardStatementInput
   transferForm: TransferInput
   statements: CreditCardStatement[]
   transfers: Transfer[]
   statementUpdateForm: CreditCardStatementUpdateInput
   editingStatementId: number | null
+  editingTransferId: number | null
   selectedStatementDetail: CreditCardStatement | null
   statementMovements: Transaction[]
   isStatementsLoading: boolean
@@ -40,6 +42,7 @@ type CreditCardsSectionProps = {
   onTransferFormChange: (nextForm: TransferInput) => void
   onStatementUpdateFormChange: (nextForm: CreditCardStatementUpdateInput) => void
   onTransferTypeChange: (nextType: TransferType) => void
+  onStartTransferEdit: (transfer: Transfer) => void
   onStatementSubmit: (event: FormEvent<HTMLFormElement>) => void
   onTransferSubmit: (event: FormEvent<HTMLFormElement>) => void
   onResetStatementForm: () => void
@@ -64,12 +67,14 @@ export function CreditCardsSection({
   selectedStatementInstrumentId,
   selectedTransferSourceInstrumentId,
   selectedTransferDestinationInstrumentId,
+  selectedTransferStatementId,
   statementForm,
   transferForm,
   statements,
   transfers,
   statementUpdateForm,
   editingStatementId,
+  editingTransferId,
   selectedStatementDetail,
   statementMovements,
   isStatementsLoading,
@@ -83,6 +88,7 @@ export function CreditCardsSection({
   onTransferFormChange,
   onStatementUpdateFormChange,
   onTransferTypeChange,
+  onStartTransferEdit,
   onStatementSubmit,
   onTransferSubmit,
   onResetStatementForm,
@@ -217,6 +223,31 @@ export function CreditCardsSection({
               ))}
             </select>
 
+            {transferForm.type === 'card_payment' ? (
+              <>
+                <label className="form-grid__field" htmlFor="transferStatement">Estado de cuenta</label>
+                <select
+                  id="transferStatement"
+                  className="form-grid__input"
+                  value={selectedTransferStatementId ?? ''}
+                  onChange={(event) => {
+                    const rawValue = event.target.value
+                    onTransferFormChange({ ...transferForm, statementId: rawValue ? Number(rawValue) : null })
+                  }}
+                  required
+                >
+                  <option value="">Selecciona estado</option>
+                  {statements
+                    .filter((statement) => statement.instrumentId === selectedTransferDestinationInstrumentId)
+                    .map((statement) => (
+                      <option key={statement.id} value={statement.id}>
+                        {statement.instrumentName ?? 'Tarjeta'} · Corte {statement.cutOffDate} · {formatCurrency(statement.totalAmount)}
+                      </option>
+                    ))}
+                </select>
+              </>
+            ) : null}
+
             <label className="form-grid__field" htmlFor="transferAmount">Monto</label>
             <input
               id="transferAmount"
@@ -269,10 +300,10 @@ export function CreditCardsSection({
 
             <div className="form-grid__actions">
               <button className="button button--primary" type="submit" disabled={!hasConfig || sourceTransferInstruments.length === 0}>
-                Crear transferencia
+                {editingTransferId === null ? 'Crear transferencia' : 'Guardar transferencia'}
               </button>
               <button className="button button--secondary" type="button" onClick={onResetTransferForm}>
-                Limpiar
+                {editingTransferId === null ? 'Limpiar' : 'Cancelar edicion'}
               </button>
               <button className="button button--secondary" type="button" onClick={onReloadTransfers}>
                 Recargar
@@ -469,6 +500,9 @@ export function CreditCardsSection({
                       <td>{formatCurrency(transfer.amount)}</td>
                       <td>
                         <div className="table__actions">
+                          <button className="button button--secondary" type="button" onClick={() => onStartTransferEdit(transfer)}>
+                            Editar
+                          </button>
                           <button className="button button--danger" type="button" onClick={() => onDeleteTransfer(transfer.id)}>
                             Eliminar
                           </button>

@@ -19,6 +19,9 @@ const ALLOWED_SUBSCRIPTION_BILLING_CYCLES = new Set(['monthly', 'yearly', 'weekl
 const ALLOWED_SIMULATION_SCENARIO_TYPES = new Set(['direct_purchase', 'msi', 'loan']);
 const ALLOWED_REMINDER_TYPES = new Set(['payment', 'cutoff', 'subscription', 'loan', 'custom']);
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const AUTO_ADJUSTMENT_CATEGORY_NAME = 'Otros (por ajuste)';
+const AUTO_ADJUSTMENT_DESCRIPTION = 'Otros (por ajuste)';
+const AUTO_ADJUSTMENT_TRANSFER_NOTE_PREFIX = 'AUTO_ADJUSTMENT_TRANSFER:';
 
 let pool;
 
@@ -799,6 +802,14 @@ function validateTransferPayload(body) {
 
   if (type === 'loan_payment' && !loanId) {
     return { ok: false, error: 'loanId es requerido para loan_payment.' };
+  }
+
+  if (type === 'card_payment' && !statementId) {
+    return { ok: false, error: 'statementId es requerido para card_payment.' };
+  }
+
+  if (type !== 'card_payment' && statementId) {
+    return { ok: false, error: 'statementId solo se permite para card_payment.' };
   }
 
   if (description && description.length > 255) {
@@ -1634,6 +1645,14 @@ function addMonthsToIsoDate(dateValue, months) {
   return date.toISOString().slice(0, 10);
 }
 
+function roundMoney(value) {
+  return Number(Number(value).toFixed(2));
+}
+
+function buildAutoAdjustmentTransferNote(transferId) {
+  return `${AUTO_ADJUSTMENT_TRANSFER_NOTE_PREFIX}${transferId}`;
+}
+
 function getBoundedDayForMonth(year, month, targetDay) {
   const monthLastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
   return Math.min(targetDay, monthLastDay);
@@ -1700,6 +1719,269 @@ async function calculateStatementTotalAmount(client, instrumentId, cutOffDate) {
   );
 
   return Number(result.rows[0]?.total ?? 0);
+}
+
+async function ensureAutoAdjustmentCategory(client) {
+  const existing = await client.query(
+    `
+    SELECT id
+    FROM app_gastos.categories
+    WHERE name = $1
+      AND is_active = TRUE
+    ORDER BY id ASC
+    LIMIT 1
+    `,
+    [AUTO_ADJUSTMENT_CATEGORY_NAME],
+  );
+
+  if (existing.rows.length > 0) {
+    return Number(existing.rows[0].id);
+  }
+
+  const created = await client.query(
+    `
+    INSERT INTO app_gastos.categories (
+      name,
+      icon_name,
+      color,
+      type,
+      is_system,
+      is_active
+    )
+    VALUES ($1, NULL, NULL, 'both', FALSE, TRUE)
+    RETURNING id
+    `,
+    [AUTO_ADJUSTMENT_CATEGORY_NAME],
+  );
+
+  return Number(created.rows[0].id);
+}
+
+async function removeAutoAdjustmentTransaction(client, transferId) {
+  const marker = buildAutoAdjustmentTransferNote(transferId);
+  const adjustmentResult = await client.query(
+    `
+    SELECT id, instrument_id, type, amount
+    FROM app_gastos.transactions
+    WHERE notes = $1
+    FOR UPDATE
+    `,
+    [marker],
+  );
+
+  if (adjustmentResult.rows.length === 0) {
+    return;
+  }
+
+  const adjustment = adjustmentResult.rows[0];
+  const instrument = await getInstrumentForUpdate(client, adjustment.instrument_id);
+
+  if (instrument && instrument.is_active) {
+    await applyInstrumentImpact(client, instrument, adjustment.type, Number(adjustment.amount), 'revert');
+  }
+
+  await client.query('DELETE FROM app_gastos.transactions WHERE id = $1', [adjustment.id]);
+}
+
+async function refreshStatementComputedAmounts(client, statementId) {
+  const statementResult = await client.query(
+    `
+    SELECT id, instrument_id, cut_off_date, minimum_payment
+    FROM app_gastos.credit_card_statements
+    WHERE id = $1
+    FOR UPDATE
+    `,
+    [statementId],
+  );
+
+  if (statementResult.rows.length === 0) {
+    return;
+  }
+
+  const statement = statementResult.rows[0];
+  const totalAmount = roundMoney(await calculateStatementTotalAmount(client, statement.instrument_id, String(statement.cut_off_date)));
+  const noInterestPayment = Math.max(0, totalAmount);
+  const defaultMinimum = Math.max(0, roundMoney(totalAmount * 0.1));
+
+  await client.query(
+    `
+    UPDATE app_gastos.credit_card_statements
+    SET total_amount = $1,
+        no_interest_payment = $2,
+        minimum_payment = CASE WHEN minimum_payment IS NULL THEN $3 ELSE minimum_payment END,
+        updated_at = NOW()
+    WHERE id = $4
+    `,
+    [
+      totalAmount,
+      noInterestPayment,
+      defaultMinimum,
+      statementId,
+    ],
+  );
+}
+
+async function syncCardPaymentAdjustment(client, payload, transferId) {
+  if (payload.type !== 'card_payment' || !payload.statementId) {
+    await removeAutoAdjustmentTransaction(client, transferId);
+    return;
+  }
+
+  const statementResult = await client.query(
+    `
+    SELECT id, instrument_id, cut_off_date
+    FROM app_gastos.credit_card_statements
+    WHERE id = $1
+    FOR UPDATE
+    `,
+    [payload.statementId],
+  );
+
+  if (statementResult.rows.length === 0) {
+    return;
+  }
+
+  const statement = statementResult.rows[0];
+  const statementInstrumentId = Number(statement.instrument_id);
+  const cutOffDate = String(statement.cut_off_date);
+
+  const previousCutOffResult = await client.query(
+    `
+    SELECT MAX(cut_off_date) AS previous_cut_off_date
+    FROM app_gastos.credit_card_statements
+    WHERE instrument_id = $1
+      AND cut_off_date < $2
+    `,
+    [statementInstrumentId, cutOffDate],
+  );
+
+  const previousCutOffDate = previousCutOffResult.rows[0]?.previous_cut_off_date
+    ? String(previousCutOffResult.rows[0].previous_cut_off_date)
+    : addMonthsToIsoDate(cutOffDate, -1);
+
+  const marker = buildAutoAdjustmentTransferNote(transferId);
+  const periodTotalResult = await client.query(
+    `
+    SELECT COALESCE(SUM(
+      CASE WHEN type = 'expense' THEN amount ELSE -amount END
+    ), 0) AS total
+    FROM app_gastos.transactions
+    WHERE instrument_id = $1
+      AND transaction_date > $2
+      AND transaction_date <= $3
+      AND COALESCE(notes, '') <> $4
+    `,
+    [statementInstrumentId, previousCutOffDate, cutOffDate, marker],
+  );
+
+  const periodTotal = Number(periodTotalResult.rows[0]?.total ?? 0);
+  const rawAdjustment = roundMoney(payload.amount - periodTotal);
+  const adjustmentAmount = rawAdjustment > 0 ? rawAdjustment : 0;
+
+  const existingResult = await client.query(
+    `
+    SELECT id, instrument_id, type, amount
+    FROM app_gastos.transactions
+    WHERE notes = $1
+    FOR UPDATE
+    `,
+    [marker],
+  );
+
+  const existing = existingResult.rows[0] ?? null;
+
+  if (existing) {
+    const existingInstrument = await getInstrumentForUpdate(client, existing.instrument_id);
+
+    if (existingInstrument && existingInstrument.is_active) {
+      await applyInstrumentImpact(client, existingInstrument, existing.type, Number(existing.amount), 'revert');
+    }
+  }
+
+  if (adjustmentAmount <= 0) {
+    if (existing) {
+      await client.query('DELETE FROM app_gastos.transactions WHERE id = $1', [existing.id]);
+    }
+
+    await refreshStatementComputedAmounts(client, payload.statementId);
+    return;
+  }
+
+  const categoryId = await ensureAutoAdjustmentCategory(client);
+  const destinationInstrument = await getInstrumentForUpdate(client, statementInstrumentId);
+
+  if (!destinationInstrument || !destinationInstrument.is_active) {
+    return;
+  }
+
+  await applyInstrumentImpact(client, destinationInstrument, 'expense', adjustmentAmount, 'apply');
+
+  if (existing) {
+    await client.query(
+      `
+      UPDATE app_gastos.transactions
+      SET instrument_id = $1,
+          category_id = $2,
+          subcategory_id = NULL,
+          currency_id = $3,
+          type = 'expense',
+          amount = $4,
+          description = $5,
+          transaction_date = $6,
+          notes = $7,
+          is_msi = FALSE,
+          msi_months = NULL,
+          msi_monthly_amount = NULL,
+          msi_start_date = NULL,
+          msi_remaining = NULL,
+          updated_at = NOW()
+      WHERE id = $8
+      `,
+      [
+        statementInstrumentId,
+        categoryId,
+        payload.currencyId,
+        adjustmentAmount,
+        AUTO_ADJUSTMENT_DESCRIPTION,
+        payload.transferDate,
+        marker,
+        existing.id,
+      ],
+    );
+  } else {
+    await client.query(
+      `
+      INSERT INTO app_gastos.transactions (
+        instrument_id,
+        category_id,
+        subcategory_id,
+        currency_id,
+        type,
+        amount,
+        description,
+        transaction_date,
+        notes,
+        is_msi,
+        msi_months,
+        msi_monthly_amount,
+        msi_start_date,
+        msi_remaining
+      )
+      VALUES ($1, $2, NULL, $3, 'expense', $4, $5, $6, $7, FALSE, NULL, NULL, NULL, NULL)
+      `,
+      [
+        statementInstrumentId,
+        categoryId,
+        payload.currencyId,
+        adjustmentAmount,
+        AUTO_ADJUSTMENT_DESCRIPTION,
+        payload.transferDate,
+        marker,
+      ],
+    );
+  }
+
+  await refreshStatementComputedAmounts(client, payload.statementId);
 }
 
 async function listStatements(instrumentId) {
@@ -2155,6 +2437,8 @@ async function createTransfer(payload) {
     );
 
     const createdId = insertResult.rows[0]?.id;
+    await syncCardPaymentAdjustment(client, payload, createdId);
+
     const fullResult = await client.query(
       `
       SELECT
@@ -2252,6 +2536,8 @@ async function updateTransfer(transferId, payload) {
       ],
     );
 
+    await syncCardPaymentAdjustment(client, payload, transferId);
+
     const fullResult = await client.query(
       `
       SELECT
@@ -2309,6 +2595,8 @@ async function deleteTransfer(transferId) {
     }
 
     await applyTransferImpact(client, previousSource, previousDestination, Number(previous.amount), 'revert');
+
+    await removeAutoAdjustmentTransaction(client, transferId);
 
     await client.query('DELETE FROM app_gastos.transfers WHERE id = $1', [transferId]);
 

@@ -38,6 +38,7 @@ export function useCreditCardsController({
   const [transferMessage, setTransferMessage] = useState('')
   const [transferError, setTransferError] = useState('')
   const [transferForm, setTransferForm] = useState<TransferInput>(EMPTY_TRANSFER_FORM)
+  const [editingTransferId, setEditingTransferId] = useState<number | null>(null)
 
   const [selectedStatementDetail, setSelectedStatementDetail] = useState<CreditCardStatement | null>(null)
   const [statementMovements, setStatementMovements] = useState<Transaction[]>([])
@@ -55,6 +56,7 @@ export function useCreditCardsController({
   const selectedTransferSourceInstrumentId = transferForm.sourceInstrumentId === 0 ? (sourceTransferInstruments[0]?.id ?? 0) : transferForm.sourceInstrumentId
   const selectedTransferDestinationInstrumentId = transferForm.destinationInstrumentId === 0 ? (creditCardInstruments[0]?.id ?? 0) : transferForm.destinationInstrumentId
   const selectedTransferType = transferForm.type
+  const selectedTransferStatementId = transferForm.statementId
 
   const availableTransferDestinations = useMemo(() => {
     const sourceId = selectedTransferSourceInstrumentId
@@ -77,6 +79,14 @@ export function useCreditCardsController({
   const totalAvailableCredit = useMemo(() => {
     return creditCardInstruments.reduce((accumulator, instrument) => accumulator + (instrument.availableCredit ?? 0), 0)
   }, [creditCardInstruments])
+
+  const availableStatementsForDestination = useMemo(() => {
+    if (selectedTransferType !== 'card_payment') {
+      return []
+    }
+
+    return statements.filter((statement) => statement.instrumentId === selectedTransferDestinationInstrumentId)
+  }, [selectedTransferDestinationInstrumentId, selectedTransferType, statements])
 
   const loadStatements = async (): Promise<void> => {
     setIsStatementsLoading(true)
@@ -223,10 +233,12 @@ export function useCreditCardsController({
   }
 
   const resetTransferForm = (): void => {
+    setEditingTransferId(null)
     setTransferForm({
       ...EMPTY_TRANSFER_FORM,
       sourceInstrumentId: sourceTransferInstruments[0]?.id ?? 0,
       destinationInstrumentId: creditCardInstruments[0]?.id ?? 0,
+      statementId: null,
     })
   }
 
@@ -235,7 +247,24 @@ export function useCreditCardsController({
       ...previous,
       type: nextType,
       statementId: nextType === 'card_payment' ? previous.statementId : null,
+      loanId: nextType === 'loan_payment' ? previous.loanId : null,
     }))
+  }
+
+  const startTransferEdit = (transfer: Transfer): void => {
+    setEditingTransferId(transfer.id)
+    setTransferForm({
+      sourceInstrumentId: transfer.sourceInstrumentId,
+      destinationInstrumentId: transfer.destinationInstrumentId,
+      amount: transfer.amount,
+      currencyId: transfer.currencyId,
+      transferDate: transfer.transferDate,
+      type: transfer.type,
+      statementId: transfer.statementId,
+      loanId: transfer.loanId,
+      description: transfer.description ?? '',
+      notes: transfer.notes ?? '',
+    })
   }
 
   const handleTransferSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
@@ -247,6 +276,7 @@ export function useCreditCardsController({
       ...transferForm,
       sourceInstrumentId: selectedTransferSourceInstrumentId,
       destinationInstrumentId: selectedTransferDestinationInstrumentId,
+      statementId: selectedTransferType === 'card_payment' ? (selectedTransferStatementId ?? null) : null,
       description: transferForm.description.trim(),
       notes: transferForm.notes.trim(),
     }
@@ -266,6 +296,27 @@ export function useCreditCardsController({
       return
     }
 
+    if (payload.type === 'card_payment' && !payload.statementId) {
+      setTransferError('Selecciona un estado de cuenta para registrar el pago de tarjeta.')
+      return
+    }
+
+    if (editingTransferId !== null) {
+      const updated = await apiClient.updateTransfer(editingTransferId, payload)
+
+      if (!updated.success) {
+        setTransferError(updated.error ?? 'No se pudo actualizar la transferencia.')
+        return
+      }
+
+      setTransferMessage('Transferencia actualizada correctamente.')
+      resetTransferForm()
+      await loadInstruments()
+      await loadStatements()
+      await loadTransfers()
+      return
+    }
+
     const created = await apiClient.createTransfer(payload)
 
     if (!created.success) {
@@ -276,6 +327,7 @@ export function useCreditCardsController({
     setTransferMessage('Transferencia registrada correctamente.')
     resetTransferForm()
     await loadInstruments()
+    await loadStatements()
     await loadTransfers()
   }
 
@@ -291,7 +343,11 @@ export function useCreditCardsController({
     }
 
     setTransferMessage('Transferencia eliminada correctamente.')
+    if (editingTransferId === id) {
+      resetTransferForm()
+    }
     await loadInstruments()
+    await loadStatements()
     await loadTransfers()
   }
 
@@ -308,6 +364,9 @@ export function useCreditCardsController({
     transferMessage,
     transferError,
     transferForm,
+    editingTransferId,
+    selectedTransferStatementId,
+    availableStatementsForDestination,
     selectedStatementDetail,
     statementMovements,
     isStatementMovementsLoading,
@@ -333,6 +392,7 @@ export function useCreditCardsController({
     handleStatementDelete,
     resetTransferForm,
     handleTransferTypeChange,
+    startTransferEdit,
     handleTransferSubmit,
     handleTransferDelete,
   }

@@ -192,11 +192,14 @@ export function App() {
               instruments={instrumentsController.instruments}
               categories={categoriesController.categories}
               transactionForm={transactionsController.transactionForm}
+              editingTransactionId={transactionsController.editingTransactionId}
               selectedTransactionInstrumentId={transactionsController.selectedTransactionInstrumentId}
               selectedTransactionCategoryId={transactionsController.selectedTransactionCategoryId}
               selectedTransactionInstrument={transactionsController.selectedTransactionInstrument}
               transactionSubcategoryOptions={transactionsController.transactionSubcategoryOptions}
               transactionFilters={transactionsController.transactionFilters}
+              showAutoAdjustmentsOnly={transactionsController.showAutoAdjustmentsOnly}
+              autoAdjustmentCount={transactionsController.autoAdjustmentCount}
               transactions={transactionsController.transactions}
               activeMsiTransactions={transactionsController.activeMsiTransactions}
               isTransactionsLoading={transactionsController.isTransactionsLoading}
@@ -205,11 +208,13 @@ export function App() {
               onTransactionFormChange={transactionsController.setTransactionForm}
               onTransactionTypeChange={transactionsController.handleTransactionTypeChange}
               onTransactionSubmit={transactionsController.handleTransactionSubmit}
+              onTransactionEdit={transactionsController.startTransactionEdit}
               onTransactionDelete={(transactionId) => {
                 void transactionsController.handleTransactionDelete(transactionId)
               }}
               onResetTransactionForm={transactionsController.resetTransactionForm}
               onFiltersChange={transactionsController.setTransactionFilters}
+              onToggleAutoAdjustmentsOnly={transactionsController.setShowAutoAdjustmentsOnly}
               onFiltersSubmit={transactionsController.handleTransactionFiltersSubmit}
               onClearFilters={() => {
                 void transactionsController.clearTransactionFilters()
@@ -231,12 +236,14 @@ export function App() {
               selectedStatementInstrumentId={creditCardsController.selectedStatementInstrumentId}
               selectedTransferSourceInstrumentId={creditCardsController.selectedTransferSourceInstrumentId}
               selectedTransferDestinationInstrumentId={creditCardsController.selectedTransferDestinationInstrumentId}
+              selectedTransferStatementId={creditCardsController.selectedTransferStatementId}
               statementForm={creditCardsController.statementForm}
               transferForm={creditCardsController.transferForm}
               statements={creditCardsController.statements}
               transfers={creditCardsController.transfers}
               statementUpdateForm={creditCardsController.statementUpdateForm}
               editingStatementId={creditCardsController.editingStatementId}
+              editingTransferId={creditCardsController.editingTransferId}
               selectedStatementDetail={creditCardsController.selectedStatementDetail}
               statementMovements={creditCardsController.statementMovements}
               isStatementsLoading={creditCardsController.isStatementsLoading}
@@ -250,6 +257,7 @@ export function App() {
               onTransferFormChange={creditCardsController.setTransferForm}
               onStatementUpdateFormChange={creditCardsController.setStatementUpdateForm}
               onTransferTypeChange={creditCardsController.handleTransferTypeChange}
+              onStartTransferEdit={creditCardsController.startTransferEdit}
               onStatementSubmit={creditCardsController.handleStatementSubmit}
               onTransferSubmit={creditCardsController.handleTransferSubmit}
               onResetStatementForm={creditCardsController.resetStatementForm}

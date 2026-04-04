@@ -19,6 +19,16 @@ type UseTransactionsControllerParams = {
   loadInstruments: () => Promise<void>
 }
 
+const AUTO_ADJUSTMENT_NOTE_PREFIX = 'AUTO_ADJUSTMENT_TRANSFER:'
+const AUTO_ADJUSTMENT_DESCRIPTION = 'Otros (por ajuste)'
+
+function isAutoAdjustmentTransaction(transaction: Transaction): boolean {
+  const notes = transaction.notes ?? ''
+  const description = transaction.description ?? ''
+
+  return notes.startsWith(AUTO_ADJUSTMENT_NOTE_PREFIX) || description === AUTO_ADJUSTMENT_DESCRIPTION
+}
+
 export function useTransactionsController({
   instruments,
   categories,
@@ -29,7 +39,9 @@ export function useTransactionsController({
   const [transactionMessage, setTransactionMessage] = useState('')
   const [transactionError, setTransactionError] = useState('')
   const [transactionForm, setTransactionForm] = useState<TransactionInput>(EMPTY_TRANSACTION_FORM)
+  const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null)
   const [transactionFilters, setTransactionFilters] = useState<TransactionFilters>(EMPTY_TRANSACTION_FILTERS)
+  const [showAutoAdjustmentsOnly, setShowAutoAdjustmentsOnly] = useState(false)
 
   const selectedTransactionInstrumentId = transactionForm.instrumentId === 0 ? (instruments[0]?.id ?? 0) : transactionForm.instrumentId
   const selectedTransactionCategoryId = transactionForm.categoryId
@@ -50,6 +62,18 @@ export function useTransactionsController({
     return transactions.filter((transaction) => transaction.isMsi && (transaction.msiRemaining ?? 0) > 0)
   }, [transactions])
 
+  const autoAdjustmentCount = useMemo(() => {
+    return transactions.filter(isAutoAdjustmentTransaction).length
+  }, [transactions])
+
+  const visibleTransactions = useMemo(() => {
+    if (!showAutoAdjustmentsOnly) {
+      return transactions
+    }
+
+    return transactions.filter(isAutoAdjustmentTransaction)
+  }, [showAutoAdjustmentsOnly, transactions])
+
   const loadTransactions = async (filters: TransactionFilters = transactionFilters): Promise<void> => {
     setIsTransactionsLoading(true)
     setTransactionError('')
@@ -67,10 +91,28 @@ export function useTransactionsController({
   }
 
   const resetTransactionForm = (): void => {
+    setEditingTransactionId(null)
     setTransactionForm({
       ...EMPTY_TRANSACTION_FORM,
       instrumentId: instruments[0]?.id ?? 0,
       categoryId: null,
+    })
+  }
+
+  const startTransactionEdit = (transaction: Transaction): void => {
+    setEditingTransactionId(transaction.id)
+    setTransactionForm({
+      instrumentId: transaction.instrumentId,
+      categoryId: transaction.categoryId,
+      subcategoryId: transaction.subcategoryId,
+      currencyId: transaction.currencyId,
+      type: transaction.type,
+      amount: transaction.amount,
+      description: transaction.description ?? '',
+      transactionDate: transaction.transactionDate,
+      notes: transaction.notes ?? '',
+      isMsi: transaction.isMsi,
+      msiMonths: transaction.msiMonths,
     })
   }
 
@@ -114,6 +156,21 @@ export function useTransactionsController({
       return
     }
 
+    if (editingTransactionId !== null) {
+      const updated = await apiClient.updateTransaction(editingTransactionId, payload)
+
+      if (!updated.success) {
+        setTransactionError(updated.error ?? 'No se pudo actualizar la transaccion.')
+        return
+      }
+
+      setTransactionMessage('Transaccion actualizada correctamente.')
+      resetTransactionForm()
+      await loadInstruments()
+      await loadTransactions()
+      return
+    }
+
     const created = await apiClient.createTransaction(payload)
 
     if (!created.success) {
@@ -150,24 +207,30 @@ export function useTransactionsController({
 
   const clearTransactionFilters = async (): Promise<void> => {
     setTransactionFilters(EMPTY_TRANSACTION_FILTERS)
+    setShowAutoAdjustmentsOnly(false)
     await loadTransactions(EMPTY_TRANSACTION_FILTERS)
   }
 
   return {
-    transactions,
+    transactions: visibleTransactions,
     isTransactionsLoading,
     transactionMessage,
     transactionError,
     transactionForm,
+    editingTransactionId,
     transactionFilters,
     selectedTransactionInstrumentId,
     selectedTransactionCategoryId,
     selectedTransactionInstrument,
     transactionSubcategoryOptions,
     activeMsiTransactions,
+    autoAdjustmentCount,
+    showAutoAdjustmentsOnly,
     setTransactionForm,
     setTransactionFilters,
+    setShowAutoAdjustmentsOnly,
     loadTransactions,
+    startTransactionEdit,
     resetTransactionForm,
     handleTransactionTypeChange,
     handleTransactionSubmit,
