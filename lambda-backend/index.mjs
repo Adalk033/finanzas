@@ -3812,8 +3812,7 @@ async function listCategories() {
         ) ORDER BY sc.name ASC
       ) AS subcategories
       FROM app_gastos.subcategories sc
-      WHERE sc.category_id = c.id
-        AND sc.is_active = TRUE
+      WHERE sc.category_id = c.id AND sc.is_active = TRUE
     ) subcategories ON TRUE
     WHERE c.is_active = TRUE
     ORDER BY c.name ASC
