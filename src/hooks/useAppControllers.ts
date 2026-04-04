@@ -62,7 +62,7 @@ export function useAppControllers() {
     loadInstruments: instrumentsController.loadInstruments,
   })
 
-  const { activeSection, handleSectionChange } = useSectionDataLoader(hasConfig, {
+  const { activeSection, handleSectionChange, isSectionLoading } = useSectionDataLoader(hasConfig, {
     loadDashboard: dashboardController.loadDashboard,
     loadBanks: banksController.loadBanks,
     loadInstruments: instrumentsController.loadInstruments,
@@ -87,6 +87,7 @@ export function useAppControllers() {
     hasConfig,
     activeSection,
     handleSectionChange,
+    isSectionLoading,
     handleSave,
     configController,
     settingsPingController,

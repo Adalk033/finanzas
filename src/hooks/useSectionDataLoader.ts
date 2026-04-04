@@ -19,56 +19,45 @@ type SectionLoaders = {
 
 export function useSectionDataLoader(hasConfig: boolean, loaders: SectionLoaders) {
   const [activeSection, setActiveSection] = useState<AppSection>('dashboard')
+  const [isSectionLoading, setIsSectionLoading] = useState(false)
 
-  const sectionHandlers: Record<AppSection, () => void> = {
-    dashboard: () => {
-      void loaders.loadDashboard()
+  const sectionHandlers: Record<AppSection, () => Promise<void>> = {
+    dashboard: async () => {
+      await loaders.loadDashboard()
     },
-    settings: () => {},
-    banks: () => {
-      void loaders.loadBanks()
+    settings: async () => {},
+    banks: async () => {
+      await loaders.loadBanks()
     },
-    instruments: () => {
-      void loaders.loadBanks()
-      void loaders.loadInstruments()
+    instruments: async () => {
+      await Promise.all([loaders.loadBanks(), loaders.loadInstruments()])
     },
-    categories: () => {
-      void loaders.loadCategories()
+    categories: async () => {
+      await loaders.loadCategories()
     },
-    transactions: () => {
-      void loaders.loadCategories()
-      void loaders.loadInstruments()
-      void loaders.loadTransactions()
+    transactions: async () => {
+      await Promise.all([loaders.loadCategories(), loaders.loadInstruments(), loaders.loadTransactions()])
     },
-    creditCards: () => {
-      void loaders.loadInstruments()
-      void loaders.loadStatements()
-      void loaders.loadTransfers()
+    creditCards: async () => {
+      await Promise.all([loaders.loadInstruments(), loaders.loadStatements(), loaders.loadTransfers()])
     },
-    subscriptions: () => {
-      void loaders.loadInstruments()
-      void loaders.loadCategories()
-      void loaders.loadSubscriptions()
+    subscriptions: async () => {
+      await Promise.all([loaders.loadInstruments(), loaders.loadCategories(), loaders.loadSubscriptions()])
     },
-    fixedExpenses: () => {
-      void loaders.loadInstruments()
-      void loaders.loadCategories()
-      void loaders.loadFixedExpenses()
+    fixedExpenses: async () => {
+      await Promise.all([loaders.loadInstruments(), loaders.loadCategories(), loaders.loadFixedExpenses()])
     },
-    loans: () => {
-      void loaders.loadInstruments()
-      void loaders.loadLoans()
+    loans: async () => {
+      await Promise.all([loaders.loadInstruments(), loaders.loadLoans()])
     },
-    budgets: () => {
-      void loaders.loadCategories()
-      void loaders.loadBudgets()
+    budgets: async () => {
+      await Promise.all([loaders.loadCategories(), loaders.loadBudgets()])
     },
-    reminders: () => {
-      void loaders.loadReminders()
+    reminders: async () => {
+      await loaders.loadReminders()
     },
-    simulator: () => {
-      void loaders.loadInstruments()
-      void loaders.loadSimulations()
+    simulator: async () => {
+      await Promise.all([loaders.loadInstruments(), loaders.loadSimulations()])
     },
   }
 
@@ -79,11 +68,15 @@ export function useSectionDataLoader(hasConfig: boolean, loaders: SectionLoaders
       return
     }
 
-    sectionHandlers[nextSection]()
+    setIsSectionLoading(true)
+    void sectionHandlers[nextSection]().finally(() => {
+      setIsSectionLoading(false)
+    })
   }
 
   return {
     activeSection,
     handleSectionChange,
+    isSectionLoading,
   }
 }

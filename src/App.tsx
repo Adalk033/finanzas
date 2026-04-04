@@ -1,6 +1,7 @@
 import { Suspense, lazy } from 'react'
 import './App.css'
 import { AppSidebar } from './components/AppSidebar'
+import { Loader } from './components/Loader'
 import { useAppControllers } from './hooks/useAppControllers'
 
 const DashboardSection = lazy(() => import('./components/sections/DashboardSection').then((module) => ({ default: module.DashboardSection })))
@@ -22,6 +23,7 @@ export function App() {
     hasConfig,
     activeSection,
     handleSectionChange,
+    isSectionLoading,
     handleSave,
     configController,
     settingsPingController,
@@ -58,12 +60,9 @@ export function App() {
       />
 
       <section className="app-shell__content">
+        {isSectionLoading && <Loader />}
         <Suspense
-          fallback={(
-            <section className="card">
-              <p className="settings-screen__status">Cargando seccion...</p>
-            </section>
-          )}
+          fallback={<Loader />}
         >
           {activeSection === 'dashboard' ? (
             <DashboardSection
