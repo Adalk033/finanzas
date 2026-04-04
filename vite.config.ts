@@ -2,7 +2,6 @@ import { defineConfig } from 'vite'
 import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import babel from '@rolldown/plugin-babel'
 import electron from 'vite-plugin-electron'
-import renderer from 'vite-plugin-electron-renderer'
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -36,6 +35,5 @@ export default defineConfig({
         },
       },
     ]),
-    renderer(),
   ],
 })
