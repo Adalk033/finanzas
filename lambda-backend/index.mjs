@@ -22,8 +22,12 @@ const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const AUTO_ADJUSTMENT_CATEGORY_NAME = 'Otros (por ajuste)';
 const AUTO_ADJUSTMENT_DESCRIPTION = 'Otros (por ajuste)';
 const AUTO_ADJUSTMENT_TRANSFER_NOTE_PREFIX = 'AUTO_ADJUSTMENT_TRANSFER:';
+const AUTO_SUBSCRIPTION_CHARGE_NOTE_PREFIX = 'AUTO_SUBSCRIPTION_CHARGE:';
+const SUBSCRIPTION_CHARGE_DESCRIPTION_PREFIX = 'Cargo automatico: ';
+const MAX_SUBSCRIPTION_JOBS_PER_RUN = 100;
 
 let pool;
+let operationalTablesEnsured = false;
 
 function jsonResponse(statusCode, payload) {
   return {
@@ -109,6 +113,31 @@ function getPool() {
 async function query(text, values = []) {
   const db = getPool();
   return db.query(text, values);
+}
+
+async function ensureOperationalTables() {
+  if (operationalTablesEnsured) {
+    return;
+  }
+
+  await query(
+    `
+    CREATE TABLE IF NOT EXISTS app_gastos.subscription_jobs (
+      subscription_id INT PRIMARY KEY REFERENCES app_gastos.subscriptions(id) ON DELETE CASCADE,
+      next_run_date DATE,
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      last_run_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+    `,
+  );
+
+  await query(
+    'CREATE INDEX IF NOT EXISTS idx_subscription_jobs_next_run ON app_gastos.subscription_jobs(next_run_date)',
+  );
+
+  operationalTablesEnsured = true;
 }
 
 function getHeader(event, headerName) {
@@ -1673,12 +1702,226 @@ function addMonthsToIsoDate(dateValue, months) {
   return date.toISOString().slice(0, 10);
 }
 
+function addDaysToIsoDate(dateValue, days) {
+  const date = new Date(`${dateValue}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
 function roundMoney(value) {
   return Number(Number(value).toFixed(2));
 }
 
 function buildAutoAdjustmentTransferNote(transferId) {
   return `${AUTO_ADJUSTMENT_TRANSFER_NOTE_PREFIX}${transferId}`;
+}
+
+function buildSubscriptionChargeNote(subscriptionId, chargeDate) {
+  return `${AUTO_SUBSCRIPTION_CHARGE_NOTE_PREFIX}${subscriptionId}:${chargeDate}`;
+}
+
+function buildSubscriptionChargeDescription(subscriptionName) {
+  const normalizedName = normalizeText(subscriptionName);
+  const base = normalizedName.length > 0 ? normalizedName : 'Suscripcion';
+  const description = `${SUBSCRIPTION_CHARGE_DESCRIPTION_PREFIX}${base}`;
+  return description.slice(0, 255);
+}
+
+function computeNextSubscriptionBillingDate(currentDate, billingCycle, billingDay) {
+  if (!currentDate) {
+    return null;
+  }
+
+  if (billingCycle === 'weekly') {
+    return addDaysToIsoDate(currentDate, 7);
+  }
+
+  if (billingCycle === 'monthly') {
+    const nextMonthDate = new Date(`${addMonthsToIsoDate(currentDate, 1)}T00:00:00.000Z`);
+    const year = nextMonthDate.getUTCFullYear();
+    const month = nextMonthDate.getUTCMonth() + 1;
+    const day = getBoundedDayForMonth(year, month, billingDay ?? nextMonthDate.getUTCDate());
+    return buildDateFromParts(year, month, day);
+  }
+
+  if (billingCycle === 'yearly') {
+    const nextYearDate = new Date(`${addMonthsToIsoDate(currentDate, 12)}T00:00:00.000Z`);
+    const year = nextYearDate.getUTCFullYear();
+    const month = nextYearDate.getUTCMonth() + 1;
+    const day = getBoundedDayForMonth(year, month, billingDay ?? nextYearDate.getUTCDate());
+    return buildDateFromParts(year, month, day);
+  }
+
+  return null;
+}
+
+async function upsertSubscriptionJob(client, payload, subscriptionId) {
+  if (!payload.isActive || !payload.nextBilling) {
+    await client.query('DELETE FROM app_gastos.subscription_jobs WHERE subscription_id = $1', [subscriptionId]);
+    return;
+  }
+
+  await client.query(
+    `
+    INSERT INTO app_gastos.subscription_jobs (
+      subscription_id,
+      next_run_date,
+      is_active,
+      last_run_at
+    )
+    VALUES ($1, $2, TRUE, NULL)
+    ON CONFLICT (subscription_id)
+    DO UPDATE
+    SET next_run_date = EXCLUDED.next_run_date,
+        is_active = TRUE,
+        updated_at = NOW()
+    `,
+    [subscriptionId, payload.nextBilling],
+  );
+}
+
+async function processDueSubscriptionCharges() {
+  return withDbTransaction(async (client) => {
+    const dueJobs = await client.query(
+      `
+      SELECT
+        j.subscription_id,
+        j.next_run_date,
+        s.name,
+        s.instrument_id,
+        s.category_id,
+        s.subcategory_id,
+        s.currency_id,
+        s.amount,
+        s.billing_cycle,
+        s.billing_day,
+        s.is_active,
+        fi.type AS instrument_type,
+        fi.credit_limit,
+        fi.current_balance,
+        fi.available_credit,
+        fi.current_amount,
+        fi.is_active AS instrument_is_active
+      FROM app_gastos.subscription_jobs j
+      INNER JOIN app_gastos.subscriptions s ON s.id = j.subscription_id
+      INNER JOIN app_gastos.financial_instruments fi ON fi.id = s.instrument_id
+      WHERE j.is_active = TRUE
+        AND j.next_run_date IS NOT NULL
+        AND j.next_run_date <= CURRENT_DATE
+      ORDER BY j.next_run_date ASC, j.subscription_id ASC
+      FOR UPDATE OF j SKIP LOCKED
+      LIMIT $1
+      `,
+      [MAX_SUBSCRIPTION_JOBS_PER_RUN],
+    );
+
+    for (const job of dueJobs.rows) {
+      const subscriptionId = Number(job.subscription_id);
+      const runDate = job.next_run_date ? String(job.next_run_date) : null;
+
+      if (!runDate || !job.is_active || !job.instrument_is_active) {
+        await client.query('DELETE FROM app_gastos.subscription_jobs WHERE subscription_id = $1', [subscriptionId]);
+        continue;
+      }
+
+      const note = buildSubscriptionChargeNote(subscriptionId, runDate);
+      const existingCharge = await client.query(
+        'SELECT id FROM app_gastos.transactions WHERE notes = $1 LIMIT 1',
+        [note],
+      );
+
+      if (existingCharge.rows.length === 0) {
+        const instrument = {
+          id: Number(job.instrument_id),
+          type: String(job.instrument_type),
+          credit_limit: job.credit_limit,
+          current_balance: job.current_balance,
+          available_credit: job.available_credit,
+          current_amount: job.current_amount,
+          is_active: Boolean(job.instrument_is_active),
+        };
+
+        const amount = Number(job.amount);
+        if (amount > 0) {
+          await applyInstrumentImpact(client, instrument, 'expense', amount, 'apply');
+
+          await client.query(
+            `
+            INSERT INTO app_gastos.transactions (
+              instrument_id,
+              category_id,
+              subcategory_id,
+              currency_id,
+              type,
+              amount,
+              description,
+              transaction_date,
+              notes,
+              is_msi,
+              msi_months,
+              msi_monthly_amount,
+              msi_start_date,
+              msi_remaining
+            )
+            VALUES ($1, $2, $3, $4, 'expense', $5, $6, $7, $8, FALSE, NULL, NULL, NULL, NULL)
+            `,
+            [
+              Number(job.instrument_id),
+              job.category_id === null ? null : Number(job.category_id),
+              job.subcategory_id === null ? null : Number(job.subcategory_id),
+              Number(job.currency_id),
+              amount,
+              buildSubscriptionChargeDescription(job.name),
+              runDate,
+              note,
+            ],
+          );
+        }
+      }
+
+      const nextBilling = computeNextSubscriptionBillingDate(
+        runDate,
+        String(job.billing_cycle),
+        job.billing_day === null ? null : Number(job.billing_day),
+      );
+
+      if (!nextBilling) {
+        await client.query(
+          `
+          UPDATE app_gastos.subscription_jobs
+          SET is_active = FALSE,
+              last_run_at = NOW(),
+              updated_at = NOW()
+          WHERE subscription_id = $1
+          `,
+          [subscriptionId],
+        );
+        continue;
+      }
+
+      await client.query(
+        `
+        UPDATE app_gastos.subscriptions
+        SET next_billing = $1,
+            updated_at = NOW()
+        WHERE id = $2
+        `,
+        [nextBilling, subscriptionId],
+      );
+
+      await client.query(
+        `
+        UPDATE app_gastos.subscription_jobs
+        SET next_run_date = $1,
+            is_active = TRUE,
+            last_run_at = NOW(),
+            updated_at = NOW()
+        WHERE subscription_id = $2
+        `,
+        [nextBilling, subscriptionId],
+      );
+    }
+  });
 }
 
 function getBoundedDayForMonth(year, month, targetDay) {
@@ -4227,6 +4470,7 @@ async function createSubscription(payload) {
     );
 
     const created = await getSubscriptionById(client, insertResult.rows[0].id);
+    await upsertSubscriptionJob(client, payload, Number(insertResult.rows[0].id));
     return { error: null, data: mapSubscription(created) };
   });
 }
@@ -4280,24 +4524,33 @@ async function updateSubscription(subscriptionId, payload) {
       ],
     );
 
+    await upsertSubscriptionJob(client, payload, subscriptionId);
+
     const updated = await getSubscriptionById(client, subscriptionId);
     return { notFound: false, error: null, data: mapSubscription(updated) };
   });
 }
 
 async function softDeleteSubscription(subscriptionId) {
-  const result = await query(
-    `
-    UPDATE app_gastos.subscriptions
-    SET is_active = FALSE,
-        updated_at = NOW()
-    WHERE id = $1
-    RETURNING id
-    `,
-    [subscriptionId],
-  );
+  return withDbTransaction(async (client) => {
+    const result = await client.query(
+      `
+      UPDATE app_gastos.subscriptions
+      SET is_active = FALSE,
+          updated_at = NOW()
+      WHERE id = $1
+      RETURNING id
+      `,
+      [subscriptionId],
+    );
 
-  return result.rows.length > 0;
+    if (result.rows.length === 0) {
+      return false;
+    }
+
+    await client.query('DELETE FROM app_gastos.subscription_jobs WHERE subscription_id = $1', [subscriptionId]);
+    return true;
+  });
 }
 
 async function getFixedExpenseById(client, fixedExpenseId) {
@@ -6556,6 +6809,17 @@ export async function handler(event) {
       data: {
         message: `Lambda listo en region ${bodyResult.value.awsRegion}: ${bodyResult.value.message.trim()}`,
       },
+    });
+  }
+
+  try {
+    await ensureOperationalTables();
+    await processDueSubscriptionCharges();
+  } catch (error) {
+    console.error('[lambda] subscription scheduler processing failed', {
+      requestId: getRequestId(event),
+      errorCode: error?.code,
+      errorMessage: error instanceof Error ? error.message : String(error),
     });
   }
 
