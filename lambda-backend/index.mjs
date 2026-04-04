@@ -53,21 +53,49 @@ function logUnhandledError(event, method, path, error) {
 }
 
 function createPool() {
-  const connectionString = process.env.DATABASE_URL;
+  const {
+    DATABASE_URL,
+    DB_HOST,
+    DB_PORT,
+    DB_NAME,
+    DB_USER,
+    DB_PASSWORD,
+  } = process.env;
 
-  if (!connectionString) {
-    throw new Error('DATABASE_URL no configurada.');
-  }
-
-  return new Pool({
-    connectionString,
+  const baseConfig = {
     ssl: {
       rejectUnauthorized: false,
     },
     max: 3,
     idleTimeoutMillis: 15000,
     connectionTimeoutMillis: 5000,
-  });
+  };
+
+  if (DB_HOST && DB_NAME && DB_USER && DB_PASSWORD) {
+    const port = DB_PORT ? Number.parseInt(DB_PORT, 10) : 5432;
+
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      throw new Error('DB_PORT invalido.');
+    }
+
+    return new Pool({
+      ...baseConfig,
+      host: DB_HOST,
+      port,
+      database: DB_NAME,
+      user: DB_USER,
+      password: DB_PASSWORD,
+    });
+  }
+
+  if (DATABASE_URL) {
+    return new Pool({
+      ...baseConfig,
+      connectionString: DATABASE_URL,
+    });
+  }
+
+  throw new Error('Configura DB_HOST, DB_NAME, DB_USER y DB_PASSWORD (opcional DB_PORT) o DATABASE_URL.');
 }
 
 function getPool() {
