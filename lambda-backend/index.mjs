@@ -15,6 +15,7 @@ const ALLOWED_TRANSACTION_TYPES = new Set(['expense', 'income']);
 const ALLOWED_MSI_MONTHS = new Set([3, 6, 9, 12, 18, 24]);
 const ALLOWED_TRANSFER_TYPES = new Set(['card_payment', 'inter_account', 'loan_payment', 'other']);
 const ALLOWED_LOAN_PAYMENT_TYPES = new Set(['fixed', 'variable']);
+const ALLOWED_SUBSCRIPTION_BILLING_CYCLES = new Set(['monthly', 'yearly', 'weekly']);
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 let pool;
@@ -218,6 +219,41 @@ function parsePathParameters(path) {
 
   if (path === '/loans') {
     return { resource: 'loans', id: null };
+  }
+
+  const fixedExpensePaymentWithId = path.match(/^\/fixed-expenses\/(\d+)\/payments\/(\d+)$/);
+  if (fixedExpensePaymentWithId) {
+    return {
+      resource: 'fixedExpensePayment',
+      id: Number.parseInt(fixedExpensePaymentWithId[1], 10),
+      paymentId: Number.parseInt(fixedExpensePaymentWithId[2], 10),
+    };
+  }
+
+  const fixedExpensePayments = path.match(/^\/fixed-expenses\/(\d+)\/payments$/);
+  if (fixedExpensePayments) {
+    return {
+      resource: 'fixedExpensePayments',
+      id: Number.parseInt(fixedExpensePayments[1], 10),
+    };
+  }
+
+  const fixedExpensesWithId = path.match(/^\/fixed-expenses\/(\d+)$/);
+  if (fixedExpensesWithId) {
+    return { resource: 'fixedExpenses', id: Number.parseInt(fixedExpensesWithId[1], 10) };
+  }
+
+  if (path === '/fixed-expenses') {
+    return { resource: 'fixedExpenses', id: null };
+  }
+
+  const subscriptionsWithId = path.match(/^\/subscriptions\/(\d+)$/);
+  if (subscriptionsWithId) {
+    return { resource: 'subscriptions', id: Number.parseInt(subscriptionsWithId[1], 10) };
+  }
+
+  if (path === '/subscriptions') {
+    return { resource: 'subscriptions', id: null };
   }
 
   return { resource: null, id: null };
@@ -850,6 +886,188 @@ function validateLoanPaymentRegisterPayload(body) {
   };
 }
 
+function validateSubscriptionPayload(body) {
+  if (!body || typeof body !== 'object') {
+    return { ok: false, error: 'Body invalido.' };
+  }
+
+  const name = normalizeText(body.name);
+  const instrumentId = normalizeNullableInteger(body.instrumentId);
+  const categoryId = normalizeNullableInteger(body.categoryId);
+  const subcategoryId = normalizeNullableInteger(body.subcategoryId);
+  const currencyId = normalizeNullableInteger(body.currencyId);
+  const amount = normalizeNullableNumber(body.amount);
+  const billingCycle = normalizeText(body.billingCycle);
+  const billingDay = normalizeNullableInteger(body.billingDay);
+  const nextBilling = normalizeNullableDate(body.nextBilling);
+  const notes = normalizeNullableText(body.notes);
+
+  if (name.length < 2 || name.length > 150) {
+    return { ok: false, error: 'name debe tener entre 2 y 150 caracteres.' };
+  }
+
+  if (!instrumentId || instrumentId < 1) {
+    return { ok: false, error: 'instrumentId invalido.' };
+  }
+
+  if (categoryId !== null && categoryId < 1) {
+    return { ok: false, error: 'categoryId invalido.' };
+  }
+
+  if (subcategoryId !== null && subcategoryId < 1) {
+    return { ok: false, error: 'subcategoryId invalido.' };
+  }
+
+  if (!currencyId || currencyId < 1) {
+    return { ok: false, error: 'currencyId invalido.' };
+  }
+
+  if (amount === null || amount <= 0 || amount > 9999999999.99) {
+    return { ok: false, error: 'amount invalido.' };
+  }
+
+  if (!ALLOWED_SUBSCRIPTION_BILLING_CYCLES.has(billingCycle)) {
+    return { ok: false, error: 'billingCycle invalido.' };
+  }
+
+  if (billingDay !== null && (billingDay < 1 || billingDay > 31)) {
+    return { ok: false, error: 'billingDay invalido.' };
+  }
+
+  if (nextBilling === null && body.nextBilling !== undefined && body.nextBilling !== null && body.nextBilling !== '') {
+    return { ok: false, error: 'nextBilling invalida. Usa YYYY-MM-DD.' };
+  }
+
+  if (notes && notes.length > 500) {
+    return { ok: false, error: 'notes no puede exceder 500 caracteres.' };
+  }
+
+  return {
+    ok: true,
+    value: {
+      name,
+      instrumentId,
+      categoryId,
+      subcategoryId,
+      currencyId,
+      amount,
+      billingCycle,
+      billingDay,
+      nextBilling,
+      isActive: body.isActive === undefined ? true : Boolean(body.isActive),
+      notes,
+    },
+  };
+}
+
+function validateFixedExpensePayload(body) {
+  if (!body || typeof body !== 'object') {
+    return { ok: false, error: 'Body invalido.' };
+  }
+
+  const name = normalizeText(body.name);
+  const instrumentId = normalizeNullableInteger(body.instrumentId);
+  const categoryId = normalizeNullableInteger(body.categoryId);
+  const subcategoryId = normalizeNullableInteger(body.subcategoryId);
+  const currencyId = normalizeNullableInteger(body.currencyId);
+  const estimatedAmount = normalizeNullableNumber(body.estimatedAmount);
+  const isVariable = Boolean(body.isVariable);
+  const paymentDay = normalizeNullableInteger(body.paymentDay);
+  const notes = normalizeNullableText(body.notes);
+
+  if (name.length < 2 || name.length > 150) {
+    return { ok: false, error: 'name debe tener entre 2 y 150 caracteres.' };
+  }
+
+  if (instrumentId !== null && instrumentId < 1) {
+    return { ok: false, error: 'instrumentId invalido.' };
+  }
+
+  if (categoryId !== null && categoryId < 1) {
+    return { ok: false, error: 'categoryId invalido.' };
+  }
+
+  if (subcategoryId !== null && subcategoryId < 1) {
+    return { ok: false, error: 'subcategoryId invalido.' };
+  }
+
+  if (!currencyId || currencyId < 1) {
+    return { ok: false, error: 'currencyId invalido.' };
+  }
+
+  if (estimatedAmount === null || estimatedAmount <= 0 || estimatedAmount > 9999999999.99) {
+    return { ok: false, error: 'estimatedAmount invalido.' };
+  }
+
+  if (paymentDay !== null && (paymentDay < 1 || paymentDay > 31)) {
+    return { ok: false, error: 'paymentDay invalido.' };
+  }
+
+  if (notes && notes.length > 500) {
+    return { ok: false, error: 'notes no puede exceder 500 caracteres.' };
+  }
+
+  return {
+    ok: true,
+    value: {
+      name,
+      instrumentId,
+      categoryId,
+      subcategoryId,
+      currencyId,
+      estimatedAmount,
+      isVariable,
+      paymentDay,
+      isActive: body.isActive === undefined ? true : Boolean(body.isActive),
+      notes,
+    },
+  };
+}
+
+function validateFixedExpensePaymentPayload(body) {
+  if (!body || typeof body !== 'object') {
+    return { ok: false, error: 'Body invalido.' };
+  }
+
+  const amount = normalizeNullableNumber(body.amount);
+  const periodMonth = normalizeNullableInteger(body.periodMonth);
+  const periodYear = normalizeNullableInteger(body.periodYear);
+  const paymentDate = normalizeNullableDate(body.paymentDate);
+  const notes = normalizeNullableText(body.notes);
+
+  if (amount === null || amount <= 0 || amount > 9999999999.99) {
+    return { ok: false, error: 'amount invalido.' };
+  }
+
+  if (!periodMonth || periodMonth < 1 || periodMonth > 12) {
+    return { ok: false, error: 'periodMonth invalido.' };
+  }
+
+  if (!periodYear || periodYear < 2000 || periodYear > 2200) {
+    return { ok: false, error: 'periodYear invalido.' };
+  }
+
+  if (paymentDate === null && body.paymentDate !== undefined && body.paymentDate !== null && body.paymentDate !== '') {
+    return { ok: false, error: 'paymentDate invalida. Usa YYYY-MM-DD.' };
+  }
+
+  if (notes && notes.length > 500) {
+    return { ok: false, error: 'notes no puede exceder 500 caracteres.' };
+  }
+
+  return {
+    ok: true,
+    value: {
+      amount,
+      periodMonth,
+      periodYear,
+      paymentDate,
+      isPaid: body.isPaid === undefined ? true : Boolean(body.isPaid),
+      notes,
+    },
+  };
+}
+
 function mapBank(row) {
   return {
     id: row.id,
@@ -1017,6 +1235,64 @@ function mapLoanPayment(row) {
     paymentDate: row.payment_date,
     isPaid: row.is_paid,
     paidDate: row.paid_date,
+    notes: row.notes,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapSubscription(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    instrumentId: row.instrument_id,
+    instrumentName: row.instrument_name ?? null,
+    categoryId: row.category_id,
+    categoryName: row.category_name ?? null,
+    subcategoryId: row.subcategory_id,
+    subcategoryName: row.subcategory_name ?? null,
+    currencyId: row.currency_id,
+    amount: Number(row.amount),
+    billingCycle: row.billing_cycle,
+    billingDay: row.billing_day,
+    nextBilling: row.next_billing,
+    isActive: row.is_active,
+    notes: row.notes,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapFixedExpense(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    instrumentId: row.instrument_id,
+    instrumentName: row.instrument_name ?? null,
+    categoryId: row.category_id,
+    categoryName: row.category_name ?? null,
+    subcategoryId: row.subcategory_id,
+    subcategoryName: row.subcategory_name ?? null,
+    currencyId: row.currency_id,
+    estimatedAmount: Number(row.estimated_amount),
+    isVariable: row.is_variable,
+    paymentDay: row.payment_day,
+    isActive: row.is_active,
+    notes: row.notes,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapFixedExpensePayment(row) {
+  return {
+    id: row.id,
+    fixedExpenseId: row.fixed_expense_id,
+    amount: Number(row.amount),
+    periodMonth: row.period_month,
+    periodYear: row.period_year,
+    paymentDate: row.payment_date,
+    isPaid: row.is_paid,
     notes: row.notes,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -3112,6 +3388,604 @@ async function softDeleteSubcategory(subcategoryId) {
   return result.rows.length > 0;
 }
 
+async function validateCategoryLinks(client, categoryId, subcategoryId) {
+  if (categoryId !== null) {
+    const categoryResult = await client.query(
+      'SELECT id FROM app_gastos.categories WHERE id = $1 AND is_active = TRUE',
+      [categoryId],
+    );
+
+    if (categoryResult.rows.length === 0) {
+      return { ok: false, error: 'categoryId no existe o esta inactiva.' };
+    }
+  }
+
+  if (subcategoryId !== null) {
+    if (categoryId === null) {
+      return { ok: false, error: 'subcategoryId requiere categoryId.' };
+    }
+
+    const subcategoryResult = await client.query(
+      'SELECT id FROM app_gastos.subcategories WHERE id = $1 AND category_id = $2 AND is_active = TRUE',
+      [subcategoryId, categoryId],
+    );
+
+    if (subcategoryResult.rows.length === 0) {
+      return { ok: false, error: 'subcategoryId no pertenece a la categoria indicada.' };
+    }
+  }
+
+  return { ok: true };
+}
+
+async function validateSubscriptionReferences(client, payload) {
+  const currencyResult = await client.query('SELECT id FROM app_gastos.currencies WHERE id = $1', [payload.currencyId]);
+  if (currencyResult.rows.length === 0) {
+    return { ok: false, error: 'currencyId no existe.' };
+  }
+
+  const instrumentResult = await client.query(
+    'SELECT id FROM app_gastos.financial_instruments WHERE id = $1 AND is_active = TRUE',
+    [payload.instrumentId],
+  );
+  if (instrumentResult.rows.length === 0) {
+    return { ok: false, error: 'instrumentId no existe o esta inactivo.' };
+  }
+
+  const categoryLinks = await validateCategoryLinks(client, payload.categoryId, payload.subcategoryId);
+  if (!categoryLinks.ok) {
+    return categoryLinks;
+  }
+
+  return { ok: true };
+}
+
+async function validateFixedExpenseReferences(client, payload) {
+  const currencyResult = await client.query('SELECT id FROM app_gastos.currencies WHERE id = $1', [payload.currencyId]);
+  if (currencyResult.rows.length === 0) {
+    return { ok: false, error: 'currencyId no existe.' };
+  }
+
+  if (payload.instrumentId !== null) {
+    const instrumentResult = await client.query(
+      'SELECT id FROM app_gastos.financial_instruments WHERE id = $1 AND is_active = TRUE',
+      [payload.instrumentId],
+    );
+    if (instrumentResult.rows.length === 0) {
+      return { ok: false, error: 'instrumentId no existe o esta inactivo.' };
+    }
+  }
+
+  const categoryLinks = await validateCategoryLinks(client, payload.categoryId, payload.subcategoryId);
+  if (!categoryLinks.ok) {
+    return categoryLinks;
+  }
+
+  return { ok: true };
+}
+
+async function getSubscriptionById(client, subscriptionId) {
+  const result = await client.query(
+    `
+    SELECT
+      s.id,
+      s.name,
+      s.instrument_id,
+      fi.name AS instrument_name,
+      s.category_id,
+      c.name AS category_name,
+      s.subcategory_id,
+      sc.name AS subcategory_name,
+      s.currency_id,
+      s.amount,
+      s.billing_cycle,
+      s.billing_day,
+      s.next_billing,
+      s.is_active,
+      s.notes,
+      s.created_at,
+      s.updated_at
+    FROM app_gastos.subscriptions s
+    INNER JOIN app_gastos.financial_instruments fi ON fi.id = s.instrument_id
+    LEFT JOIN app_gastos.categories c ON c.id = s.category_id
+    LEFT JOIN app_gastos.subcategories sc ON sc.id = s.subcategory_id
+    WHERE s.id = $1
+    `,
+    [subscriptionId],
+  );
+
+  return result.rows[0] ?? null;
+}
+
+async function listSubscriptions() {
+  const result = await query(
+    `
+    SELECT
+      s.id,
+      s.name,
+      s.instrument_id,
+      fi.name AS instrument_name,
+      s.category_id,
+      c.name AS category_name,
+      s.subcategory_id,
+      sc.name AS subcategory_name,
+      s.currency_id,
+      s.amount,
+      s.billing_cycle,
+      s.billing_day,
+      s.next_billing,
+      s.is_active,
+      s.notes,
+      s.created_at,
+      s.updated_at
+    FROM app_gastos.subscriptions s
+    INNER JOIN app_gastos.financial_instruments fi ON fi.id = s.instrument_id
+    LEFT JOIN app_gastos.categories c ON c.id = s.category_id
+    LEFT JOIN app_gastos.subcategories sc ON sc.id = s.subcategory_id
+    WHERE s.is_active = TRUE
+    ORDER BY s.next_billing ASC NULLS LAST, s.id DESC
+    `,
+  );
+
+  return result.rows.map(mapSubscription);
+}
+
+async function createSubscription(payload) {
+  return withDbTransaction(async (client) => {
+    const references = await validateSubscriptionReferences(client, payload);
+    if (!references.ok) {
+      return { error: references.error, data: null };
+    }
+
+    const insertResult = await client.query(
+      `
+      INSERT INTO app_gastos.subscriptions (
+        name,
+        instrument_id,
+        category_id,
+        subcategory_id,
+        currency_id,
+        amount,
+        billing_cycle,
+        billing_day,
+        next_billing,
+        is_active,
+        notes
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      RETURNING id
+      `,
+      [
+        payload.name,
+        payload.instrumentId,
+        payload.categoryId,
+        payload.subcategoryId,
+        payload.currencyId,
+        payload.amount,
+        payload.billingCycle,
+        payload.billingDay,
+        payload.nextBilling,
+        payload.isActive,
+        payload.notes,
+      ],
+    );
+
+    const created = await getSubscriptionById(client, insertResult.rows[0].id);
+    return { error: null, data: mapSubscription(created) };
+  });
+}
+
+async function updateSubscription(subscriptionId, payload) {
+  return withDbTransaction(async (client) => {
+    const existing = await client.query(
+      'SELECT id FROM app_gastos.subscriptions WHERE id = $1 FOR UPDATE',
+      [subscriptionId],
+    );
+
+    if (existing.rows.length === 0) {
+      return { notFound: true, error: null, data: null };
+    }
+
+    const references = await validateSubscriptionReferences(client, payload);
+    if (!references.ok) {
+      return { notFound: false, error: references.error, data: null };
+    }
+
+    await client.query(
+      `
+      UPDATE app_gastos.subscriptions
+      SET name = $1,
+          instrument_id = $2,
+          category_id = $3,
+          subcategory_id = $4,
+          currency_id = $5,
+          amount = $6,
+          billing_cycle = $7,
+          billing_day = $8,
+          next_billing = $9,
+          is_active = $10,
+          notes = $11,
+          updated_at = NOW()
+      WHERE id = $12
+      `,
+      [
+        payload.name,
+        payload.instrumentId,
+        payload.categoryId,
+        payload.subcategoryId,
+        payload.currencyId,
+        payload.amount,
+        payload.billingCycle,
+        payload.billingDay,
+        payload.nextBilling,
+        payload.isActive,
+        payload.notes,
+        subscriptionId,
+      ],
+    );
+
+    const updated = await getSubscriptionById(client, subscriptionId);
+    return { notFound: false, error: null, data: mapSubscription(updated) };
+  });
+}
+
+async function softDeleteSubscription(subscriptionId) {
+  const result = await query(
+    `
+    UPDATE app_gastos.subscriptions
+    SET is_active = FALSE,
+        updated_at = NOW()
+    WHERE id = $1
+    RETURNING id
+    `,
+    [subscriptionId],
+  );
+
+  return result.rows.length > 0;
+}
+
+async function getFixedExpenseById(client, fixedExpenseId) {
+  const result = await client.query(
+    `
+    SELECT
+      fe.id,
+      fe.name,
+      fe.instrument_id,
+      fi.name AS instrument_name,
+      fe.category_id,
+      c.name AS category_name,
+      fe.subcategory_id,
+      sc.name AS subcategory_name,
+      fe.currency_id,
+      fe.estimated_amount,
+      fe.is_variable,
+      fe.payment_day,
+      fe.is_active,
+      fe.notes,
+      fe.created_at,
+      fe.updated_at
+    FROM app_gastos.fixed_expenses fe
+    LEFT JOIN app_gastos.financial_instruments fi ON fi.id = fe.instrument_id
+    LEFT JOIN app_gastos.categories c ON c.id = fe.category_id
+    LEFT JOIN app_gastos.subcategories sc ON sc.id = fe.subcategory_id
+    WHERE fe.id = $1
+    `,
+    [fixedExpenseId],
+  );
+
+  return result.rows[0] ?? null;
+}
+
+async function listFixedExpenses() {
+  const result = await query(
+    `
+    SELECT
+      fe.id,
+      fe.name,
+      fe.instrument_id,
+      fi.name AS instrument_name,
+      fe.category_id,
+      c.name AS category_name,
+      fe.subcategory_id,
+      sc.name AS subcategory_name,
+      fe.currency_id,
+      fe.estimated_amount,
+      fe.is_variable,
+      fe.payment_day,
+      fe.is_active,
+      fe.notes,
+      fe.created_at,
+      fe.updated_at
+    FROM app_gastos.fixed_expenses fe
+    LEFT JOIN app_gastos.financial_instruments fi ON fi.id = fe.instrument_id
+    LEFT JOIN app_gastos.categories c ON c.id = fe.category_id
+    LEFT JOIN app_gastos.subcategories sc ON sc.id = fe.subcategory_id
+    WHERE fe.is_active = TRUE
+    ORDER BY fe.payment_day ASC NULLS LAST, fe.id DESC
+    `,
+  );
+
+  return result.rows.map(mapFixedExpense);
+}
+
+async function createFixedExpense(payload) {
+  return withDbTransaction(async (client) => {
+    const references = await validateFixedExpenseReferences(client, payload);
+    if (!references.ok) {
+      return { error: references.error, data: null };
+    }
+
+    const insertResult = await client.query(
+      `
+      INSERT INTO app_gastos.fixed_expenses (
+        name,
+        instrument_id,
+        category_id,
+        subcategory_id,
+        currency_id,
+        estimated_amount,
+        is_variable,
+        payment_day,
+        is_active,
+        notes
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      RETURNING id
+      `,
+      [
+        payload.name,
+        payload.instrumentId,
+        payload.categoryId,
+        payload.subcategoryId,
+        payload.currencyId,
+        payload.estimatedAmount,
+        payload.isVariable,
+        payload.paymentDay,
+        payload.isActive,
+        payload.notes,
+      ],
+    );
+
+    const created = await getFixedExpenseById(client, insertResult.rows[0].id);
+    return { error: null, data: mapFixedExpense(created) };
+  });
+}
+
+async function updateFixedExpense(fixedExpenseId, payload) {
+  return withDbTransaction(async (client) => {
+    const existing = await client.query(
+      'SELECT id FROM app_gastos.fixed_expenses WHERE id = $1 FOR UPDATE',
+      [fixedExpenseId],
+    );
+
+    if (existing.rows.length === 0) {
+      return { notFound: true, error: null, data: null };
+    }
+
+    const references = await validateFixedExpenseReferences(client, payload);
+    if (!references.ok) {
+      return { notFound: false, error: references.error, data: null };
+    }
+
+    await client.query(
+      `
+      UPDATE app_gastos.fixed_expenses
+      SET name = $1,
+          instrument_id = $2,
+          category_id = $3,
+          subcategory_id = $4,
+          currency_id = $5,
+          estimated_amount = $6,
+          is_variable = $7,
+          payment_day = $8,
+          is_active = $9,
+          notes = $10,
+          updated_at = NOW()
+      WHERE id = $11
+      `,
+      [
+        payload.name,
+        payload.instrumentId,
+        payload.categoryId,
+        payload.subcategoryId,
+        payload.currencyId,
+        payload.estimatedAmount,
+        payload.isVariable,
+        payload.paymentDay,
+        payload.isActive,
+        payload.notes,
+        fixedExpenseId,
+      ],
+    );
+
+    const updated = await getFixedExpenseById(client, fixedExpenseId);
+    return { notFound: false, error: null, data: mapFixedExpense(updated) };
+  });
+}
+
+async function softDeleteFixedExpense(fixedExpenseId) {
+  const result = await query(
+    `
+    UPDATE app_gastos.fixed_expenses
+    SET is_active = FALSE,
+        updated_at = NOW()
+    WHERE id = $1
+    RETURNING id
+    `,
+    [fixedExpenseId],
+  );
+
+  return result.rows.length > 0;
+}
+
+async function listFixedExpensePayments(fixedExpenseId) {
+  const fixedExpenseResult = await query('SELECT id FROM app_gastos.fixed_expenses WHERE id = $1', [fixedExpenseId]);
+
+  if (fixedExpenseResult.rows.length === 0) {
+    return { notFound: true, data: [] };
+  }
+
+  const result = await query(
+    `
+    SELECT
+      id,
+      fixed_expense_id,
+      amount,
+      period_month,
+      period_year,
+      payment_date,
+      is_paid,
+      notes,
+      created_at,
+      updated_at
+    FROM app_gastos.fixed_expense_payments
+    WHERE fixed_expense_id = $1
+    ORDER BY period_year DESC, period_month DESC, id DESC
+    `,
+    [fixedExpenseId],
+  );
+
+  return { notFound: false, data: result.rows.map(mapFixedExpensePayment) };
+}
+
+async function createFixedExpensePayment(fixedExpenseId, payload) {
+  return withDbTransaction(async (client) => {
+    const fixedExpenseResult = await client.query(
+      'SELECT id FROM app_gastos.fixed_expenses WHERE id = $1 FOR UPDATE',
+      [fixedExpenseId],
+    );
+
+    if (fixedExpenseResult.rows.length === 0) {
+      return { notFound: true, error: null, data: null };
+    }
+
+    const insertResult = await client.query(
+      `
+      INSERT INTO app_gastos.fixed_expense_payments (
+        fixed_expense_id,
+        amount,
+        period_month,
+        period_year,
+        payment_date,
+        is_paid,
+        notes
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING
+        id,
+        fixed_expense_id,
+        amount,
+        period_month,
+        period_year,
+        payment_date,
+        is_paid,
+        notes,
+        created_at,
+        updated_at
+      `,
+      [
+        fixedExpenseId,
+        payload.amount,
+        payload.periodMonth,
+        payload.periodYear,
+        payload.paymentDate,
+        payload.isPaid,
+        payload.notes,
+      ],
+    );
+
+    return { notFound: false, error: null, data: mapFixedExpensePayment(insertResult.rows[0]) };
+  });
+}
+
+async function updateFixedExpensePayment(fixedExpenseId, paymentId, payload) {
+  return withDbTransaction(async (client) => {
+    const previous = await client.query(
+      `
+      SELECT id
+      FROM app_gastos.fixed_expense_payments
+      WHERE id = $1
+        AND fixed_expense_id = $2
+      FOR UPDATE
+      `,
+      [paymentId, fixedExpenseId],
+    );
+
+    if (previous.rows.length === 0) {
+      return { notFound: true, error: null, data: null };
+    }
+
+    await client.query(
+      `
+      UPDATE app_gastos.fixed_expense_payments
+      SET amount = $1,
+          period_month = $2,
+          period_year = $3,
+          payment_date = $4,
+          is_paid = $5,
+          notes = $6,
+          updated_at = NOW()
+      WHERE id = $7
+      RETURNING
+        id,
+        fixed_expense_id,
+        amount,
+        period_month,
+        period_year,
+        payment_date,
+        is_paid,
+        notes,
+        created_at,
+        updated_at
+      `,
+      [
+        payload.amount,
+        payload.periodMonth,
+        payload.periodYear,
+        payload.paymentDate,
+        payload.isPaid,
+        payload.notes,
+        paymentId,
+      ],
+    );
+
+    const updated = await client.query(
+      `
+      SELECT
+        id,
+        fixed_expense_id,
+        amount,
+        period_month,
+        period_year,
+        payment_date,
+        is_paid,
+        notes,
+        created_at,
+        updated_at
+      FROM app_gastos.fixed_expense_payments
+      WHERE id = $1
+      `,
+      [paymentId],
+    );
+
+    return { notFound: false, error: null, data: mapFixedExpensePayment(updated.rows[0]) };
+  });
+}
+
+async function deleteFixedExpensePayment(fixedExpenseId, paymentId) {
+  const result = await query(
+    `
+    DELETE FROM app_gastos.fixed_expense_payments
+    WHERE id = $1
+      AND fixed_expense_id = $2
+    RETURNING id
+    `,
+    [paymentId, fixedExpenseId],
+  );
+
+  return result.rows.length > 0;
+}
+
 async function handleBanksRoute(method, path, event) {
   const { id } = parsePathParameters(path);
 
@@ -3610,6 +4484,198 @@ async function handleTransfersRoute(method, path, event) {
   return null;
 }
 
+async function handleSubscriptionsRoute(method, path, event) {
+  const { id } = parsePathParameters(path);
+
+  if (method === 'GET' && id === null) {
+    const data = await listSubscriptions();
+    return jsonResponse(200, { success: true, data });
+  }
+
+  if (method === 'POST' && id === null) {
+    const bodyResult = parseJsonBody(event);
+    if (!bodyResult.ok) {
+      return jsonResponse(400, { success: false, error: bodyResult.error });
+    }
+
+    const validated = validateSubscriptionPayload(bodyResult.value);
+    if (!validated.ok) {
+      return jsonResponse(400, { success: false, error: validated.error });
+    }
+
+    const created = await createSubscription(validated.value);
+    if (created.error) {
+      return jsonResponse(400, { success: false, error: created.error });
+    }
+
+    return jsonResponse(201, { success: true, data: created.data });
+  }
+
+  if (method === 'PUT' && id !== null) {
+    const bodyResult = parseJsonBody(event);
+    if (!bodyResult.ok) {
+      return jsonResponse(400, { success: false, error: bodyResult.error });
+    }
+
+    const validated = validateSubscriptionPayload(bodyResult.value);
+    if (!validated.ok) {
+      return jsonResponse(400, { success: false, error: validated.error });
+    }
+
+    const updated = await updateSubscription(id, validated.value);
+    if (updated.notFound) {
+      return jsonResponse(404, { success: false, error: 'Suscripcion no encontrada.' });
+    }
+
+    if (updated.error) {
+      return jsonResponse(400, { success: false, error: updated.error });
+    }
+
+    return jsonResponse(200, { success: true, data: updated.data });
+  }
+
+  if (method === 'DELETE' && id !== null) {
+    const deleted = await softDeleteSubscription(id);
+    if (!deleted) {
+      return jsonResponse(404, { success: false, error: 'Suscripcion no encontrada.' });
+    }
+
+    return jsonResponse(200, { success: true, data: { id } });
+  }
+
+  return null;
+}
+
+async function handleFixedExpensesRoute(method, path, event) {
+  const parsed = parsePathParameters(path);
+
+  if (method === 'GET' && parsed.resource === 'fixedExpenses' && parsed.id === null) {
+    const data = await listFixedExpenses();
+    return jsonResponse(200, { success: true, data });
+  }
+
+  if (method === 'POST' && parsed.resource === 'fixedExpenses' && parsed.id === null) {
+    const bodyResult = parseJsonBody(event);
+    if (!bodyResult.ok) {
+      return jsonResponse(400, { success: false, error: bodyResult.error });
+    }
+
+    const validated = validateFixedExpensePayload(bodyResult.value);
+    if (!validated.ok) {
+      return jsonResponse(400, { success: false, error: validated.error });
+    }
+
+    const created = await createFixedExpense(validated.value);
+    if (created.error) {
+      return jsonResponse(400, { success: false, error: created.error });
+    }
+
+    return jsonResponse(201, { success: true, data: created.data });
+  }
+
+  if (method === 'PUT' && parsed.resource === 'fixedExpenses' && parsed.id !== null) {
+    const bodyResult = parseJsonBody(event);
+    if (!bodyResult.ok) {
+      return jsonResponse(400, { success: false, error: bodyResult.error });
+    }
+
+    const validated = validateFixedExpensePayload(bodyResult.value);
+    if (!validated.ok) {
+      return jsonResponse(400, { success: false, error: validated.error });
+    }
+
+    const updated = await updateFixedExpense(parsed.id, validated.value);
+    if (updated.notFound) {
+      return jsonResponse(404, { success: false, error: 'Gasto fijo no encontrado.' });
+    }
+
+    if (updated.error) {
+      return jsonResponse(400, { success: false, error: updated.error });
+    }
+
+    return jsonResponse(200, { success: true, data: updated.data });
+  }
+
+  if (method === 'DELETE' && parsed.resource === 'fixedExpenses' && parsed.id !== null) {
+    const deleted = await softDeleteFixedExpense(parsed.id);
+    if (!deleted) {
+      return jsonResponse(404, { success: false, error: 'Gasto fijo no encontrado.' });
+    }
+
+    return jsonResponse(200, { success: true, data: { id: parsed.id } });
+  }
+
+  if (method === 'GET' && parsed.resource === 'fixedExpensePayments' && parsed.id !== null) {
+    const payments = await listFixedExpensePayments(parsed.id);
+    if (payments.notFound) {
+      return jsonResponse(404, { success: false, error: 'Gasto fijo no encontrado.' });
+    }
+
+    return jsonResponse(200, { success: true, data: payments.data });
+  }
+
+  if (method === 'POST' && parsed.resource === 'fixedExpensePayments' && parsed.id !== null) {
+    const bodyResult = parseJsonBody(event);
+    if (!bodyResult.ok) {
+      return jsonResponse(400, { success: false, error: bodyResult.error });
+    }
+
+    const validated = validateFixedExpensePaymentPayload(bodyResult.value);
+    if (!validated.ok) {
+      return jsonResponse(400, { success: false, error: validated.error });
+    }
+
+    const created = await createFixedExpensePayment(parsed.id, validated.value);
+    if (created.notFound) {
+      return jsonResponse(404, { success: false, error: 'Gasto fijo no encontrado.' });
+    }
+
+    if (created.error) {
+      return jsonResponse(400, { success: false, error: created.error });
+    }
+
+    return jsonResponse(201, { success: true, data: created.data });
+  }
+
+  if (method === 'PUT' && parsed.resource === 'fixedExpensePayment' && parsed.id !== null) {
+    if (!parsed.paymentId || parsed.paymentId < 1) {
+      return jsonResponse(400, { success: false, error: 'paymentId invalido.' });
+    }
+
+    const bodyResult = parseJsonBody(event);
+    if (!bodyResult.ok) {
+      return jsonResponse(400, { success: false, error: bodyResult.error });
+    }
+
+    const validated = validateFixedExpensePaymentPayload(bodyResult.value);
+    if (!validated.ok) {
+      return jsonResponse(400, { success: false, error: validated.error });
+    }
+
+    const updated = await updateFixedExpensePayment(parsed.id, parsed.paymentId, validated.value);
+    if (updated.notFound) {
+      return jsonResponse(404, { success: false, error: 'Pago de gasto fijo no encontrado.' });
+    }
+
+    return jsonResponse(200, { success: true, data: updated.data });
+  }
+
+  if (method === 'DELETE' && parsed.resource === 'fixedExpensePayment' && parsed.id !== null) {
+    if (!parsed.paymentId || parsed.paymentId < 1) {
+      return jsonResponse(400, { success: false, error: 'paymentId invalido.' });
+    }
+
+    const deleted = await deleteFixedExpensePayment(parsed.id, parsed.paymentId);
+    if (!deleted) {
+      return jsonResponse(404, { success: false, error: 'Pago de gasto fijo no encontrado.' });
+    }
+
+    return jsonResponse(200, { success: true, data: { id: parsed.paymentId } });
+  }
+
+  return null;
+}
+
 async function handleLoansRoute(method, path, event) {
   const parsed = parsePathParameters(path);
 
@@ -3814,6 +4880,20 @@ export async function handler(event) {
 
     if (resource === 'transfers') {
       const response = await handleTransfersRoute(method, path, event);
+      if (response) {
+        return response;
+      }
+    }
+
+    if (resource === 'subscriptions') {
+      const response = await handleSubscriptionsRoute(method, path, event);
+      if (response) {
+        return response;
+      }
+    }
+
+    if (resource === 'fixedExpenses' || resource === 'fixedExpensePayments' || resource === 'fixedExpensePayment') {
+      const response = await handleFixedExpensesRoute(method, path, event);
       if (response) {
         return response;
       }

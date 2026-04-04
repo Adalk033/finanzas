@@ -14,6 +14,12 @@ import type {
   LoanInput,
   LoanPayment,
   LoanPaymentRegisterInput,
+  Subscription,
+  SubscriptionInput,
+  FixedExpense,
+  FixedExpenseInput,
+  FixedExpensePayment,
+  FixedExpensePaymentInput,
   Subcategory,
   SubcategoryInput,
   Transfer,
@@ -216,6 +222,37 @@ function sanitizeLoanPaymentRegisterPayload(payload: LoanPaymentRegisterInput): 
   }
 }
 
+function sanitizeSubscriptionPayload(payload: SubscriptionInput): Omit<SubscriptionInput, 'nextBilling' | 'notes'> & {
+  nextBilling: string | null
+  notes: string | null
+} {
+  return {
+    ...payload,
+    nextBilling: payload.nextBilling.trim() || null,
+    notes: payload.notes.trim() || null,
+  }
+}
+
+function sanitizeFixedExpensePayload(payload: FixedExpenseInput): Omit<FixedExpenseInput, 'notes'> & {
+  notes: string | null
+} {
+  return {
+    ...payload,
+    notes: payload.notes.trim() || null,
+  }
+}
+
+function sanitizeFixedExpensePaymentPayload(payload: FixedExpensePaymentInput): Omit<FixedExpensePaymentInput, 'paymentDate' | 'notes'> & {
+  paymentDate: string | null
+  notes: string | null
+} {
+  return {
+    ...payload,
+    paymentDate: payload.paymentDate.trim() || null,
+    notes: payload.notes.trim() || null,
+  }
+}
+
 function buildTransactionQuery(filters: TransactionFilters): string {
   const params = new URLSearchParams()
 
@@ -411,5 +448,53 @@ export const apiClient = {
     request<{ loan: Loan; payment: LoanPayment }>(`${ENDPOINTS.LOANS}/${loanId}/payments/${installmentNum}/pay`, {
       method: 'POST',
       body: JSON.stringify(sanitizeLoanPaymentRegisterPayload(payload)),
+    }),
+  getSubscriptions: () => request<Subscription[]>(ENDPOINTS.SUBSCRIPTIONS, { method: 'GET' }),
+  createSubscription: (payload: SubscriptionInput) =>
+    request<Subscription>(ENDPOINTS.SUBSCRIPTIONS, {
+      method: 'POST',
+      body: JSON.stringify(sanitizeSubscriptionPayload(payload)),
+    }),
+  updateSubscription: (id: number, payload: SubscriptionInput) =>
+    request<Subscription>(`${ENDPOINTS.SUBSCRIPTIONS}/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(sanitizeSubscriptionPayload(payload)),
+    }),
+  deleteSubscription: (id: number) =>
+    request<{ id: number }>(`${ENDPOINTS.SUBSCRIPTIONS}/${id}`, {
+      method: 'DELETE',
+    }),
+  getFixedExpenses: () => request<FixedExpense[]>(ENDPOINTS.FIXED_EXPENSES, { method: 'GET' }),
+  createFixedExpense: (payload: FixedExpenseInput) =>
+    request<FixedExpense>(ENDPOINTS.FIXED_EXPENSES, {
+      method: 'POST',
+      body: JSON.stringify(sanitizeFixedExpensePayload(payload)),
+    }),
+  updateFixedExpense: (id: number, payload: FixedExpenseInput) =>
+    request<FixedExpense>(`${ENDPOINTS.FIXED_EXPENSES}/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(sanitizeFixedExpensePayload(payload)),
+    }),
+  deleteFixedExpense: (id: number) =>
+    request<{ id: number }>(`${ENDPOINTS.FIXED_EXPENSES}/${id}`, {
+      method: 'DELETE',
+    }),
+  getFixedExpensePayments: (fixedExpenseId: number) =>
+    request<FixedExpensePayment[]>(`${ENDPOINTS.FIXED_EXPENSES}/${fixedExpenseId}/payments`, {
+      method: 'GET',
+    }),
+  createFixedExpensePayment: (fixedExpenseId: number, payload: FixedExpensePaymentInput) =>
+    request<FixedExpensePayment>(`${ENDPOINTS.FIXED_EXPENSES}/${fixedExpenseId}/payments`, {
+      method: 'POST',
+      body: JSON.stringify(sanitizeFixedExpensePaymentPayload(payload)),
+    }),
+  updateFixedExpensePayment: (fixedExpenseId: number, paymentId: number, payload: FixedExpensePaymentInput) =>
+    request<FixedExpensePayment>(`${ENDPOINTS.FIXED_EXPENSES}/${fixedExpenseId}/payments/${paymentId}`, {
+      method: 'PUT',
+      body: JSON.stringify(sanitizeFixedExpensePaymentPayload(payload)),
+    }),
+  deleteFixedExpensePayment: (fixedExpenseId: number, paymentId: number) =>
+    request<{ id: number }>(`${ENDPOINTS.FIXED_EXPENSES}/${fixedExpenseId}/payments/${paymentId}`, {
+      method: 'DELETE',
     }),
 }

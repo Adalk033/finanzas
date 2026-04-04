@@ -13,12 +13,19 @@ import type {
   CreditCardStatementUpdateInput,
   FinancialInstrument,
   FinancialInstrumentInput,
+  FixedExpense,
+  FixedExpenseInput,
+  FixedExpensePayment,
+  FixedExpensePaymentInput,
   InstrumentType,
   Loan,
   LoanInput,
   LoanPayment,
   LoanPaymentRegisterInput,
   LoanPaymentType,
+  Subscription,
+  SubscriptionBillingCycle,
+  SubscriptionInput,
   Subcategory,
   SubcategoryInput,
   Transfer,
@@ -30,7 +37,7 @@ import type {
   TransactionType,
 } from './types/domain'
 
-type AppSection = 'settings' | 'banks' | 'instruments' | 'categories' | 'transactions' | 'creditCards' | 'loans'
+type AppSection = 'settings' | 'banks' | 'instruments' | 'categories' | 'transactions' | 'creditCards' | 'subscriptions' | 'fixedExpenses' | 'loans'
 
 const EMPTY_BANK_FORM: BankInput = {
   name: '',
@@ -150,6 +157,42 @@ const EMPTY_LOAN_PAYMENT_REGISTER: LoanPaymentRegisterInput = {
   notes: '',
 }
 
+const EMPTY_SUBSCRIPTION_FORM: SubscriptionInput = {
+  name: '',
+  instrumentId: 0,
+  categoryId: null,
+  subcategoryId: null,
+  currencyId: 1,
+  amount: 0,
+  billingCycle: 'monthly',
+  billingDay: 1,
+  nextBilling: TODAY_ISO,
+  isActive: true,
+  notes: '',
+}
+
+const EMPTY_FIXED_EXPENSE_FORM: FixedExpenseInput = {
+  name: '',
+  instrumentId: null,
+  categoryId: null,
+  subcategoryId: null,
+  currencyId: 1,
+  estimatedAmount: 0,
+  isVariable: false,
+  paymentDay: 1,
+  isActive: true,
+  notes: '',
+}
+
+const EMPTY_FIXED_EXPENSE_PAYMENT_FORM: FixedExpensePaymentInput = {
+  amount: 0,
+  periodMonth: new Date().getMonth() + 1,
+  periodYear: new Date().getFullYear(),
+  paymentDate: TODAY_ISO,
+  isPaid: true,
+  notes: '',
+}
+
 const MSI_OPTIONS = [3, 6, 9, 12, 18, 24]
 
 function toEditableBank(bank: Bank): BankInput {
@@ -197,6 +240,37 @@ function toEditableSubcategory(subcategory: Subcategory): SubcategoryInput {
     name: subcategory.name,
     iconName: subcategory.iconName ?? '',
     isActive: subcategory.isActive,
+  }
+}
+
+function toEditableSubscription(subscription: Subscription): SubscriptionInput {
+  return {
+    name: subscription.name,
+    instrumentId: subscription.instrumentId,
+    categoryId: subscription.categoryId,
+    subcategoryId: subscription.subcategoryId,
+    currencyId: subscription.currencyId,
+    amount: subscription.amount,
+    billingCycle: subscription.billingCycle,
+    billingDay: subscription.billingDay,
+    nextBilling: subscription.nextBilling ?? '',
+    isActive: subscription.isActive,
+    notes: subscription.notes ?? '',
+  }
+}
+
+function toEditableFixedExpense(expense: FixedExpense): FixedExpenseInput {
+  return {
+    name: expense.name,
+    instrumentId: expense.instrumentId,
+    categoryId: expense.categoryId,
+    subcategoryId: expense.subcategoryId,
+    currencyId: expense.currencyId,
+    estimatedAmount: expense.estimatedAmount,
+    isVariable: expense.isVariable,
+    paymentDay: expense.paymentDay,
+    isActive: expense.isActive,
+    notes: expense.notes ?? '',
   }
 }
 
@@ -302,6 +376,24 @@ export function App() {
   const [isLoanPaymentsLoading, setIsLoanPaymentsLoading] = useState(false)
   const [loanPaymentRegister, setLoanPaymentRegister] = useState<LoanPaymentRegisterInput>(EMPTY_LOAN_PAYMENT_REGISTER)
 
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
+  const [isSubscriptionsLoading, setIsSubscriptionsLoading] = useState(false)
+  const [subscriptionMessage, setSubscriptionMessage] = useState('')
+  const [subscriptionError, setSubscriptionError] = useState('')
+  const [subscriptionForm, setSubscriptionForm] = useState<SubscriptionInput>(EMPTY_SUBSCRIPTION_FORM)
+  const [editingSubscriptionId, setEditingSubscriptionId] = useState<number | null>(null)
+
+  const [fixedExpenses, setFixedExpenses] = useState<FixedExpense[]>([])
+  const [isFixedExpensesLoading, setIsFixedExpensesLoading] = useState(false)
+  const [fixedExpenseMessage, setFixedExpenseMessage] = useState('')
+  const [fixedExpenseError, setFixedExpenseError] = useState('')
+  const [fixedExpenseForm, setFixedExpenseForm] = useState<FixedExpenseInput>(EMPTY_FIXED_EXPENSE_FORM)
+  const [editingFixedExpenseId, setEditingFixedExpenseId] = useState<number | null>(null)
+  const [selectedFixedExpenseId, setSelectedFixedExpenseId] = useState<number | null>(null)
+  const [fixedExpensePayments, setFixedExpensePayments] = useState<FixedExpensePayment[]>([])
+  const [isFixedExpensePaymentsLoading, setIsFixedExpensePaymentsLoading] = useState(false)
+  const [fixedExpensePaymentForm, setFixedExpensePaymentForm] = useState<FixedExpensePaymentInput>(EMPTY_FIXED_EXPENSE_PAYMENT_FORM)
+
   const hasConfig = Boolean(config.apiKey.trim() && config.apiEndpoint.trim() && config.awsRegion.trim())
 
   const banksById = useMemo(() => {
@@ -393,6 +485,34 @@ export function App() {
 
     return loans.find((loan) => loan.id === selectedLoanId) ?? null
   }, [loans, selectedLoanId])
+
+  const expenseCategoryOptions = useMemo(() => {
+    return categories.filter((category) => category.type === 'expense' || category.type === 'both')
+  }, [categories])
+
+  const selectedSubscriptionCategory = useMemo(() => {
+    if (!subscriptionForm.categoryId) {
+      return null
+    }
+
+    return categories.find((category) => category.id === subscriptionForm.categoryId) ?? null
+  }, [categories, subscriptionForm.categoryId])
+
+  const selectedFixedExpenseCategory = useMemo(() => {
+    if (!fixedExpenseForm.categoryId) {
+      return null
+    }
+
+    return categories.find((category) => category.id === fixedExpenseForm.categoryId) ?? null
+  }, [categories, fixedExpenseForm.categoryId])
+
+  const selectedFixedExpense = useMemo(() => {
+    if (!selectedFixedExpenseId) {
+      return null
+    }
+
+    return fixedExpenses.find((expense) => expense.id === selectedFixedExpenseId) ?? null
+  }, [fixedExpenses, selectedFixedExpenseId])
 
   const loadBanks = async (): Promise<void> => {
     setIsBanksLoading(true)
@@ -540,6 +660,55 @@ export function App() {
     setIsLoanPaymentsLoading(false)
   }
 
+  const loadSubscriptions = async (): Promise<void> => {
+    setIsSubscriptionsLoading(true)
+    setSubscriptionError('')
+
+    const result = await apiClient.getSubscriptions()
+
+    if (!result.success) {
+      setSubscriptionError(result.error ?? 'No se pudieron cargar las suscripciones.')
+      setIsSubscriptionsLoading(false)
+      return
+    }
+
+    setSubscriptions(result.data ?? [])
+    setIsSubscriptionsLoading(false)
+  }
+
+  const loadFixedExpenses = async (): Promise<void> => {
+    setIsFixedExpensesLoading(true)
+    setFixedExpenseError('')
+
+    const result = await apiClient.getFixedExpenses()
+
+    if (!result.success) {
+      setFixedExpenseError(result.error ?? 'No se pudieron cargar los gastos fijos.')
+      setIsFixedExpensesLoading(false)
+      return
+    }
+
+    setFixedExpenses(result.data ?? [])
+    setIsFixedExpensesLoading(false)
+  }
+
+  const loadFixedExpensePayments = async (fixedExpenseId: number): Promise<void> => {
+    setIsFixedExpensePaymentsLoading(true)
+    setFixedExpenseError('')
+
+    const result = await apiClient.getFixedExpensePayments(fixedExpenseId)
+
+    if (!result.success) {
+      setFixedExpenseError(result.error ?? 'No se pudo cargar el historial de pagos.')
+      setIsFixedExpensePaymentsLoading(false)
+      return
+    }
+
+    setSelectedFixedExpenseId(fixedExpenseId)
+    setFixedExpensePayments(result.data ?? [])
+    setIsFixedExpensePaymentsLoading(false)
+  }
+
   const selectedBankId = instrumentForm.bankId === 0 ? (banks[0]?.id ?? 0) : instrumentForm.bankId
 
   const handleSave = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
@@ -684,6 +853,20 @@ export function App() {
       void loadInstruments()
       void loadStatements()
       void loadTransfers()
+      return
+    }
+
+    if (nextSection === 'subscriptions') {
+      void loadInstruments()
+      void loadCategories()
+      void loadSubscriptions()
+      return
+    }
+
+    if (nextSection === 'fixedExpenses') {
+      void loadInstruments()
+      void loadCategories()
+      void loadFixedExpenses()
       return
     }
 
@@ -1258,6 +1441,205 @@ export function App() {
     await loadLoanPayments(selectedLoanId)
   }
 
+  const resetSubscriptionEditor = (): void => {
+    setSubscriptionForm({
+      ...EMPTY_SUBSCRIPTION_FORM,
+      instrumentId: instruments[0]?.id ?? 0,
+      categoryId: null,
+      subcategoryId: null,
+    })
+    setEditingSubscriptionId(null)
+  }
+
+  const handleSubscriptionBillingCycleChange = (billingCycle: SubscriptionBillingCycle): void => {
+    setSubscriptionForm((previous) => ({
+      ...previous,
+      billingCycle,
+      billingDay: previous.billingDay ?? 1,
+    }))
+  }
+
+  const handleSubscriptionSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault()
+    setSubscriptionError('')
+    setSubscriptionMessage('')
+
+    if (subscriptionForm.instrumentId < 1) {
+      setSubscriptionError('Selecciona un instrumento valido.')
+      return
+    }
+
+    if (subscriptionForm.amount <= 0) {
+      setSubscriptionError('Ingresa un monto mayor a cero.')
+      return
+    }
+
+    const payload: SubscriptionInput = {
+      ...subscriptionForm,
+      name: subscriptionForm.name.trim(),
+      notes: subscriptionForm.notes.trim(),
+      nextBilling: subscriptionForm.nextBilling.trim(),
+    }
+
+    if (editingSubscriptionId === null) {
+      const created = await apiClient.createSubscription(payload)
+      if (!created.success) {
+        setSubscriptionError(created.error ?? 'No se pudo crear la suscripcion.')
+        return
+      }
+      setSubscriptionMessage('Suscripcion creada correctamente.')
+    } else {
+      const updated = await apiClient.updateSubscription(editingSubscriptionId, payload)
+      if (!updated.success) {
+        setSubscriptionError(updated.error ?? 'No se pudo actualizar la suscripcion.')
+        return
+      }
+      setSubscriptionMessage('Suscripcion actualizada correctamente.')
+    }
+
+    resetSubscriptionEditor()
+    await loadSubscriptions()
+  }
+
+  const handleSubscriptionDelete = async (subscriptionId: number): Promise<void> => {
+    setSubscriptionError('')
+    setSubscriptionMessage('')
+
+    const deleted = await apiClient.deleteSubscription(subscriptionId)
+    if (!deleted.success) {
+      setSubscriptionError(deleted.error ?? 'No se pudo eliminar la suscripcion.')
+      return
+    }
+
+    setSubscriptionMessage('Suscripcion eliminada correctamente.')
+    if (editingSubscriptionId === subscriptionId) {
+      resetSubscriptionEditor()
+    }
+    await loadSubscriptions()
+  }
+
+  const resetFixedExpenseEditor = (): void => {
+    setFixedExpenseForm({
+      ...EMPTY_FIXED_EXPENSE_FORM,
+      instrumentId: instruments.find((instrument) => instrument.type !== 'credit_card')?.id ?? null,
+      categoryId: null,
+      subcategoryId: null,
+    })
+    setEditingFixedExpenseId(null)
+  }
+
+  const handleFixedExpenseSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault()
+    setFixedExpenseError('')
+    setFixedExpenseMessage('')
+
+    if (fixedExpenseForm.estimatedAmount <= 0) {
+      setFixedExpenseError('Ingresa un monto estimado mayor a cero.')
+      return
+    }
+
+    const payload: FixedExpenseInput = {
+      ...fixedExpenseForm,
+      name: fixedExpenseForm.name.trim(),
+      notes: fixedExpenseForm.notes.trim(),
+    }
+
+    if (editingFixedExpenseId === null) {
+      const created = await apiClient.createFixedExpense(payload)
+      if (!created.success) {
+        setFixedExpenseError(created.error ?? 'No se pudo crear el gasto fijo.')
+        return
+      }
+      setFixedExpenseMessage('Gasto fijo creado correctamente.')
+    } else {
+      const updated = await apiClient.updateFixedExpense(editingFixedExpenseId, payload)
+      if (!updated.success) {
+        setFixedExpenseError(updated.error ?? 'No se pudo actualizar el gasto fijo.')
+        return
+      }
+      setFixedExpenseMessage('Gasto fijo actualizado correctamente.')
+    }
+
+    resetFixedExpenseEditor()
+    await loadFixedExpenses()
+  }
+
+  const handleFixedExpenseDelete = async (fixedExpenseId: number): Promise<void> => {
+    setFixedExpenseError('')
+    setFixedExpenseMessage('')
+
+    const deleted = await apiClient.deleteFixedExpense(fixedExpenseId)
+    if (!deleted.success) {
+      setFixedExpenseError(deleted.error ?? 'No se pudo eliminar el gasto fijo.')
+      return
+    }
+
+    setFixedExpenseMessage('Gasto fijo eliminado correctamente.')
+    if (editingFixedExpenseId === fixedExpenseId) {
+      resetFixedExpenseEditor()
+    }
+    if (selectedFixedExpenseId === fixedExpenseId) {
+      setSelectedFixedExpenseId(null)
+      setFixedExpensePayments([])
+    }
+    await loadFixedExpenses()
+  }
+
+  const resetFixedExpensePaymentForm = (): void => {
+    setFixedExpensePaymentForm(EMPTY_FIXED_EXPENSE_PAYMENT_FORM)
+  }
+
+  const handleFixedExpensePaymentSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault()
+
+    if (!selectedFixedExpenseId) {
+      setFixedExpenseError('Primero selecciona un gasto fijo.')
+      return
+    }
+
+    setFixedExpenseError('')
+    setFixedExpenseMessage('')
+
+    if (fixedExpensePaymentForm.amount <= 0) {
+      setFixedExpenseError('Ingresa un monto de pago mayor a cero.')
+      return
+    }
+
+    const payload: FixedExpensePaymentInput = {
+      ...fixedExpensePaymentForm,
+      notes: fixedExpensePaymentForm.notes.trim(),
+      paymentDate: fixedExpensePaymentForm.paymentDate.trim(),
+    }
+
+    const created = await apiClient.createFixedExpensePayment(selectedFixedExpenseId, payload)
+    if (!created.success) {
+      setFixedExpenseError(created.error ?? 'No se pudo registrar el pago mensual.')
+      return
+    }
+
+    setFixedExpenseMessage('Pago mensual registrado correctamente.')
+    resetFixedExpensePaymentForm()
+    await loadFixedExpensePayments(selectedFixedExpenseId)
+  }
+
+  const handleFixedExpensePaymentDelete = async (paymentId: number): Promise<void> => {
+    if (!selectedFixedExpenseId) {
+      return
+    }
+
+    setFixedExpenseError('')
+    setFixedExpenseMessage('')
+
+    const deleted = await apiClient.deleteFixedExpensePayment(selectedFixedExpenseId, paymentId)
+    if (!deleted.success) {
+      setFixedExpenseError(deleted.error ?? 'No se pudo eliminar el pago mensual.')
+      return
+    }
+
+    setFixedExpenseMessage('Pago mensual eliminado correctamente.')
+    await loadFixedExpensePayments(selectedFixedExpenseId)
+  }
+
   if (isLoading) {
     return (
       <main className="settings-screen settings-screen--centered">
@@ -1311,6 +1693,20 @@ export function App() {
           onClick={() => handleSectionChange('creditCards')}
         >
           Tarjetas y Transferencias
+        </button>
+        <button
+          className={`nav-button ${activeSection === 'subscriptions' ? 'nav-button--active' : ''}`}
+          type="button"
+          onClick={() => handleSectionChange('subscriptions')}
+        >
+          Suscripciones
+        </button>
+        <button
+          className={`nav-button ${activeSection === 'fixedExpenses' ? 'nav-button--active' : ''}`}
+          type="button"
+          onClick={() => handleSectionChange('fixedExpenses')}
+        >
+          Gastos fijos
         </button>
         <button
           className={`nav-button ${activeSection === 'loans' ? 'nav-button--active' : ''}`}
@@ -2796,6 +3192,621 @@ export function App() {
                   </table>
                 </div>
               </article>
+            </div>
+          </section>
+        ) : null}
+
+        {activeSection === 'subscriptions' ? (
+          <section className="card">
+            <header className="card__header">
+              <h2 className="card__title">Suscripciones</h2>
+              <p className="card__subtitle">Listado y gestion de cargos recurrentes por instrumento y ciclo.</p>
+            </header>
+
+            <div className="transaction-layout">
+              <section className="mini-card">
+                <header className="mini-card__header">
+                  <h3 className="mini-card__title">Nueva suscripcion</h3>
+                  <p className="mini-card__subtitle">Define monto, ciclo y proximo cargo esperado.</p>
+                </header>
+
+                <form className="form-grid" onSubmit={handleSubscriptionSubmit}>
+                  <label className="form-grid__field" htmlFor="subscriptionName">Nombre</label>
+                  <input
+                    id="subscriptionName"
+                    className="form-grid__input"
+                    type="text"
+                    value={subscriptionForm.name}
+                    onChange={(event) => setSubscriptionForm({ ...subscriptionForm, name: event.target.value })}
+                    placeholder="Netflix"
+                    required
+                  />
+
+                  <label className="form-grid__field" htmlFor="subscriptionInstrument">Instrumento</label>
+                  <select
+                    id="subscriptionInstrument"
+                    className="form-grid__input"
+                    value={subscriptionForm.instrumentId}
+                    onChange={(event) => setSubscriptionForm({ ...subscriptionForm, instrumentId: Number(event.target.value) })}
+                    required
+                  >
+                    <option value={0}>Selecciona instrumento</option>
+                    {instruments.map((instrument) => (
+                      <option key={instrument.id} value={instrument.id}>{instrument.name}</option>
+                    ))}
+                  </select>
+
+                  <label className="form-grid__field" htmlFor="subscriptionAmount">Monto</label>
+                  <input
+                    id="subscriptionAmount"
+                    className="form-grid__input"
+                    type="number"
+                    min={0.01}
+                    step="0.01"
+                    value={subscriptionForm.amount}
+                    onChange={(event) => setSubscriptionForm({ ...subscriptionForm, amount: Number(event.target.value) })}
+                    required
+                  />
+
+                  <label className="form-grid__field" htmlFor="subscriptionCycle">Ciclo</label>
+                  <select
+                    id="subscriptionCycle"
+                    className="form-grid__input"
+                    value={subscriptionForm.billingCycle}
+                    onChange={(event) => handleSubscriptionBillingCycleChange(event.target.value as SubscriptionBillingCycle)}
+                  >
+                    <option value="monthly">Mensual</option>
+                    <option value="yearly">Anual</option>
+                    <option value="weekly">Semanal</option>
+                  </select>
+
+                  <label className="form-grid__field" htmlFor="subscriptionBillingDay">Dia de cargo</label>
+                  <input
+                    id="subscriptionBillingDay"
+                    className="form-grid__input"
+                    type="number"
+                    min={1}
+                    max={31}
+                    value={subscriptionForm.billingDay ?? 1}
+                    onChange={(event) => setSubscriptionForm({ ...subscriptionForm, billingDay: Number(event.target.value) })}
+                  />
+
+                  <label className="form-grid__field" htmlFor="subscriptionNextBilling">Proximo cargo</label>
+                  <input
+                    id="subscriptionNextBilling"
+                    className="form-grid__input"
+                    type="date"
+                    value={subscriptionForm.nextBilling}
+                    onChange={(event) => setSubscriptionForm({ ...subscriptionForm, nextBilling: event.target.value })}
+                  />
+
+                  <label className="form-grid__field" htmlFor="subscriptionCategory">Categoria</label>
+                  <select
+                    id="subscriptionCategory"
+                    className="form-grid__input"
+                    value={subscriptionForm.categoryId ?? ''}
+                    onChange={(event) => {
+                      const nextCategoryId = event.target.value ? Number(event.target.value) : null
+                      setSubscriptionForm({ ...subscriptionForm, categoryId: nextCategoryId, subcategoryId: null })
+                    }}
+                  >
+                    <option value="">Sin categoria</option>
+                    {expenseCategoryOptions.map((category) => (
+                      <option key={category.id} value={category.id}>{category.name}</option>
+                    ))}
+                  </select>
+
+                  <label className="form-grid__field" htmlFor="subscriptionSubcategory">Subcategoria</label>
+                  <select
+                    id="subscriptionSubcategory"
+                    className="form-grid__input"
+                    value={subscriptionForm.subcategoryId ?? ''}
+                    onChange={(event) => {
+                      const nextSubcategoryId = event.target.value ? Number(event.target.value) : null
+                      setSubscriptionForm({ ...subscriptionForm, subcategoryId: nextSubcategoryId })
+                    }}
+                    disabled={!selectedSubscriptionCategory}
+                  >
+                    <option value="">Sin subcategoria</option>
+                    {(selectedSubscriptionCategory?.subcategories ?? []).map((subcategory) => (
+                      <option key={subcategory.id} value={subcategory.id}>{subcategory.name}</option>
+                    ))}
+                  </select>
+
+                  <label className="form-grid__field" htmlFor="subscriptionNotes">Notas</label>
+                  <input
+                    id="subscriptionNotes"
+                    className="form-grid__input"
+                    type="text"
+                    value={subscriptionForm.notes}
+                    onChange={(event) => setSubscriptionForm({ ...subscriptionForm, notes: event.target.value })}
+                    placeholder="Opcional"
+                  />
+
+                  <div className="form-grid__actions">
+                    <button className="button button--primary" type="submit" disabled={!hasConfig || instruments.length === 0}>
+                      {editingSubscriptionId === null ? 'Crear suscripcion' : 'Guardar cambios'}
+                    </button>
+                    <button className="button button--secondary" type="button" onClick={resetSubscriptionEditor}>
+                      Limpiar
+                    </button>
+                    <button
+                      className="button button--secondary"
+                      type="button"
+                      onClick={() => {
+                        void loadSubscriptions()
+                      }}
+                    >
+                      Recargar
+                    </button>
+                  </div>
+                </form>
+              </section>
+
+              <section className="mini-card">
+                <header className="mini-card__header">
+                  <h3 className="mini-card__title">Resumen</h3>
+                  <p className="mini-card__subtitle">Vista rapida del comportamiento recurrente.</p>
+                </header>
+
+                <div className="summary-grid">
+                  <article className="summary-card">
+                    <p className="summary-card__label">Suscripciones activas</p>
+                    <p className="summary-card__value">{subscriptions.length}</p>
+                  </article>
+                  <article className="summary-card">
+                    <p className="summary-card__label">Total mensual aproximado</p>
+                    <p className="summary-card__value">{formatCurrency(subscriptions.reduce((total, item) => total + item.amount, 0))}</p>
+                  </article>
+                </div>
+              </section>
+            </div>
+
+            {subscriptionError ? <p className="message message--error">{subscriptionError}</p> : null}
+            {subscriptionMessage ? <p className="message message--success">{subscriptionMessage}</p> : null}
+
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Nombre</th>
+                    <th>Instrumento</th>
+                    <th>Monto</th>
+                    <th>Ciclo</th>
+                    <th>Proximo cargo</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {isSubscriptionsLoading ? (
+                    <tr>
+                      <td colSpan={6}>Cargando suscripciones...</td>
+                    </tr>
+                  ) : null}
+
+                  {!isSubscriptionsLoading && subscriptions.length === 0 ? (
+                    <tr>
+                      <td colSpan={6}>No hay suscripciones registradas.</td>
+                    </tr>
+                  ) : null}
+
+                  {!isSubscriptionsLoading
+                    ? subscriptions.map((subscription) => (
+                      <tr key={subscription.id}>
+                        <td>{subscription.name}</td>
+                        <td>{subscription.instrumentName ?? '-'}</td>
+                        <td>{formatCurrency(subscription.amount)}</td>
+                        <td>{subscription.billingCycle}</td>
+                        <td>{subscription.nextBilling ?? '-'}</td>
+                        <td>
+                          <div className="table__actions">
+                            <button
+                              className="button button--secondary"
+                              type="button"
+                              onClick={() => {
+                                setEditingSubscriptionId(subscription.id)
+                                setSubscriptionForm(toEditableSubscription(subscription))
+                              }}
+                            >
+                              Editar
+                            </button>
+                            <button
+                              className="button button--danger"
+                              type="button"
+                              onClick={() => {
+                                void handleSubscriptionDelete(subscription.id)
+                              }}
+                            >
+                              Eliminar
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                    : null}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        ) : null}
+
+        {activeSection === 'fixedExpenses' ? (
+          <section className="card">
+            <header className="card__header">
+              <h2 className="card__title">Gastos Fijos</h2>
+              <p className="card__subtitle">Gestion de gastos recurrentes y registro de pagos mensuales.</p>
+            </header>
+
+            <div className="transaction-layout">
+              <section className="mini-card">
+                <header className="mini-card__header">
+                  <h3 className="mini-card__title">Nuevo gasto fijo</h3>
+                  <p className="mini-card__subtitle">Renta, luz, agua, internet y otros compromisos.</p>
+                </header>
+
+                <form className="form-grid" onSubmit={handleFixedExpenseSubmit}>
+                  <label className="form-grid__field" htmlFor="fixedExpenseName">Nombre</label>
+                  <input
+                    id="fixedExpenseName"
+                    className="form-grid__input"
+                    type="text"
+                    value={fixedExpenseForm.name}
+                    onChange={(event) => setFixedExpenseForm({ ...fixedExpenseForm, name: event.target.value })}
+                    placeholder="Renta departamento"
+                    required
+                  />
+
+                  <label className="form-grid__field" htmlFor="fixedExpenseAmount">Monto estimado</label>
+                  <input
+                    id="fixedExpenseAmount"
+                    className="form-grid__input"
+                    type="number"
+                    min={0.01}
+                    step="0.01"
+                    value={fixedExpenseForm.estimatedAmount}
+                    onChange={(event) => setFixedExpenseForm({ ...fixedExpenseForm, estimatedAmount: Number(event.target.value) })}
+                    required
+                  />
+
+                  <label className="form-grid__field" htmlFor="fixedExpenseInstrument">Instrumento (opcional)</label>
+                  <select
+                    id="fixedExpenseInstrument"
+                    className="form-grid__input"
+                    value={fixedExpenseForm.instrumentId ?? ''}
+                    onChange={(event) => {
+                      const raw = event.target.value
+                      setFixedExpenseForm({ ...fixedExpenseForm, instrumentId: raw ? Number(raw) : null })
+                    }}
+                  >
+                    <option value="">Sin instrumento</option>
+                    {instruments.map((instrument) => (
+                      <option key={instrument.id} value={instrument.id}>{instrument.name}</option>
+                    ))}
+                  </select>
+
+                  <label className="form-grid__field" htmlFor="fixedExpenseCategory">Categoria</label>
+                  <select
+                    id="fixedExpenseCategory"
+                    className="form-grid__input"
+                    value={fixedExpenseForm.categoryId ?? ''}
+                    onChange={(event) => {
+                      const nextCategoryId = event.target.value ? Number(event.target.value) : null
+                      setFixedExpenseForm({ ...fixedExpenseForm, categoryId: nextCategoryId, subcategoryId: null })
+                    }}
+                  >
+                    <option value="">Sin categoria</option>
+                    {expenseCategoryOptions.map((category) => (
+                      <option key={category.id} value={category.id}>{category.name}</option>
+                    ))}
+                  </select>
+
+                  <label className="form-grid__field" htmlFor="fixedExpenseSubcategory">Subcategoria</label>
+                  <select
+                    id="fixedExpenseSubcategory"
+                    className="form-grid__input"
+                    value={fixedExpenseForm.subcategoryId ?? ''}
+                    onChange={(event) => {
+                      const nextSubcategoryId = event.target.value ? Number(event.target.value) : null
+                      setFixedExpenseForm({ ...fixedExpenseForm, subcategoryId: nextSubcategoryId })
+                    }}
+                    disabled={!selectedFixedExpenseCategory}
+                  >
+                    <option value="">Sin subcategoria</option>
+                    {(selectedFixedExpenseCategory?.subcategories ?? []).map((subcategory) => (
+                      <option key={subcategory.id} value={subcategory.id}>{subcategory.name}</option>
+                    ))}
+                  </select>
+
+                  <label className="form-grid__field" htmlFor="fixedExpenseIsVariable">Tipo de monto</label>
+                  <select
+                    id="fixedExpenseIsVariable"
+                    className="form-grid__input"
+                    value={fixedExpenseForm.isVariable ? 'yes' : 'no'}
+                    onChange={(event) => setFixedExpenseForm({ ...fixedExpenseForm, isVariable: event.target.value === 'yes' })}
+                  >
+                    <option value="no">Fijo</option>
+                    <option value="yes">Variable</option>
+                  </select>
+
+                  <label className="form-grid__field" htmlFor="fixedExpensePaymentDay">Dia de pago</label>
+                  <input
+                    id="fixedExpensePaymentDay"
+                    className="form-grid__input"
+                    type="number"
+                    min={1}
+                    max={31}
+                    value={fixedExpenseForm.paymentDay ?? 1}
+                    onChange={(event) => setFixedExpenseForm({ ...fixedExpenseForm, paymentDay: Number(event.target.value) })}
+                  />
+
+                  <label className="form-grid__field" htmlFor="fixedExpenseNotes">Notas</label>
+                  <input
+                    id="fixedExpenseNotes"
+                    className="form-grid__input"
+                    type="text"
+                    value={fixedExpenseForm.notes}
+                    onChange={(event) => setFixedExpenseForm({ ...fixedExpenseForm, notes: event.target.value })}
+                    placeholder="Opcional"
+                  />
+
+                  <div className="form-grid__actions">
+                    <button className="button button--primary" type="submit" disabled={!hasConfig}>
+                      {editingFixedExpenseId === null ? 'Crear gasto fijo' : 'Guardar cambios'}
+                    </button>
+                    <button className="button button--secondary" type="button" onClick={resetFixedExpenseEditor}>
+                      Limpiar
+                    </button>
+                    <button
+                      className="button button--secondary"
+                      type="button"
+                      onClick={() => {
+                        void loadFixedExpenses()
+                      }}
+                    >
+                      Recargar
+                    </button>
+                  </div>
+                </form>
+              </section>
+
+              <section className="mini-card">
+                <header className="mini-card__header">
+                  <h3 className="mini-card__title">Registrar pago mensual</h3>
+                  <p className="mini-card__subtitle">Selecciona un gasto fijo y registra el pago del periodo.</p>
+                </header>
+
+                <form className="form-grid" onSubmit={handleFixedExpensePaymentSubmit}>
+                  <label className="form-grid__field" htmlFor="fixedExpenseSelected">Gasto fijo</label>
+                  <select
+                    id="fixedExpenseSelected"
+                    className="form-grid__input"
+                    value={selectedFixedExpenseId ?? ''}
+                    onChange={(event) => {
+                      const nextId = event.target.value ? Number(event.target.value) : null
+                      setSelectedFixedExpenseId(nextId)
+                      setFixedExpensePayments([])
+                      if (nextId) {
+                        void loadFixedExpensePayments(nextId)
+                      }
+                    }}
+                  >
+                    <option value="">Selecciona gasto fijo</option>
+                    {fixedExpenses.map((expense) => (
+                      <option key={expense.id} value={expense.id}>{expense.name}</option>
+                    ))}
+                  </select>
+
+                  <label className="form-grid__field" htmlFor="fixedExpensePaymentAmount">Monto pagado</label>
+                  <input
+                    id="fixedExpensePaymentAmount"
+                    className="form-grid__input"
+                    type="number"
+                    min={0.01}
+                    step="0.01"
+                    value={fixedExpensePaymentForm.amount}
+                    onChange={(event) => setFixedExpensePaymentForm({ ...fixedExpensePaymentForm, amount: Number(event.target.value) })}
+                    required
+                  />
+
+                  <label className="form-grid__field" htmlFor="fixedExpensePaymentMonth">Mes</label>
+                  <input
+                    id="fixedExpensePaymentMonth"
+                    className="form-grid__input"
+                    type="number"
+                    min={1}
+                    max={12}
+                    value={fixedExpensePaymentForm.periodMonth}
+                    onChange={(event) => setFixedExpensePaymentForm({ ...fixedExpensePaymentForm, periodMonth: Number(event.target.value) })}
+                    required
+                  />
+
+                  <label className="form-grid__field" htmlFor="fixedExpensePaymentYear">Anio</label>
+                  <input
+                    id="fixedExpensePaymentYear"
+                    className="form-grid__input"
+                    type="number"
+                    min={2000}
+                    max={2200}
+                    value={fixedExpensePaymentForm.periodYear}
+                    onChange={(event) => setFixedExpensePaymentForm({ ...fixedExpensePaymentForm, periodYear: Number(event.target.value) })}
+                    required
+                  />
+
+                  <label className="form-grid__field" htmlFor="fixedExpensePaymentDate">Fecha de pago</label>
+                  <input
+                    id="fixedExpensePaymentDate"
+                    className="form-grid__input"
+                    type="date"
+                    value={fixedExpensePaymentForm.paymentDate}
+                    onChange={(event) => setFixedExpensePaymentForm({ ...fixedExpensePaymentForm, paymentDate: event.target.value })}
+                  />
+
+                  <label className="form-grid__field" htmlFor="fixedExpensePaymentNotes">Notas</label>
+                  <input
+                    id="fixedExpensePaymentNotes"
+                    className="form-grid__input"
+                    type="text"
+                    value={fixedExpensePaymentForm.notes}
+                    onChange={(event) => setFixedExpensePaymentForm({ ...fixedExpensePaymentForm, notes: event.target.value })}
+                    placeholder="Opcional"
+                  />
+
+                  <div className="form-grid__actions">
+                    <button className="button button--primary" type="submit" disabled={!selectedFixedExpenseId}>
+                      Registrar pago
+                    </button>
+                    <button className="button button--secondary" type="button" onClick={resetFixedExpensePaymentForm}>
+                      Limpiar
+                    </button>
+                  </div>
+                </form>
+              </section>
+            </div>
+
+            {fixedExpenseError ? <p className="message message--error">{fixedExpenseError}</p> : null}
+            {fixedExpenseMessage ? <p className="message message--success">{fixedExpenseMessage}</p> : null}
+
+            <div className="category-list">
+              <article className="category-card">
+                <header className="category-card__header">
+                  <div>
+                    <h3 className="category-card__title">Listado de gastos fijos</h3>
+                    <p className="category-card__meta">Renta, servicios y compromisos mensuales.</p>
+                  </div>
+                </header>
+
+                <div className="table-wrap">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Nombre</th>
+                        <th>Monto estimado</th>
+                        <th>Variable</th>
+                        <th>Dia pago</th>
+                        <th>Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {isFixedExpensesLoading ? (
+                        <tr>
+                          <td colSpan={5}>Cargando gastos fijos...</td>
+                        </tr>
+                      ) : null}
+
+                      {!isFixedExpensesLoading && fixedExpenses.length === 0 ? (
+                        <tr>
+                          <td colSpan={5}>No hay gastos fijos registrados.</td>
+                        </tr>
+                      ) : null}
+
+                      {!isFixedExpensesLoading
+                        ? fixedExpenses.map((expense) => (
+                          <tr key={expense.id}>
+                            <td>{expense.name}</td>
+                            <td>{formatCurrency(expense.estimatedAmount)}</td>
+                            <td>{expense.isVariable ? 'Si' : 'No'}</td>
+                            <td>{expense.paymentDay ?? '-'}</td>
+                            <td>
+                              <div className="table__actions">
+                                <button
+                                  className="button button--secondary"
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingFixedExpenseId(expense.id)
+                                    setFixedExpenseForm(toEditableFixedExpense(expense))
+                                  }}
+                                >
+                                  Editar
+                                </button>
+                                <button
+                                  className="button button--secondary"
+                                  type="button"
+                                  onClick={() => {
+                                    void loadFixedExpensePayments(expense.id)
+                                  }}
+                                >
+                                  Historial
+                                </button>
+                                <button
+                                  className="button button--danger"
+                                  type="button"
+                                  onClick={() => {
+                                    void handleFixedExpenseDelete(expense.id)
+                                  }}
+                                >
+                                  Eliminar
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                        : null}
+                    </tbody>
+                  </table>
+                </div>
+              </article>
+
+              {selectedFixedExpense !== null ? (
+                <article className="category-card">
+                  <header className="category-card__header">
+                    <div>
+                      <h3 className="category-card__title">Historial de pagos · {selectedFixedExpense.name}</h3>
+                      <p className="category-card__meta">Pagos registrados por mes y anio.</p>
+                    </div>
+                  </header>
+
+                  <div className="table-wrap">
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>Periodo</th>
+                          <th>Monto</th>
+                          <th>Fecha pago</th>
+                          <th>Estado</th>
+                          <th>Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {isFixedExpensePaymentsLoading ? (
+                          <tr>
+                            <td colSpan={5}>Cargando historial de pagos...</td>
+                          </tr>
+                        ) : null}
+
+                        {!isFixedExpensePaymentsLoading && fixedExpensePayments.length === 0 ? (
+                          <tr>
+                            <td colSpan={5}>No hay pagos registrados para este gasto fijo.</td>
+                          </tr>
+                        ) : null}
+
+                        {!isFixedExpensePaymentsLoading
+                          ? fixedExpensePayments.map((payment) => (
+                            <tr key={payment.id}>
+                              <td>{`${payment.periodMonth}/${payment.periodYear}`}</td>
+                              <td>{formatCurrency(payment.amount)}</td>
+                              <td>{payment.paymentDate ?? '-'}</td>
+                              <td>{payment.isPaid ? 'Pagado' : 'Pendiente'}</td>
+                              <td>
+                                <div className="table__actions">
+                                  <button
+                                    className="button button--danger"
+                                    type="button"
+                                    onClick={() => {
+                                      void handleFixedExpensePaymentDelete(payment.id)
+                                    }}
+                                  >
+                                    Eliminar
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                          : null}
+                      </tbody>
+                    </table>
+                  </div>
+                </article>
+              ) : null}
             </div>
           </section>
         ) : null}

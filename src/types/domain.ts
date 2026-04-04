@@ -3,6 +3,7 @@ export type CategoryType = 'expense' | 'income' | 'both'
 export type TransactionType = 'expense' | 'income'
 export type TransferType = 'card_payment' | 'inter_account' | 'loan_payment' | 'other'
 export type LoanPaymentType = 'fixed' | 'variable'
+export type SubscriptionBillingCycle = 'monthly' | 'yearly' | 'weekly'
 
 export interface Bank {
   id: number
@@ -272,5 +273,93 @@ export interface LoanPayment {
 export interface LoanPaymentRegisterInput {
   paidDate: string
   amount: number | null
+  notes: string
+}
+
+export interface Subscription {
+  id: number
+  name: string
+  instrumentId: number
+  instrumentName: string | null
+  categoryId: number | null
+  categoryName: string | null
+  subcategoryId: number | null
+  subcategoryName: string | null
+  currencyId: number
+  amount: number
+  billingCycle: SubscriptionBillingCycle
+  billingDay: number | null
+  nextBilling: string | null
+  isActive: boolean
+  notes: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SubscriptionInput {
+  name: string
+  instrumentId: number
+  categoryId: number | null
+  subcategoryId: number | null
+  currencyId: number
+  amount: number
+  billingCycle: SubscriptionBillingCycle
+  billingDay: number | null
+  nextBilling: string
+  isActive: boolean
+  notes: string
+}
+
+export interface FixedExpense {
+  id: number
+  name: string
+  instrumentId: number | null
+  instrumentName: string | null
+  categoryId: number | null
+  categoryName: string | null
+  subcategoryId: number | null
+  subcategoryName: string | null
+  currencyId: number
+  estimatedAmount: number
+  isVariable: boolean
+  paymentDay: number | null
+  isActive: boolean
+  notes: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface FixedExpenseInput {
+  name: string
+  instrumentId: number | null
+  categoryId: number | null
+  subcategoryId: number | null
+  currencyId: number
+  estimatedAmount: number
+  isVariable: boolean
+  paymentDay: number | null
+  isActive: boolean
+  notes: string
+}
+
+export interface FixedExpensePayment {
+  id: number
+  fixedExpenseId: number
+  amount: number
+  periodMonth: number
+  periodYear: number
+  paymentDate: string | null
+  isPaid: boolean
+  notes: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface FixedExpensePaymentInput {
+  amount: number
+  periodMonth: number
+  periodYear: number
+  paymentDate: string
+  isPaid: boolean
   notes: string
 }

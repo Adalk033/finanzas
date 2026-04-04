@@ -666,11 +666,11 @@ Lambda única de .mjs con conexión a la dB de postgreSQL
 
 ### Fase 6 — Módulo Suscripciones y Gastos Fijos
 
-- [ ]  **Backend:** CRUD suscripciones
-- [ ]  **Backend:** CRUD gastos fijos + historial de pagos
-- [ ]  **Frontend:** Página de Suscripciones — listado con montos y ciclos
-- [ ]  **Frontend:** Página de Gastos Fijos — renta, luz, agua, etc.
-- [ ]  **Frontend:** Registro de pago mensual de gastos fijos
+- [x]  **Backend:** CRUD suscripciones
+- [x]  **Backend:** CRUD gastos fijos + historial de pagos
+- [x]  **Frontend:** Página de Suscripciones — listado con montos y ciclos
+- [x]  **Frontend:** Página de Gastos Fijos — renta, luz, agua, etc.
+- [x]  **Frontend:** Registro de pago mensual de gastos fijos
 
 ### Fase 7 — Dashboard Principal
 
