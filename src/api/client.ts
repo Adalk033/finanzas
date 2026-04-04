@@ -22,6 +22,11 @@ import type {
   FixedExpensePaymentInput,
   Subcategory,
   SubcategoryInput,
+  DashboardBalanceEvolution,
+  DashboardCashFlowPoint,
+  DashboardExpenseByCategory,
+  DashboardFutureExpensePoint,
+  DashboardSummary,
   Transfer,
   TransferInput,
   Transaction,
@@ -291,6 +296,11 @@ export const apiClient = {
       method: 'POST',
       body: JSON.stringify({ message }),
     }),
+  getDashboardSummary: () => request<DashboardSummary>(ENDPOINTS.DASHBOARD_SUMMARY, { method: 'GET' }),
+  getDashboardExpensesByCategory: () => request<DashboardExpenseByCategory[]>(ENDPOINTS.DASHBOARD_EXPENSES_BY_CATEGORY, { method: 'GET' }),
+  getDashboardCashFlow: () => request<DashboardCashFlowPoint[]>(ENDPOINTS.DASHBOARD_CASH_FLOW, { method: 'GET' }),
+  getDashboardBalanceEvolution: () => request<DashboardBalanceEvolution>(ENDPOINTS.DASHBOARD_BALANCE_EVOLUTION, { method: 'GET' }),
+  getDashboardFutureExpenses: () => request<DashboardFutureExpensePoint[]>(ENDPOINTS.DASHBOARD_FUTURE_EXPENSES, { method: 'GET' }),
   getBanks: () => request<Bank[]>(ENDPOINTS.BANKS, { method: 'GET' }),
   createBank: (payload: BankInput) =>
     request<Bank>(ENDPOINTS.BANKS, {

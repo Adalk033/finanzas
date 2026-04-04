@@ -1,6 +1,11 @@
 export const ENDPOINTS = {
   HEALTH: '/health',
   BOOTSTRAP_PING: '/bootstrap/ping',
+  DASHBOARD_SUMMARY: '/dashboard/summary',
+  DASHBOARD_EXPENSES_BY_CATEGORY: '/dashboard/charts/expenses-by-category',
+  DASHBOARD_CASH_FLOW: '/dashboard/charts/cash-flow',
+  DASHBOARD_BALANCE_EVOLUTION: '/dashboard/charts/balance-evolution',
+  DASHBOARD_FUTURE_EXPENSES: '/dashboard/charts/future-expenses',
   CATEGORIES: '/categories',
   BANKS: '/banks',
   INSTRUMENTS: '/instruments',

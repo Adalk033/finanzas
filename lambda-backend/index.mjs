@@ -124,6 +124,26 @@ function parseInteger(value) {
 }
 
 function parsePathParameters(path) {
+  if (path === '/dashboard/summary') {
+    return { resource: 'dashboardSummary', id: null };
+  }
+
+  if (path === '/dashboard/charts/expenses-by-category') {
+    return { resource: 'dashboardExpensesByCategory', id: null };
+  }
+
+  if (path === '/dashboard/charts/cash-flow') {
+    return { resource: 'dashboardCashFlow', id: null };
+  }
+
+  if (path === '/dashboard/charts/balance-evolution') {
+    return { resource: 'dashboardBalanceEvolution', id: null };
+  }
+
+  if (path === '/dashboard/charts/future-expenses') {
+    return { resource: 'dashboardFutureExpenses', id: null };
+  }
+
   const statementMovements = path.match(/^\/statements\/(\d+)\/movements$/);
   if (statementMovements) {
     return {
@@ -3986,6 +4006,279 @@ async function deleteFixedExpensePayment(fixedExpenseId, paymentId) {
   return result.rows.length > 0;
 }
 
+async function getDashboardSummary() {
+  const result = await query(
+    `
+    SELECT
+      total_available,
+      total_credit_debt,
+      total_loan_debt,
+      total_available_credit
+    FROM app_gastos.v_financial_summary
+    LIMIT 1
+    `,
+  );
+
+  const row = result.rows[0] ?? {
+    total_available: 0,
+    total_credit_debt: 0,
+    total_loan_debt: 0,
+    total_available_credit: 0,
+  };
+
+  const totalAvailable = Number(row.total_available ?? 0);
+  const totalCreditDebt = Number(row.total_credit_debt ?? 0);
+  const totalLoanDebt = Number(row.total_loan_debt ?? 0);
+  const totalAvailableCredit = Number(row.total_available_credit ?? 0);
+
+  return {
+    totalAvailable,
+    totalCreditDebt,
+    totalLoanDebt,
+    totalAvailableCredit,
+    netBalance: Number((totalAvailable - totalCreditDebt - totalLoanDebt).toFixed(2)),
+  };
+}
+
+async function getDashboardExpensesByCategory() {
+  const result = await query(
+    `
+    SELECT
+      COALESCE(c.name, 'Sin categoria') AS category,
+      COALESCE(SUM(t.amount), 0) AS total
+    FROM app_gastos.transactions t
+    LEFT JOIN app_gastos.categories c ON c.id = t.category_id
+    WHERE t.type = 'expense'
+      AND DATE_TRUNC('month', t.transaction_date) = DATE_TRUNC('month', CURRENT_DATE)
+    GROUP BY COALESCE(c.name, 'Sin categoria')
+    ORDER BY total DESC
+    `,
+  );
+
+  return result.rows.map((row) => ({
+    category: row.category,
+    total: Number(row.total),
+  }));
+}
+
+async function getDashboardCashFlow() {
+  const result = await query(
+    `
+    WITH months AS (
+      SELECT DATE_TRUNC('month', CURRENT_DATE) - (INTERVAL '1 month' * gs.idx) AS month_start
+      FROM GENERATE_SERIES(5, 0, -1) AS gs(idx)
+    )
+    SELECT
+      TO_CHAR(months.month_start, 'YYYY-MM') AS month,
+      COALESCE(SUM(CASE WHEN t.type = 'income' THEN t.amount ELSE 0 END), 0) AS income,
+      COALESCE(SUM(CASE WHEN t.type = 'expense' THEN t.amount ELSE 0 END), 0) AS expense
+    FROM months
+    LEFT JOIN app_gastos.transactions t
+      ON DATE_TRUNC('month', t.transaction_date) = months.month_start
+    GROUP BY months.month_start
+    ORDER BY months.month_start
+    `,
+  );
+
+  return result.rows.map((row) => ({
+    month: row.month,
+    income: Number(row.income),
+    expense: Number(row.expense),
+  }));
+}
+
+async function getDashboardBalanceEvolution() {
+  const result = await query(
+    `
+    WITH months AS (
+      SELECT DATE_TRUNC('month', CURRENT_DATE) - (INTERVAL '1 month' * gs.idx) AS month_start
+      FROM GENERATE_SERIES(5, 0, -1) AS gs(idx)
+    ),
+    active_instruments AS (
+      SELECT id, name
+      FROM app_gastos.financial_instruments
+      WHERE is_active = TRUE
+        AND type IN ('debit_card', 'account')
+    ),
+    movement_rows AS (
+      SELECT
+        t.instrument_id,
+        DATE_TRUNC('month', t.transaction_date) AS month_start,
+        SUM(CASE WHEN t.type = 'income' THEN t.amount ELSE -t.amount END) AS delta
+      FROM app_gastos.transactions t
+      INNER JOIN app_gastos.financial_instruments fi ON fi.id = t.instrument_id
+      WHERE fi.type IN ('debit_card', 'account')
+        AND t.transaction_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '5 month'
+      GROUP BY t.instrument_id, DATE_TRUNC('month', t.transaction_date)
+
+      UNION ALL
+
+      SELECT
+        tr.source_instrument_id AS instrument_id,
+        DATE_TRUNC('month', tr.transfer_date) AS month_start,
+        SUM(-tr.amount) AS delta
+      FROM app_gastos.transfers tr
+      INNER JOIN app_gastos.financial_instruments fi ON fi.id = tr.source_instrument_id
+      WHERE fi.type IN ('debit_card', 'account')
+        AND tr.transfer_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '5 month'
+      GROUP BY tr.source_instrument_id, DATE_TRUNC('month', tr.transfer_date)
+
+      UNION ALL
+
+      SELECT
+        tr.destination_instrument_id AS instrument_id,
+        DATE_TRUNC('month', tr.transfer_date) AS month_start,
+        SUM(tr.amount) AS delta
+      FROM app_gastos.transfers tr
+      INNER JOIN app_gastos.financial_instruments fi ON fi.id = tr.destination_instrument_id
+      WHERE fi.type IN ('debit_card', 'account')
+        AND tr.transfer_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '5 month'
+      GROUP BY tr.destination_instrument_id, DATE_TRUNC('month', tr.transfer_date)
+    ),
+    monthly_delta AS (
+      SELECT instrument_id, month_start, SUM(delta) AS delta
+      FROM movement_rows
+      GROUP BY instrument_id, month_start
+    )
+    SELECT
+      ai.id AS instrument_id,
+      ai.name AS instrument_name,
+      TO_CHAR(months.month_start, 'YYYY-MM') AS month,
+      SUM(COALESCE(md.delta, 0)) OVER (
+        PARTITION BY ai.id
+        ORDER BY months.month_start
+        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+      ) AS balance
+    FROM active_instruments ai
+    CROSS JOIN months
+    LEFT JOIN monthly_delta md
+      ON md.instrument_id = ai.id
+      AND md.month_start = months.month_start
+    ORDER BY ai.name, months.month_start
+    `,
+  );
+
+  const series = [];
+  const keyByInstrument = new Map();
+  const pointsByMonth = new Map();
+
+  for (const row of result.rows) {
+    const instrumentId = Number(row.instrument_id);
+    const month = String(row.month);
+    const instrumentName = String(row.instrument_name);
+
+    if (!keyByInstrument.has(instrumentId)) {
+      const key = `instrument_${instrumentId}`;
+      keyByInstrument.set(instrumentId, key);
+      series.push({ key, label: instrumentName });
+    }
+
+    const key = keyByInstrument.get(instrumentId);
+    const existingPoint = pointsByMonth.get(month) ?? { month };
+    existingPoint[key] = Number(row.balance);
+    pointsByMonth.set(month, existingPoint);
+  }
+
+  const points = Array.from(pointsByMonth.values()).sort((a, b) => String(a.month).localeCompare(String(b.month)));
+
+  return { series, points };
+}
+
+async function getDashboardFutureExpenses() {
+  const result = await query(
+    `
+    WITH months AS (
+      SELECT DATE_TRUNC('month', CURRENT_DATE) + (INTERVAL '1 month' * gs.idx) AS month_start
+      FROM GENERATE_SERIES(0, 5) AS gs(idx)
+    ),
+    subscription_monthly AS (
+      SELECT COALESCE(SUM(
+        CASE s.billing_cycle
+          WHEN 'monthly' THEN s.amount
+          WHEN 'yearly' THEN s.amount / 12
+          WHEN 'weekly' THEN (s.amount * 52) / 12
+          ELSE 0
+        END
+      ), 0) AS total
+      FROM app_gastos.subscriptions s
+      WHERE s.is_active = TRUE
+    ),
+    fixed_monthly AS (
+      SELECT COALESCE(SUM(fe.estimated_amount), 0) AS total
+      FROM app_gastos.fixed_expenses fe
+      WHERE fe.is_active = TRUE
+    ),
+    loan_monthly AS (
+      SELECT
+        DATE_TRUNC('month', lp.payment_date) AS month_start,
+        COALESCE(SUM(lp.amount), 0) AS total
+      FROM app_gastos.loan_payments lp
+      INNER JOIN app_gastos.loans l ON l.id = lp.loan_id
+      WHERE lp.is_paid = FALSE
+        AND l.is_active = TRUE
+        AND lp.payment_date >= DATE_TRUNC('month', CURRENT_DATE)
+        AND lp.payment_date < DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '6 month'
+      GROUP BY DATE_TRUNC('month', lp.payment_date)
+    )
+    SELECT
+      TO_CHAR(months.month_start, 'YYYY-MM') AS month,
+      ROUND(COALESCE(sm.total, 0)::numeric, 2) AS subscriptions,
+      ROUND(COALESCE(fm.total, 0)::numeric, 2) AS fixed_expenses,
+      ROUND(COALESCE(lm.total, 0)::numeric, 2) AS loan_payments
+    FROM months
+    CROSS JOIN subscription_monthly sm
+    CROSS JOIN fixed_monthly fm
+    LEFT JOIN loan_monthly lm ON lm.month_start = months.month_start
+    ORDER BY months.month_start
+    `,
+  );
+
+  return result.rows.map((row) => {
+    const subscriptions = Number(row.subscriptions);
+    const fixedExpenses = Number(row.fixed_expenses);
+    const loanPayments = Number(row.loan_payments);
+
+    return {
+      month: row.month,
+      subscriptions,
+      fixedExpenses,
+      loanPayments,
+      total: Number((subscriptions + fixedExpenses + loanPayments).toFixed(2)),
+    };
+  });
+}
+
+async function handleDashboardRoute(method, path) {
+  const { resource } = parsePathParameters(path);
+
+  if (method === 'GET' && resource === 'dashboardSummary') {
+    const data = await getDashboardSummary();
+    return jsonResponse(200, { success: true, data });
+  }
+
+  if (method === 'GET' && resource === 'dashboardExpensesByCategory') {
+    const data = await getDashboardExpensesByCategory();
+    return jsonResponse(200, { success: true, data });
+  }
+
+  if (method === 'GET' && resource === 'dashboardCashFlow') {
+    const data = await getDashboardCashFlow();
+    return jsonResponse(200, { success: true, data });
+  }
+
+  if (method === 'GET' && resource === 'dashboardBalanceEvolution') {
+    const data = await getDashboardBalanceEvolution();
+    return jsonResponse(200, { success: true, data });
+  }
+
+  if (method === 'GET' && resource === 'dashboardFutureExpenses') {
+    const data = await getDashboardFutureExpenses();
+    return jsonResponse(200, { success: true, data });
+  }
+
+  return null;
+}
+
 async function handleBanksRoute(method, path, event) {
   const { id } = parsePathParameters(path);
 
@@ -4829,6 +5122,19 @@ export async function handler(event) {
   const { resource } = parsePathParameters(path);
 
   try {
+    if (
+      resource === 'dashboardSummary'
+      || resource === 'dashboardExpensesByCategory'
+      || resource === 'dashboardCashFlow'
+      || resource === 'dashboardBalanceEvolution'
+      || resource === 'dashboardFutureExpenses'
+    ) {
+      const response = await handleDashboardRoute(method, path);
+      if (response) {
+        return response;
+      }
+    }
+
     if (resource === 'categories') {
       const response = await handleCategoriesRoute(method, path, event);
       if (response) {

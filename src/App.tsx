@@ -1,4 +1,21 @@
 import { useMemo, useState, type FormEvent } from 'react'
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import './App.css'
 import { apiClient } from './api/client'
 import { useLocalConfig } from './hooks/useLocalConfig'
@@ -8,6 +25,11 @@ import type {
   Category,
   CategoryInput,
   CategoryType,
+  DashboardBalanceEvolution,
+  DashboardCashFlowPoint,
+  DashboardExpenseByCategory,
+  DashboardFutureExpensePoint,
+  DashboardSummary,
   CreditCardStatement,
   CreditCardStatementInput,
   CreditCardStatementUpdateInput,
@@ -37,7 +59,7 @@ import type {
   TransactionType,
 } from './types/domain'
 
-type AppSection = 'settings' | 'banks' | 'instruments' | 'categories' | 'transactions' | 'creditCards' | 'subscriptions' | 'fixedExpenses' | 'loans'
+type AppSection = 'dashboard' | 'settings' | 'banks' | 'instruments' | 'categories' | 'transactions' | 'creditCards' | 'subscriptions' | 'fixedExpenses' | 'loans'
 
 const EMPTY_BANK_FORM: BankInput = {
   name: '',
@@ -194,6 +216,14 @@ const EMPTY_FIXED_EXPENSE_PAYMENT_FORM: FixedExpensePaymentInput = {
 }
 
 const MSI_OPTIONS = [3, 6, 9, 12, 18, 24]
+const DASHBOARD_CHART_COLORS = ['#57A6D8', '#2D8F85', '#F4C95D', '#E6A23C', '#F87171', '#A78BFA']
+const EMPTY_DASHBOARD_SUMMARY: DashboardSummary = {
+  totalAvailable: 0,
+  totalCreditDebt: 0,
+  totalLoanDebt: 0,
+  totalAvailableCredit: 0,
+  netBalance: 0,
+}
 
 function toEditableBank(bank: Bank): BankInput {
   return {
@@ -312,7 +342,17 @@ export function App() {
   const [pingResponse, setPingResponse] = useState('')
   const [pingError, setPingError] = useState('')
   const [isPinging, setIsPinging] = useState(false)
-  const [activeSection, setActiveSection] = useState<AppSection>('settings')
+  const [activeSection, setActiveSection] = useState<AppSection>('dashboard')
+  const [dashboardSummary, setDashboardSummary] = useState<DashboardSummary>(EMPTY_DASHBOARD_SUMMARY)
+  const [dashboardExpensesByCategory, setDashboardExpensesByCategory] = useState<DashboardExpenseByCategory[]>([])
+  const [dashboardCashFlow, setDashboardCashFlow] = useState<DashboardCashFlowPoint[]>([])
+  const [dashboardBalanceEvolution, setDashboardBalanceEvolution] = useState<DashboardBalanceEvolution>({
+    series: [],
+    points: [],
+  })
+  const [dashboardFutureExpenses, setDashboardFutureExpenses] = useState<DashboardFutureExpensePoint[]>([])
+  const [isDashboardLoading, setIsDashboardLoading] = useState(false)
+  const [dashboardError, setDashboardError] = useState('')
 
   const [banks, setBanks] = useState<Bank[]>([])
   const [isBanksLoading, setIsBanksLoading] = useState(false)
@@ -513,6 +553,62 @@ export function App() {
 
     return fixedExpenses.find((expense) => expense.id === selectedFixedExpenseId) ?? null
   }, [fixedExpenses, selectedFixedExpenseId])
+
+  const loadDashboard = async (): Promise<void> => {
+    setIsDashboardLoading(true)
+    setDashboardError('')
+
+    const [
+      summaryResult,
+      expensesResult,
+      cashFlowResult,
+      balanceEvolutionResult,
+      futureExpensesResult,
+    ] = await Promise.all([
+      apiClient.getDashboardSummary(),
+      apiClient.getDashboardExpensesByCategory(),
+      apiClient.getDashboardCashFlow(),
+      apiClient.getDashboardBalanceEvolution(),
+      apiClient.getDashboardFutureExpenses(),
+    ])
+
+    if (!summaryResult.success) {
+      setDashboardError(summaryResult.error ?? 'No se pudo cargar el resumen financiero.')
+      setIsDashboardLoading(false)
+      return
+    }
+
+    if (!expensesResult.success) {
+      setDashboardError(expensesResult.error ?? 'No se pudo cargar la grafica de gastos por categoria.')
+      setIsDashboardLoading(false)
+      return
+    }
+
+    if (!cashFlowResult.success) {
+      setDashboardError(cashFlowResult.error ?? 'No se pudo cargar la grafica de flujo de efectivo.')
+      setIsDashboardLoading(false)
+      return
+    }
+
+    if (!balanceEvolutionResult.success) {
+      setDashboardError(balanceEvolutionResult.error ?? 'No se pudo cargar la grafica de evolucion de saldos.')
+      setIsDashboardLoading(false)
+      return
+    }
+
+    if (!futureExpensesResult.success) {
+      setDashboardError(futureExpensesResult.error ?? 'No se pudo cargar la proyeccion de gastos futuros.')
+      setIsDashboardLoading(false)
+      return
+    }
+
+    setDashboardSummary(summaryResult.data ?? EMPTY_DASHBOARD_SUMMARY)
+    setDashboardExpensesByCategory(expensesResult.data ?? [])
+    setDashboardCashFlow(cashFlowResult.data ?? [])
+    setDashboardBalanceEvolution(balanceEvolutionResult.data ?? { series: [], points: [] })
+    setDashboardFutureExpenses(futureExpensesResult.data ?? [])
+    setIsDashboardLoading(false)
+  }
 
   const loadBanks = async (): Promise<void> => {
     setIsBanksLoading(true)
@@ -823,6 +919,11 @@ export function App() {
     setActiveSection(nextSection)
 
     if (!hasConfig) {
+      return
+    }
+
+    if (nextSection === 'dashboard') {
+      void loadDashboard()
       return
     }
 
@@ -1653,6 +1754,13 @@ export function App() {
       <aside className="app-shell__sidebar">
         <h1 className="app-shell__brand">Finanzas Lit</h1>
         <button
+          className={`nav-button ${activeSection === 'dashboard' ? 'nav-button--active' : ''}`}
+          type="button"
+          onClick={() => handleSectionChange('dashboard')}
+        >
+          Dashboard
+        </button>
+        <button
           className={`nav-button ${activeSection === 'settings' ? 'nav-button--active' : ''}`}
           type="button"
           onClick={() => handleSectionChange('settings')}
@@ -1718,6 +1826,150 @@ export function App() {
       </aside>
 
       <section className="app-shell__content">
+        {activeSection === 'dashboard' ? (
+          <section className="card">
+            <header className="card__header">
+              <h2 className="card__title">Dashboard Principal</h2>
+              <p className="card__subtitle">Resumen financiero y tendencias clave de tus finanzas.</p>
+            </header>
+
+            <div className="form-grid__actions">
+              <button
+                className="button button--secondary"
+                type="button"
+                disabled={!hasConfig || isDashboardLoading}
+                onClick={() => {
+                  void loadDashboard()
+                }}
+              >
+                {isDashboardLoading ? 'Cargando...' : 'Recargar dashboard'}
+              </button>
+            </div>
+
+            {dashboardError ? <p className="message message--error">{dashboardError}</p> : null}
+
+            <div className="dashboard-grid">
+              <article className="summary-card">
+                <p className="summary-card__label">Dinero disponible total</p>
+                <p className="summary-card__value summary-card__value--positive">{formatCurrency(dashboardSummary.totalAvailable)}</p>
+              </article>
+              <article className="summary-card">
+                <p className="summary-card__label">Deuda total en TDC</p>
+                <p className="summary-card__value">{formatCurrency(dashboardSummary.totalCreditDebt)}</p>
+              </article>
+              <article className="summary-card">
+                <p className="summary-card__label">Deuda total en prestamos</p>
+                <p className="summary-card__value">{formatCurrency(dashboardSummary.totalLoanDebt)}</p>
+              </article>
+              <article className="summary-card">
+                <p className="summary-card__label">Credito disponible total</p>
+                <p className="summary-card__value summary-card__value--positive">{formatCurrency(dashboardSummary.totalAvailableCredit)}</p>
+              </article>
+              <article className="summary-card dashboard-grid__item--full">
+                <p className="summary-card__label">Balance neto</p>
+                <p className={`summary-card__value ${dashboardSummary.netBalance >= 0 ? 'summary-card__value--positive' : ''}`}>
+                  {formatCurrency(dashboardSummary.netBalance)}
+                </p>
+              </article>
+            </div>
+
+            <div className="dashboard-charts">
+              <article className="mini-card">
+                <header className="mini-card__header">
+                  <h3 className="mini-card__title">Gasto por categoria</h3>
+                </header>
+                {dashboardExpensesByCategory.length === 0 ? (
+                  <p className="card__subtitle">Sin datos para el mes actual.</p>
+                ) : (
+                  <div className="chart-box">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={dashboardExpensesByCategory} dataKey="total" nameKey="category" outerRadius={90} label>
+                          {dashboardExpensesByCategory.map((entry, index) => (
+                            <Cell key={`${entry.category}-${index}`} fill={DASHBOARD_CHART_COLORS[index % DASHBOARD_CHART_COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </article>
+
+              <article className="mini-card">
+                <header className="mini-card__header">
+                  <h3 className="mini-card__title">Flujo mensual: ingresos vs egresos</h3>
+                </header>
+                <div className="chart-box">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={dashboardCashFlow}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                      <XAxis dataKey="month" stroke="var(--color-text-secondary)" />
+                      <YAxis stroke="var(--color-text-secondary)" />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="income" fill="var(--color-success)" name="Ingresos" />
+                      <Bar dataKey="expense" fill="var(--color-error)" name="Egresos" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </article>
+
+              <article className="mini-card">
+                <header className="mini-card__header">
+                  <h3 className="mini-card__title">Evolucion de saldo por cuenta</h3>
+                </header>
+                {dashboardBalanceEvolution.series.length === 0 ? (
+                  <p className="card__subtitle">No hay cuentas de debito/cuenta para graficar.</p>
+                ) : (
+                  <div className="chart-box">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={dashboardBalanceEvolution.points}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                        <XAxis dataKey="month" stroke="var(--color-text-secondary)" />
+                        <YAxis stroke="var(--color-text-secondary)" />
+                        <Tooltip />
+                        <Legend />
+                        {dashboardBalanceEvolution.series.map((series, index) => (
+                          <Line
+                            key={series.key}
+                            type="monotone"
+                            dataKey={series.key}
+                            name={series.label}
+                            stroke={DASHBOARD_CHART_COLORS[index % DASHBOARD_CHART_COLORS.length]}
+                            strokeWidth={2}
+                            dot={false}
+                          />
+                        ))}
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </article>
+
+              <article className="mini-card">
+                <header className="mini-card__header">
+                  <h3 className="mini-card__title">Proyeccion de gastos futuros</h3>
+                </header>
+                <div className="chart-box">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={dashboardFutureExpenses}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                      <XAxis dataKey="month" stroke="var(--color-text-secondary)" />
+                      <YAxis stroke="var(--color-text-secondary)" />
+                      <Tooltip />
+                      <Legend />
+                      <Area type="monotone" dataKey="subscriptions" stackId="1" stroke="#57A6D8" fill="#57A6D8" name="Suscripciones" />
+                      <Area type="monotone" dataKey="fixedExpenses" stackId="1" stroke="#2D8F85" fill="#2D8F85" name="Gastos fijos" />
+                      <Area type="monotone" dataKey="loanPayments" stackId="1" stroke="#E6A23C" fill="#E6A23C" name="Pagos prestamos" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </article>
+            </div>
+          </section>
+        ) : null}
+
         {activeSection === 'settings' ? (
           <section className="card">
             <header className="card__header">

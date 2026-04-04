@@ -674,18 +674,18 @@ Lambda única de .mjs con conexión a la dB de postgreSQL
 
 ### Fase 7 — Dashboard Principal
 
-- [ ]  **Backend:** Endpoints de resumen financiero (vista v_financial_summary)
-- [ ]  **Backend:** Endpoints de agregados para gráficas
-- [ ]  **Frontend:** Dashboard con cards de resumen:
+- [x]  **Backend:** Endpoints de resumen financiero (vista v_financial_summary)
+- [x]  **Backend:** Endpoints de agregados para gráficas
+- [x]  **Frontend:** Dashboard con cards de resumen:
     - Dinero disponible total (todas las cuentas)
     - Deuda total en TDC
     - Deuda total en préstamos
     - Crédito disponible total
     - Balance neto (disponible − deudas)
-- [ ]  **Gráfica:** Gasto por categoría (Pie chart — Recharts)
-- [ ]  **Gráfica:** Flujo de efectivo mensual — ingresos vs egresos (Bar chart)
-- [ ]  **Gráfica:** Evolución de saldo por cuenta (Line chart)
-- [ ]  **Gráfica:** Proyección de gastos futuros (Area chart)
+- [x]  **Gráfica:** Gasto por categoría (Pie chart — Recharts)
+- [x]  **Gráfica:** Flujo de efectivo mensual — ingresos vs egresos (Bar chart)
+- [x]  **Gráfica:** Evolución de saldo por cuenta (Line chart)
+- [x]  **Gráfica:** Proyección de gastos futuros (Area chart)
 
 ### Fase 8 — Módulo Presupuestos y Simulador
 

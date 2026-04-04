@@ -363,3 +363,45 @@ export interface FixedExpensePaymentInput {
   isPaid: boolean
   notes: string
 }
+
+export interface DashboardSummary {
+  totalAvailable: number
+  totalCreditDebt: number
+  totalLoanDebt: number
+  totalAvailableCredit: number
+  netBalance: number
+}
+
+export interface DashboardExpenseByCategory {
+  category: string
+  total: number
+}
+
+export interface DashboardCashFlowPoint {
+  month: string
+  income: number
+  expense: number
+}
+
+export interface DashboardBalanceSeries {
+  key: string
+  label: string
+}
+
+export interface DashboardBalancePoint {
+  month: string
+  [key: string]: string | number
+}
+
+export interface DashboardBalanceEvolution {
+  series: DashboardBalanceSeries[]
+  points: DashboardBalancePoint[]
+}
+
+export interface DashboardFutureExpensePoint {
+  month: string
+  subscriptions: number
+  fixedExpenses: number
+  loanPayments: number
+  total: number
+}
