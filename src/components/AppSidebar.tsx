@@ -11,20 +11,23 @@ type AppSidebarProps = {
 type NavItem = {
   key: AppSection
   label: string
+  showPendingBadge?: boolean
 }
 
 const NAV_ITEMS: NavItem[] = [
   { key: 'dashboard', label: 'Dashboard' },
-  { key: 'settings', label: 'Settings' },
+  { key: 'transactions', label: 'Transacciones' },
+  { key: 'budgets', label: 'Presupuestos' },
+  { key: 'simulator', label: 'Simulador' },
   { key: 'banks', label: 'Bancos' },
   { key: 'instruments', label: 'Instrumentos' },
   { key: 'categories', label: 'Categorias' },
-  { key: 'transactions', label: 'Transacciones' },
   { key: 'creditCards', label: 'Tarjetas y Transferencias' },
   { key: 'subscriptions', label: 'Suscripciones' },
   { key: 'fixedExpenses', label: 'Gastos fijos' },
   { key: 'loans', label: 'Prestamos' },
-  { key: 'budgets', label: 'Presupuestos' },
+  { key: 'reminders', label: 'Recordatorios', showPendingBadge: true },
+  { key: 'settings', label: 'Settings' },
 ]
 const CLOUD_STATUS_LABELS: Record<CloudConnectionStatus, string> = {
   connected: 'Conectado a la nube',
@@ -50,26 +53,10 @@ export function AppSidebar({ activeSection, pendingRemindersCount, cloudConnecti
           type="button"
           onClick={() => onSectionChange(item.key)}
         >
-          {item.label}
+          {item.showPendingBadge ? <span className="nav-button__label">{item.label}</span> : item.label}
+          {item.showPendingBadge && pendingRemindersCount > 0 ? <span className="nav-button__badge">{pendingRemindersCount}</span> : null}
         </button>
       ))}
-
-      <button
-        className={`nav-button ${activeSection === 'reminders' ? 'nav-button--active' : ''}`}
-        type="button"
-        onClick={() => onSectionChange('reminders')}
-      >
-        <span className="nav-button__label">Recordatorios</span>
-        {pendingRemindersCount > 0 ? <span className="nav-button__badge">{pendingRemindersCount}</span> : null}
-      </button>
-
-      <button
-        className={`nav-button ${activeSection === 'simulator' ? 'nav-button--active' : ''}`}
-        type="button"
-        onClick={() => onSectionChange('simulator')}
-      >
-        Simulador
-      </button>
     </aside>
   )
 }
