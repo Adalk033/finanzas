@@ -1,33 +1,52 @@
 import { useMemo, useState, type FormEvent } from 'react'
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Legend,
-  Line,
-  LineChart,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
 import './App.css'
 import { apiClient } from './api/client'
 import { useLocalConfig } from './hooks/useLocalConfig'
+import { AppSidebar } from './components/AppSidebar'
+import { BanksSection } from './components/sections/BanksSection'
+import { CategoriesSection } from './components/sections/CategoriesSection'
+import { DashboardSection } from './components/sections/DashboardSection'
+import { InstrumentsSection } from './components/sections/InstrumentsSection'
+import { SettingsSection } from './components/sections/SettingsSection'
+import {
+  EMPTY_BANK_FORM,
+  EMPTY_BUDGET_FORM,
+  EMPTY_CATEGORY_FORM,
+  EMPTY_DASHBOARD_SUMMARY,
+  EMPTY_FIXED_EXPENSE_FORM,
+  EMPTY_FIXED_EXPENSE_PAYMENT_FORM,
+  EMPTY_INSTRUMENT_FORM,
+  EMPTY_LOAN_FORM,
+  EMPTY_LOAN_PAYMENT_REGISTER,
+  EMPTY_REMINDER_FORM,
+  EMPTY_SIMULATION_FORM,
+  EMPTY_STATEMENT_FORM,
+  EMPTY_STATEMENT_UPDATE_FORM,
+  EMPTY_SUBCATEGORY_FORM,
+  EMPTY_SUBSCRIPTION_FORM,
+  EMPTY_TRANSACTION_FILTERS,
+  EMPTY_TRANSACTION_FORM,
+  EMPTY_TRANSFER_FORM,
+  MSI_OPTIONS,
+  formatCurrency,
+  getBudgetStatusLabel,
+  getReminderTypeLabel,
+  getSimulationScenarioLabel,
+  toEditableBank,
+  toEditableCategory,
+  toEditableFixedExpense,
+  toEditableInstrument,
+  toEditableSubcategory,
+  toEditableSubscription,
+  type AppSection,
+} from './app/appHelpers'
 import type {
   Budget,
   BudgetInput,
-  BudgetStatus,
   Bank,
   BankInput,
   Category,
   CategoryInput,
-  CategoryType,
   DashboardBalanceEvolution,
   DashboardCashFlowPoint,
   DashboardExpenseByCategory,
@@ -49,12 +68,10 @@ import type {
   LoanPaymentRegisterInput,
   Reminder,
   ReminderInput,
-  ReminderType,
   LoanPaymentType,
   Subscription,
   SubscriptionBillingCycle,
   SubscriptionInput,
-  Subcategory,
   SubcategoryInput,
   Simulation,
   SimulationInput,
@@ -66,353 +83,8 @@ import type {
   TransactionFilters,
   TransactionInput,
   TransactionType,
+  ReminderType,
 } from './types/domain'
-
-type AppSection = 'dashboard' | 'settings' | 'banks' | 'instruments' | 'categories' | 'transactions' | 'creditCards' | 'subscriptions' | 'fixedExpenses' | 'loans' | 'budgets' | 'reminders' | 'simulator'
-
-const EMPTY_BANK_FORM: BankInput = {
-  name: '',
-  shortName: '',
-  color: '',
-  iconName: '',
-  isActive: true,
-}
-
-const EMPTY_INSTRUMENT_FORM: FinancialInstrumentInput = {
-  bankId: 0,
-  name: '',
-  type: 'credit_card',
-  lastFour: '',
-  currencyId: 1,
-  creditLimit: 0,
-  currentBalance: 0,
-  availableCredit: 0,
-  cutOffDay: 1,
-  paymentDueDay: 1,
-  annualRate: null,
-  currentAmount: 0,
-  notes: '',
-  isActive: true,
-}
-
-const EMPTY_CATEGORY_FORM: CategoryInput = {
-  name: '',
-  iconName: '',
-  color: '',
-  type: 'expense',
-  isActive: true,
-}
-
-const EMPTY_SUBCATEGORY_FORM: SubcategoryInput = {
-  categoryId: 0,
-  name: '',
-  iconName: '',
-  isActive: true,
-}
-
-const TODAY_ISO = new Date().toISOString().slice(0, 10)
-
-const EMPTY_TRANSACTION_FORM: TransactionInput = {
-  instrumentId: 0,
-  categoryId: null,
-  subcategoryId: null,
-  currencyId: 1,
-  type: 'expense',
-  amount: 0,
-  description: '',
-  transactionDate: TODAY_ISO,
-  notes: '',
-  isMsi: false,
-  msiMonths: null,
-}
-
-const EMPTY_TRANSACTION_FILTERS: TransactionFilters = {
-  fromDate: '',
-  toDate: '',
-  categoryId: undefined,
-  instrumentId: undefined,
-  type: undefined,
-  search: '',
-}
-
-const EMPTY_STATEMENT_FORM: CreditCardStatementInput = {
-  instrumentId: 0,
-  cutOffDate: TODAY_ISO,
-  paymentDueDate: '',
-  minimumPayment: null,
-  noInterestPayment: null,
-}
-
-const EMPTY_STATEMENT_UPDATE_FORM: CreditCardStatementUpdateInput = {
-  paymentDueDate: '',
-  minimumPayment: null,
-  noInterestPayment: null,
-  isPaid: null,
-  paidAmount: null,
-  paidDate: '',
-}
-
-const EMPTY_TRANSFER_FORM: TransferInput = {
-  sourceInstrumentId: 0,
-  destinationInstrumentId: 0,
-  amount: 0,
-  currencyId: 1,
-  transferDate: TODAY_ISO,
-  type: 'card_payment',
-  statementId: null,
-  loanId: null,
-  description: '',
-  notes: '',
-}
-
-const EMPTY_LOAN_FORM: LoanInput = {
-  name: '',
-  lender: '',
-  currencyId: 1,
-  originalAmount: 0,
-  annualRate: null,
-  totalInstallments: 12,
-  paymentType: 'fixed',
-  fixedPayment: 0,
-  paymentDay: 1,
-  startDate: TODAY_ISO,
-  endDate: '',
-  instrumentId: null,
-  notes: '',
-  isActive: true,
-}
-
-const EMPTY_LOAN_PAYMENT_REGISTER: LoanPaymentRegisterInput = {
-  paidDate: TODAY_ISO,
-  amount: null,
-  notes: '',
-}
-
-const EMPTY_SUBSCRIPTION_FORM: SubscriptionInput = {
-  name: '',
-  instrumentId: 0,
-  categoryId: null,
-  subcategoryId: null,
-  currencyId: 1,
-  amount: 0,
-  billingCycle: 'monthly',
-  billingDay: 1,
-  nextBilling: TODAY_ISO,
-  isActive: true,
-  notes: '',
-}
-
-const EMPTY_FIXED_EXPENSE_FORM: FixedExpenseInput = {
-  name: '',
-  instrumentId: null,
-  categoryId: null,
-  subcategoryId: null,
-  currencyId: 1,
-  estimatedAmount: 0,
-  isVariable: false,
-  paymentDay: 1,
-  isActive: true,
-  notes: '',
-}
-
-const EMPTY_FIXED_EXPENSE_PAYMENT_FORM: FixedExpensePaymentInput = {
-  amount: 0,
-  periodMonth: new Date().getMonth() + 1,
-  periodYear: new Date().getFullYear(),
-  paymentDate: TODAY_ISO,
-  isPaid: true,
-  notes: '',
-}
-
-const EMPTY_BUDGET_FORM: BudgetInput = {
-  categoryId: null,
-  currencyId: 1,
-  amount: 0,
-  month: new Date().getMonth() + 1,
-  year: new Date().getFullYear(),
-  notes: '',
-}
-
-const EMPTY_SIMULATION_FORM: SimulationInput = {
-  name: '',
-  description: '',
-  simulationDate: TODAY_ISO,
-  scenarioType: 'direct_purchase',
-  amount: 0,
-  instrumentId: null,
-  msiMonths: null,
-  loanMonths: null,
-  annualRate: null,
-}
-
-const EMPTY_REMINDER_FORM: ReminderInput = {
-  title: '',
-  description: '',
-  reminderDate: TODAY_ISO,
-  type: 'custom',
-  referenceId: null,
-  referenceType: '',
-  isRead: false,
-  isDismissed: false,
-}
-
-const MSI_OPTIONS = [3, 6, 9, 12, 18, 24]
-const DASHBOARD_CHART_COLORS = ['#57A6D8', '#2D8F85', '#F4C95D', '#E6A23C', '#F87171', '#A78BFA']
-const EMPTY_DASHBOARD_SUMMARY: DashboardSummary = {
-  totalAvailable: 0,
-  totalCreditDebt: 0,
-  totalLoanDebt: 0,
-  totalAvailableCredit: 0,
-  netBalance: 0,
-}
-
-function toEditableBank(bank: Bank): BankInput {
-  return {
-    name: bank.name,
-    shortName: bank.shortName ?? '',
-    color: bank.color ?? '',
-    iconName: bank.iconName ?? '',
-    isActive: bank.isActive,
-  }
-}
-
-function toEditableInstrument(instrument: FinancialInstrument): FinancialInstrumentInput {
-  return {
-    bankId: instrument.bankId,
-    name: instrument.name,
-    type: instrument.type,
-    lastFour: instrument.lastFour ?? '',
-    currencyId: instrument.currencyId,
-    creditLimit: instrument.creditLimit,
-    currentBalance: instrument.currentBalance,
-    availableCredit: instrument.availableCredit,
-    cutOffDay: instrument.cutOffDay,
-    paymentDueDay: instrument.paymentDueDay,
-    annualRate: instrument.annualRate,
-    currentAmount: instrument.currentAmount,
-    notes: instrument.notes ?? '',
-    isActive: instrument.isActive,
-  }
-}
-
-function toEditableCategory(category: Category): CategoryInput {
-  return {
-    name: category.name,
-    iconName: category.iconName ?? '',
-    color: category.color ?? '',
-    type: category.type,
-    isActive: category.isActive,
-  }
-}
-
-function toEditableSubcategory(subcategory: Subcategory): SubcategoryInput {
-  return {
-    categoryId: subcategory.categoryId,
-    name: subcategory.name,
-    iconName: subcategory.iconName ?? '',
-    isActive: subcategory.isActive,
-  }
-}
-
-function toEditableSubscription(subscription: Subscription): SubscriptionInput {
-  return {
-    name: subscription.name,
-    instrumentId: subscription.instrumentId,
-    categoryId: subscription.categoryId,
-    subcategoryId: subscription.subcategoryId,
-    currencyId: subscription.currencyId,
-    amount: subscription.amount,
-    billingCycle: subscription.billingCycle,
-    billingDay: subscription.billingDay,
-    nextBilling: subscription.nextBilling ?? '',
-    isActive: subscription.isActive,
-    notes: subscription.notes ?? '',
-  }
-}
-
-function toEditableFixedExpense(expense: FixedExpense): FixedExpenseInput {
-  return {
-    name: expense.name,
-    instrumentId: expense.instrumentId,
-    categoryId: expense.categoryId,
-    subcategoryId: expense.subcategoryId,
-    currencyId: expense.currencyId,
-    estimatedAmount: expense.estimatedAmount,
-    isVariable: expense.isVariable,
-    paymentDay: expense.paymentDay,
-    isActive: expense.isActive,
-    notes: expense.notes ?? '',
-  }
-}
-
-function formatCurrency(amount: number | null): string {
-  if (amount === null) {
-    return '-'
-  }
-
-  return new Intl.NumberFormat('es-MX', {
-    style: 'currency',
-    currency: 'MXN',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount)
-}
-
-function getCategoryTypeLabel(type: CategoryType): string {
-  if (type === 'income') {
-    return 'Ingreso'
-  }
-
-  if (type === 'both') {
-    return 'Ambos'
-  }
-
-  return 'Gasto'
-}
-
-function getBudgetStatusLabel(status: BudgetStatus): string {
-  if (status === 'exceeded') {
-    return 'Excedido'
-  }
-
-  if (status === 'warning') {
-    return 'Al limite'
-  }
-
-  return 'Bajo control'
-}
-
-function getSimulationScenarioLabel(type: SimulationScenarioType): string {
-  if (type === 'msi') {
-    return 'MSI'
-  }
-
-  if (type === 'loan') {
-    return 'Prestamo'
-  }
-
-  return 'Compra directa'
-}
-
-function getReminderTypeLabel(type: ReminderType): string {
-  if (type === 'payment') {
-    return 'Pago'
-  }
-
-  if (type === 'cutoff') {
-    return 'Corte'
-  }
-
-  if (type === 'subscription') {
-    return 'Suscripcion'
-  }
-
-  if (type === 'loan') {
-    return 'Prestamo'
-  }
-
-  return 'Custom'
-}
 
 export function App() {
   const {
@@ -2225,920 +1897,138 @@ export function App() {
 
   return (
     <main className="app-shell">
-      <aside className="app-shell__sidebar">
-        <h1 className="app-shell__brand">Finanzas Lit</h1>
-        <button
-          className={`nav-button ${activeSection === 'dashboard' ? 'nav-button--active' : ''}`}
-          type="button"
-          onClick={() => handleSectionChange('dashboard')}
-        >
-          Dashboard
-        </button>
-        <button
-          className={`nav-button ${activeSection === 'settings' ? 'nav-button--active' : ''}`}
-          type="button"
-          onClick={() => handleSectionChange('settings')}
-        >
-          Settings
-        </button>
-        <button
-          className={`nav-button ${activeSection === 'banks' ? 'nav-button--active' : ''}`}
-          type="button"
-          onClick={() => handleSectionChange('banks')}
-        >
-          Bancos
-        </button>
-        <button
-          className={`nav-button ${activeSection === 'instruments' ? 'nav-button--active' : ''}`}
-          type="button"
-          onClick={() => handleSectionChange('instruments')}
-        >
-          Instrumentos
-        </button>
-        <button
-          className={`nav-button ${activeSection === 'categories' ? 'nav-button--active' : ''}`}
-          type="button"
-          onClick={() => handleSectionChange('categories')}
-        >
-          Categorias
-        </button>
-        <button
-          className={`nav-button ${activeSection === 'transactions' ? 'nav-button--active' : ''}`}
-          type="button"
-          onClick={() => handleSectionChange('transactions')}
-        >
-          Transacciones
-        </button>
-        <button
-          className={`nav-button ${activeSection === 'creditCards' ? 'nav-button--active' : ''}`}
-          type="button"
-          onClick={() => handleSectionChange('creditCards')}
-        >
-          Tarjetas y Transferencias
-        </button>
-        <button
-          className={`nav-button ${activeSection === 'subscriptions' ? 'nav-button--active' : ''}`}
-          type="button"
-          onClick={() => handleSectionChange('subscriptions')}
-        >
-          Suscripciones
-        </button>
-        <button
-          className={`nav-button ${activeSection === 'fixedExpenses' ? 'nav-button--active' : ''}`}
-          type="button"
-          onClick={() => handleSectionChange('fixedExpenses')}
-        >
-          Gastos fijos
-        </button>
-        <button
-          className={`nav-button ${activeSection === 'loans' ? 'nav-button--active' : ''}`}
-          type="button"
-          onClick={() => handleSectionChange('loans')}
-        >
-          Prestamos
-        </button>
-        <button
-          className={`nav-button ${activeSection === 'budgets' ? 'nav-button--active' : ''}`}
-          type="button"
-          onClick={() => handleSectionChange('budgets')}
-        >
-          Presupuestos
-        </button>
-        <button
-          className={`nav-button ${activeSection === 'reminders' ? 'nav-button--active' : ''}`}
-          type="button"
-          onClick={() => handleSectionChange('reminders')}
-        >
-          <span className="nav-button__label">Recordatorios</span>
-          {pendingRemindersCount > 0 ? (
-            <span className="nav-button__badge">{pendingRemindersCount}</span>
-          ) : null}
-        </button>
-        <button
-          className={`nav-button ${activeSection === 'simulator' ? 'nav-button--active' : ''}`}
-          type="button"
-          onClick={() => handleSectionChange('simulator')}
-        >
-          Simulador
-        </button>
-      </aside>
+      <AppSidebar
+        activeSection={activeSection}
+        pendingRemindersCount={pendingRemindersCount}
+        onSectionChange={handleSectionChange}
+      />
 
       <section className="app-shell__content">
         {activeSection === 'dashboard' ? (
-          <section className="card">
-            <header className="card__header">
-              <h2 className="card__title">Dashboard Principal</h2>
-              <p className="card__subtitle">Resumen financiero y tendencias clave de tus finanzas.</p>
-            </header>
-
-            <div className="form-grid__actions">
-              <button
-                className="button button--secondary"
-                type="button"
-                disabled={!hasConfig || isDashboardLoading}
-                onClick={() => {
-                  void loadDashboard()
-                }}
-              >
-                {isDashboardLoading ? 'Cargando...' : 'Recargar dashboard'}
-              </button>
-            </div>
-
-            {!hasConfig ? <p className="message message--info">Configura API Key, endpoint y region en Settings para cargar datos.</p> : null}
-            {isDashboardLoading ? <p className="message message--info">Cargando resumen y graficas del dashboard...</p> : null}
-            {dashboardError ? <p className="message message--error">{dashboardError}</p> : null}
-
-            <div className="dashboard-grid">
-              <article className="summary-card">
-                <p className="summary-card__label">Dinero disponible total</p>
-                <p className="summary-card__value summary-card__value--positive">{formatCurrency(dashboardSummary.totalAvailable)}</p>
-              </article>
-              <article className="summary-card">
-                <p className="summary-card__label">Deuda total en TDC</p>
-                <p className="summary-card__value">{formatCurrency(dashboardSummary.totalCreditDebt)}</p>
-              </article>
-              <article className="summary-card">
-                <p className="summary-card__label">Deuda total en prestamos</p>
-                <p className="summary-card__value">{formatCurrency(dashboardSummary.totalLoanDebt)}</p>
-              </article>
-              <article className="summary-card">
-                <p className="summary-card__label">Credito disponible total</p>
-                <p className="summary-card__value summary-card__value--positive">{formatCurrency(dashboardSummary.totalAvailableCredit)}</p>
-              </article>
-              <article className="summary-card dashboard-grid__item--full">
-                <p className="summary-card__label">Balance neto</p>
-                <p className={`summary-card__value ${dashboardSummary.netBalance >= 0 ? 'summary-card__value--positive' : ''}`}>
-                  {formatCurrency(dashboardSummary.netBalance)}
-                </p>
-              </article>
-            </div>
-
-            <div className="dashboard-charts">
-              <article className="mini-card">
-                <header className="mini-card__header">
-                  <h3 className="mini-card__title">Gasto por categoria</h3>
-                </header>
-                {dashboardExpensesByCategory.length === 0 ? (
-                  <p className="card__subtitle">Sin datos para el mes actual.</p>
-                ) : (
-                  <div className="chart-box">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie data={dashboardExpensesByCategory} dataKey="total" nameKey="category" outerRadius={90} label>
-                          {dashboardExpensesByCategory.map((entry, index) => (
-                            <Cell key={`${entry.category}-${index}`} fill={DASHBOARD_CHART_COLORS[index % DASHBOARD_CHART_COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-              </article>
-
-              <article className="mini-card">
-                <header className="mini-card__header">
-                  <h3 className="mini-card__title">Flujo mensual: ingresos vs egresos</h3>
-                </header>
-                {dashboardCashFlow.length === 0 ? (
-                  <p className="card__subtitle">No hay datos suficientes para el flujo mensual.</p>
-                ) : (
-                  <div className="chart-box">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={dashboardCashFlow}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-                        <XAxis dataKey="month" stroke="var(--color-text-secondary)" />
-                        <YAxis stroke="var(--color-text-secondary)" />
-                        <Tooltip />
-                        <Legend />
-                        <Bar dataKey="income" fill="var(--color-success)" name="Ingresos" />
-                        <Bar dataKey="expense" fill="var(--color-error)" name="Egresos" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-              </article>
-
-              <article className="mini-card">
-                <header className="mini-card__header">
-                  <h3 className="mini-card__title">Evolucion de saldo por cuenta</h3>
-                </header>
-                {dashboardBalanceEvolution.series.length === 0 ? (
-                  <p className="card__subtitle">No hay cuentas de debito/cuenta para graficar.</p>
-                ) : (
-                  <div className="chart-box">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={dashboardBalanceEvolution.points}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-                        <XAxis dataKey="month" stroke="var(--color-text-secondary)" />
-                        <YAxis stroke="var(--color-text-secondary)" />
-                        <Tooltip />
-                        <Legend />
-                        {dashboardBalanceEvolution.series.map((series, index) => (
-                          <Line
-                            key={series.key}
-                            type="monotone"
-                            dataKey={series.key}
-                            name={series.label}
-                            stroke={DASHBOARD_CHART_COLORS[index % DASHBOARD_CHART_COLORS.length]}
-                            strokeWidth={2}
-                            dot={false}
-                          />
-                        ))}
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-              </article>
-
-              <article className="mini-card">
-                <header className="mini-card__header">
-                  <h3 className="mini-card__title">Proyeccion de gastos futuros</h3>
-                </header>
-                {dashboardFutureExpenses.length === 0 ? (
-                  <p className="card__subtitle">No hay proyecciones disponibles por ahora.</p>
-                ) : (
-                  <div className="chart-box">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={dashboardFutureExpenses}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-                        <XAxis dataKey="month" stroke="var(--color-text-secondary)" />
-                        <YAxis stroke="var(--color-text-secondary)" />
-                        <Tooltip />
-                        <Legend />
-                        <Area type="monotone" dataKey="subscriptions" stackId="1" stroke="#57A6D8" fill="#57A6D8" name="Suscripciones" />
-                        <Area type="monotone" dataKey="fixedExpenses" stackId="1" stroke="#2D8F85" fill="#2D8F85" name="Gastos fijos" />
-                        <Area type="monotone" dataKey="loanPayments" stackId="1" stroke="#E6A23C" fill="#E6A23C" name="Pagos prestamos" />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-              </article>
-            </div>
-          </section>
+          <DashboardSection
+            hasConfig={hasConfig}
+            isDashboardLoading={isDashboardLoading}
+            dashboardError={dashboardError}
+            dashboardSummary={dashboardSummary}
+            dashboardExpensesByCategory={dashboardExpensesByCategory}
+            dashboardCashFlow={dashboardCashFlow}
+            dashboardBalanceEvolution={dashboardBalanceEvolution}
+            dashboardFutureExpenses={dashboardFutureExpenses}
+            onReload={() => {
+              void loadDashboard()
+            }}
+          />
         ) : null}
 
         {activeSection === 'settings' ? (
-          <section className="card">
-            <header className="card__header">
-              <h2 className="card__title">Configuracion Inicial</h2>
-              <p className="card__subtitle">Guarda API Key, endpoint HTTPS y region AWS en SQLite local.</p>
-            </header>
-
-            <form className="form-grid" onSubmit={handleSave}>
-              <label className="form-grid__field" htmlFor="apiKey">API Key</label>
-              <input
-                id="apiKey"
-                className="form-grid__input"
-                type="password"
-                value={config.apiKey}
-                onChange={(event) => setConfig({ ...config, apiKey: event.target.value })}
-                placeholder="Ingresa tu x-api-key"
-                autoComplete="off"
-                required
-              />
-
-              <label className="form-grid__field" htmlFor="apiEndpoint">API Endpoint (HTTPS)</label>
-              <input
-                id="apiEndpoint"
-                className="form-grid__input"
-                type="url"
-                value={config.apiEndpoint}
-                onChange={(event) => setConfig({ ...config, apiEndpoint: event.target.value })}
-                placeholder="https://xxxxx.execute-api.us-east-1.amazonaws.com/prod"
-                autoComplete="off"
-                required
-              />
-
-              <label className="form-grid__field" htmlFor="awsRegion">AWS Region</label>
-              <input
-                id="awsRegion"
-                className="form-grid__input"
-                type="text"
-                value={config.awsRegion}
-                onChange={(event) => setConfig({ ...config, awsRegion: event.target.value })}
-                placeholder="us-east-1"
-                autoComplete="off"
-                required
-              />
-
-              <div className="form-grid__actions">
-                <button className="button button--primary" type="submit" disabled={isSaving}>
-                  {isSaving ? 'Guardando...' : 'Guardar configuracion'}
-                </button>
-                <button
-                  className="button button--secondary"
-                  type="button"
-                  disabled={isPinging}
-                  onClick={() => {
-                    void handlePing()
-                  }}
-                >
-                  {isPinging ? 'Probando...' : 'Probar conexion'}
-                </button>
-              </div>
-            </form>
-
-            {error ? <p className="message message--error">{error}</p> : null}
-            {successMessage ? <p className="message message--success">{successMessage}</p> : null}
-            {pingError ? <p className="message message--error">{pingError}</p> : null}
-            {pingResponse ? <p className="message message--info">{pingResponse}</p> : null}
-          </section>
+          <SettingsSection
+            config={config}
+            isSaving={isSaving}
+            isPinging={isPinging}
+            error={error}
+            successMessage={successMessage}
+            pingError={pingError}
+            pingResponse={pingResponse}
+            onConfigChange={setConfig}
+            onSave={handleSave}
+            onPing={() => {
+              void handlePing()
+            }}
+          />
         ) : null}
 
         {activeSection === 'banks' ? (
-          <section className="card">
-            <header className="card__header">
-              <h2 className="card__title">Bancos</h2>
-              <p className="card__subtitle">Alta, edicion y baja logica de entidades bancarias.</p>
-            </header>
-
-            <form className="form-grid" onSubmit={handleBankSubmit}>
-              <label className="form-grid__field" htmlFor="bankName">Nombre del banco</label>
-              <input
-                id="bankName"
-                className="form-grid__input"
-                type="text"
-                value={bankForm.name}
-                onChange={(event) => setBankForm({ ...bankForm, name: event.target.value })}
-                placeholder="BBVA"
-                required
-              />
-
-              <label className="form-grid__field" htmlFor="bankShortName">Nombre corto</label>
-              <input
-                id="bankShortName"
-                className="form-grid__input"
-                type="text"
-                value={bankForm.shortName}
-                onChange={(event) => setBankForm({ ...bankForm, shortName: event.target.value })}
-                placeholder="BBVA"
-              />
-
-              <label className="form-grid__field" htmlFor="bankColor">Color Hex</label>
-              <input
-                id="bankColor"
-                className="form-grid__input"
-                type="text"
-                value={bankForm.color}
-                onChange={(event) => setBankForm({ ...bankForm, color: event.target.value })}
-                placeholder="#0057B8"
-              />
-
-              <label className="form-grid__field" htmlFor="bankIcon">Icono (Lucide)</label>
-              <input
-                id="bankIcon"
-                className="form-grid__input"
-                type="text"
-                value={bankForm.iconName}
-                onChange={(event) => setBankForm({ ...bankForm, iconName: event.target.value })}
-                placeholder="Landmark"
-              />
-
-              <div className="form-grid__actions">
-                <button className="button button--primary" type="submit" disabled={!hasConfig}>
-                  {editingBankId === null ? 'Crear banco' : 'Guardar cambios'}
-                </button>
-                <button className="button button--secondary" type="button" onClick={resetBankEditor}>
-                  Limpiar
-                </button>
-                <button
-                  className="button button--secondary"
-                  type="button"
-                  disabled={!hasConfig}
-                  onClick={() => {
-                    void loadBanks()
-                  }}
-                >
-                  Recargar
-                </button>
-              </div>
-            </form>
-
-            {bankError ? <p className="message message--error">{bankError}</p> : null}
-            {bankMessage ? <p className="message message--success">{bankMessage}</p> : null}
-
-            <div className="table-wrap">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Nombre</th>
-                    <th>Nombre corto</th>
-                    <th>Color</th>
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {isBanksLoading ? (
-                    <tr>
-                      <td colSpan={4}>Cargando bancos...</td>
-                    </tr>
-                  ) : null}
-                  {!isBanksLoading && banks.length === 0 ? (
-                    <tr>
-                      <td colSpan={4}>No hay bancos registrados.</td>
-                    </tr>
-                  ) : null}
-                  {!isBanksLoading
-                    ? banks.map((bank) => (
-                      <tr key={bank.id}>
-                        <td>{bank.name}</td>
-                        <td>{bank.shortName ?? '-'}</td>
-                        <td>{bank.color ?? '-'}</td>
-                        <td>
-                          <div className="table__actions">
-                            <button
-                              className="button button--secondary"
-                              type="button"
-                              onClick={() => {
-                                setEditingBankId(bank.id)
-                                setBankForm(toEditableBank(bank))
-                              }}
-                            >
-                              Editar
-                            </button>
-                            <button
-                              className="button button--danger"
-                              type="button"
-                              onClick={() => {
-                                void handleBankDelete(bank.id)
-                              }}
-                            >
-                              Eliminar
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                    : null}
-                </tbody>
-              </table>
-            </div>
-          </section>
+          <BanksSection
+            hasConfig={hasConfig}
+            editingBankId={editingBankId}
+            bankForm={bankForm}
+            isBanksLoading={isBanksLoading}
+            banks={banks}
+            bankError={bankError}
+            bankMessage={bankMessage}
+            onBankFormChange={setBankForm}
+            onSubmit={handleBankSubmit}
+            onReset={resetBankEditor}
+            onReload={() => {
+              void loadBanks()
+            }}
+            onEdit={(bank) => {
+              setEditingBankId(bank.id)
+              setBankForm(toEditableBank(bank))
+            }}
+            onDelete={(bankId) => {
+              void handleBankDelete(bankId)
+            }}
+          />
         ) : null}
 
         {activeSection === 'instruments' ? (
-          <section className="card">
-            <header className="card__header">
-              <h2 className="card__title">Instrumentos Financieros</h2>
-              <p className="card__subtitle">Gestion de TDC, TDD y cuentas agrupadas por banco.</p>
-            </header>
-
-            <form className="form-grid" onSubmit={handleInstrumentSubmit}>
-              <label className="form-grid__field" htmlFor="instrumentBank">Banco</label>
-              <select
-                id="instrumentBank"
-                className="form-grid__input"
-                value={selectedBankId}
-                onChange={(event) => setInstrumentForm({ ...instrumentForm, bankId: Number(event.target.value) })}
-                required
-              >
-                <option value={0}>Selecciona banco</option>
-                {banks.map((bank) => (
-                  <option key={bank.id} value={bank.id}>{bank.name}</option>
-                ))}
-              </select>
-
-              <label className="form-grid__field" htmlFor="instrumentName">Nombre del instrumento</label>
-              <input
-                id="instrumentName"
-                className="form-grid__input"
-                type="text"
-                value={instrumentForm.name}
-                onChange={(event) => setInstrumentForm({ ...instrumentForm, name: event.target.value })}
-                placeholder="Nu Platinum"
-                required
-              />
-
-              <label className="form-grid__field" htmlFor="instrumentType">Tipo</label>
-              <select
-                id="instrumentType"
-                className="form-grid__input"
-                value={instrumentForm.type}
-                onChange={(event) => handleInstrumentTypeChange(event.target.value as InstrumentType)}
-              >
-                <option value="credit_card">Tarjeta de credito</option>
-                <option value="debit_card">Tarjeta de debito</option>
-                <option value="account">Cuenta bancaria</option>
-              </select>
-
-              <label className="form-grid__field" htmlFor="instrumentLastFour">Ultimos 4 digitos</label>
-              <input
-                id="instrumentLastFour"
-                className="form-grid__input"
-                type="text"
-                value={instrumentForm.lastFour}
-                maxLength={4}
-                onChange={(event) => setInstrumentForm({ ...instrumentForm, lastFour: event.target.value })}
-                placeholder="1234"
-              />
-
-              {instrumentForm.type === 'credit_card' ? (
-                <>
-                  <label className="form-grid__field" htmlFor="creditLimit">Limite de credito</label>
-                  <input
-                    id="creditLimit"
-                    className="form-grid__input"
-                    type="number"
-                    step="0.01"
-                    value={instrumentForm.creditLimit ?? 0}
-                    onChange={(event) => setInstrumentForm({ ...instrumentForm, creditLimit: Number(event.target.value) })}
-                    required
-                  />
-
-                  <label className="form-grid__field" htmlFor="currentBalance">Saldo actual</label>
-                  <input
-                    id="currentBalance"
-                    className="form-grid__input"
-                    type="number"
-                    step="0.01"
-                    value={instrumentForm.currentBalance ?? 0}
-                    onChange={(event) => setInstrumentForm({ ...instrumentForm, currentBalance: Number(event.target.value) })}
-                  />
-
-                  <label className="form-grid__field" htmlFor="cutOffDay">Dia de corte</label>
-                  <input
-                    id="cutOffDay"
-                    className="form-grid__input"
-                    type="number"
-                    min={1}
-                    max={31}
-                    value={instrumentForm.cutOffDay ?? 1}
-                    onChange={(event) => setInstrumentForm({ ...instrumentForm, cutOffDay: Number(event.target.value) })}
-                    required
-                  />
-
-                  <label className="form-grid__field" htmlFor="paymentDueDay">Dia de pago</label>
-                  <input
-                    id="paymentDueDay"
-                    className="form-grid__input"
-                    type="number"
-                    min={1}
-                    max={31}
-                    value={instrumentForm.paymentDueDay ?? 1}
-                    onChange={(event) => setInstrumentForm({ ...instrumentForm, paymentDueDay: Number(event.target.value) })}
-                    required
-                  />
-                </>
-              ) : (
-                <>
-                  <label className="form-grid__field" htmlFor="currentAmount">Saldo actual</label>
-                  <input
-                    id="currentAmount"
-                    className="form-grid__input"
-                    type="number"
-                    step="0.01"
-                    value={instrumentForm.currentAmount ?? 0}
-                    onChange={(event) => setInstrumentForm({ ...instrumentForm, currentAmount: Number(event.target.value) })}
-                    required
-                  />
-                </>
-              )}
-
-              <label className="form-grid__field" htmlFor="instrumentNotes">Notas</label>
-              <input
-                id="instrumentNotes"
-                className="form-grid__input"
-                type="text"
-                value={instrumentForm.notes}
-                onChange={(event) => setInstrumentForm({ ...instrumentForm, notes: event.target.value })}
-                placeholder="Cuenta principal"
-              />
-
-              <div className="form-grid__actions">
-                <button className="button button--primary" type="submit" disabled={!hasConfig || banks.length === 0}>
-                  {editingInstrumentId === null ? 'Crear instrumento' : 'Guardar cambios'}
-                </button>
-                <button className="button button--secondary" type="button" onClick={resetInstrumentEditor}>
-                  Limpiar
-                </button>
-                <button
-                  className="button button--secondary"
-                  type="button"
-                  disabled={!hasConfig}
-                  onClick={() => {
-                    void loadInstruments()
-                  }}
-                >
-                  Recargar
-                </button>
-              </div>
-            </form>
-
-            {instrumentError ? <p className="message message--error">{instrumentError}</p> : null}
-            {instrumentMessage ? <p className="message message--success">{instrumentMessage}</p> : null}
-
-            <div className="group-list">
-              {isInstrumentsLoading ? <p className="card__subtitle">Cargando instrumentos...</p> : null}
-              {!isInstrumentsLoading && groupedInstruments.length === 0 ? (
-                <p className="card__subtitle">No hay instrumentos registrados.</p>
-              ) : null}
-
-              {!isInstrumentsLoading
-                ? groupedInstruments.map((group) => (
-                  <article key={group.bank?.id ?? `bank-${group.instruments[0].bankId}`} className="group-card">
-                    <h3 className="group-card__title">{group.bank?.name ?? 'Banco sin nombre'}</h3>
-                    <div className="table-wrap">
-                      <table className="table">
-                        <thead>
-                          <tr>
-                            <th>Instrumento</th>
-                            <th>Tipo</th>
-                            <th>Detalle</th>
-                            <th>Acciones</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {group.instruments.map((instrument) => (
-                            <tr key={instrument.id}>
-                              <td>{instrument.name}</td>
-                              <td>{instrument.type}</td>
-                              <td>
-                                {instrument.type === 'credit_card'
-                                  ? `Corte ${instrument.cutOffDay ?? '-'} / Pago ${instrument.paymentDueDay ?? '-'} / Limite ${formatCurrency(instrument.creditLimit)} / Saldo ${formatCurrency(instrument.currentBalance)}`
-                                  : `Saldo ${formatCurrency(instrument.currentAmount)}`}
-                              </td>
-                              <td>
-                                <div className="table__actions">
-                                  <button
-                                    className="button button--secondary"
-                                    type="button"
-                                    onClick={() => {
-                                      setEditingInstrumentId(instrument.id)
-                                      setInstrumentForm(toEditableInstrument(instrument))
-                                    }}
-                                  >
-                                    Editar
-                                  </button>
-                                  <button
-                                    className="button button--danger"
-                                    type="button"
-                                    onClick={() => {
-                                      void handleInstrumentDelete(instrument.id)
-                                    }}
-                                  >
-                                    Eliminar
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </article>
-                ))
-                : null}
-            </div>
-          </section>
+          <InstrumentsSection
+            hasConfig={hasConfig}
+            editingInstrumentId={editingInstrumentId}
+            instrumentForm={instrumentForm}
+            selectedBankId={selectedBankId}
+            banks={banks}
+            isInstrumentsLoading={isInstrumentsLoading}
+            groupedInstruments={groupedInstruments}
+            instrumentError={instrumentError}
+            instrumentMessage={instrumentMessage}
+            onInstrumentFormChange={setInstrumentForm}
+            onTypeChange={handleInstrumentTypeChange}
+            onSubmit={handleInstrumentSubmit}
+            onReset={resetInstrumentEditor}
+            onReload={() => {
+              void loadInstruments()
+            }}
+            onEdit={(instrument) => {
+              setEditingInstrumentId(instrument.id)
+              setInstrumentForm(toEditableInstrument(instrument))
+            }}
+            onDelete={(instrumentId) => {
+              void handleInstrumentDelete(instrumentId)
+            }}
+          />
         ) : null}
 
         {activeSection === 'categories' ? (
-          <section className="card">
-            <header className="card__header">
-              <h2 className="card__title">Categorias y Subcategorias</h2>
-              <p className="card__subtitle">CRUD de categorias con subcategorias anidadas y control de eliminacion.</p>
-            </header>
-
-            <div className="category-layout">
-              <section className="mini-card">
-                <header className="mini-card__header">
-                  <h3 className="mini-card__title">Categoria</h3>
-                  <p className="mini-card__subtitle">Define el grupo principal que se usara en gastos e ingresos.</p>
-                </header>
-
-                <form className="form-grid" onSubmit={handleCategorySubmit}>
-                  <label className="form-grid__field" htmlFor="categoryName">Nombre</label>
-                  <input
-                    id="categoryName"
-                    className="form-grid__input"
-                    type="text"
-                    value={categoryForm.name}
-                    onChange={(event) => setCategoryForm({ ...categoryForm, name: event.target.value })}
-                    placeholder="Alimentacion"
-                    required
-                  />
-
-                  <label className="form-grid__field" htmlFor="categoryType">Tipo</label>
-                  <select
-                    id="categoryType"
-                    className="form-grid__input"
-                    value={categoryForm.type}
-                    onChange={(event) => setCategoryForm({ ...categoryForm, type: event.target.value as CategoryType })}
-                  >
-                    <option value="expense">Gasto</option>
-                    <option value="income">Ingreso</option>
-                    <option value="both">Ambos</option>
-                  </select>
-
-                  <label className="form-grid__field" htmlFor="categoryIcon">Icono (Lucide)</label>
-                  <input
-                    id="categoryIcon"
-                    className="form-grid__input"
-                    type="text"
-                    value={categoryForm.iconName}
-                    onChange={(event) => setCategoryForm({ ...categoryForm, iconName: event.target.value })}
-                    placeholder="UtensilsCrossed"
-                  />
-
-                  <label className="form-grid__field" htmlFor="categoryColor">Color</label>
-                  <input
-                    id="categoryColor"
-                    className="form-grid__input"
-                    type="text"
-                    value={categoryForm.color}
-                    onChange={(event) => setCategoryForm({ ...categoryForm, color: event.target.value })}
-                    placeholder="#2d8f85"
-                  />
-
-                  <div className="form-grid__actions">
-                    <button className="button button--primary" type="submit" disabled={!hasConfig}>
-                      {editingCategoryId === null ? 'Crear categoria' : 'Guardar cambios'}
-                    </button>
-                    <button className="button button--secondary" type="button" onClick={resetCategoryEditor}>
-                      Limpiar
-                    </button>
-                    <button
-                      className="button button--secondary"
-                      type="button"
-                      disabled={!hasConfig}
-                      onClick={() => {
-                        void loadCategories()
-                      }}
-                    >
-                      Recargar
-                    </button>
-                  </div>
-                </form>
-
-                {categoryError ? <p className="message message--error">{categoryError}</p> : null}
-                {categoryMessage ? <p className="message message--success">{categoryMessage}</p> : null}
-              </section>
-
-              <section className="mini-card">
-                <header className="mini-card__header">
-                  <h3 className="mini-card__title">Subcategoria</h3>
-                  <p className="mini-card__subtitle">Cada subcategoria vive dentro de una categoria existente.</p>
-                </header>
-
-                <form className="form-grid" onSubmit={handleSubcategorySubmit}>
-                  <label className="form-grid__field" htmlFor="subcategoryCategory">Categoria</label>
-                  <select
-                    id="subcategoryCategory"
-                    className="form-grid__input"
-                    value={selectedSubcategoryCategoryId}
-                    onChange={(event) => setSubcategoryForm({ ...subcategoryForm, categoryId: Number(event.target.value) })}
-                    required
-                  >
-                    <option value={0}>Selecciona categoria</option>
-                    {categoryOptions.map((category) => (
-                      <option key={category.id} value={category.id}>{category.name}</option>
-                    ))}
-                  </select>
-
-                  <label className="form-grid__field" htmlFor="subcategoryName">Nombre</label>
-                  <input
-                    id="subcategoryName"
-                    className="form-grid__input"
-                    type="text"
-                    value={subcategoryForm.name}
-                    onChange={(event) => setSubcategoryForm({ ...subcategoryForm, name: event.target.value })}
-                    placeholder="Despensa"
-                    required
-                  />
-
-                  <label className="form-grid__field" htmlFor="subcategoryIcon">Icono (Lucide)</label>
-                  <input
-                    id="subcategoryIcon"
-                    className="form-grid__input"
-                    type="text"
-                    value={subcategoryForm.iconName}
-                    onChange={(event) => setSubcategoryForm({ ...subcategoryForm, iconName: event.target.value })}
-                    placeholder="ShoppingCart"
-                  />
-
-                  <div className="form-grid__actions">
-                    <button className="button button--primary" type="submit" disabled={!hasConfig || categories.length === 0}>
-                      {editingSubcategoryId === null ? 'Crear subcategoria' : 'Guardar cambios'}
-                    </button>
-                    <button className="button button--secondary" type="button" onClick={resetSubcategoryEditor}>
-                      Limpiar
-                    </button>
-                    <button
-                      className="button button--secondary"
-                      type="button"
-                      disabled={!hasConfig}
-                      onClick={() => {
-                        void loadCategories()
-                      }}
-                    >
-                      Recargar
-                    </button>
-                  </div>
-                </form>
-
-                {subcategoryError ? <p className="message message--error">{subcategoryError}</p> : null}
-                {subcategoryMessage ? <p className="message message--success">{subcategoryMessage}</p> : null}
-              </section>
-            </div>
-
-            <div className="category-list">
-              {isCategoriesLoading ? <p className="card__subtitle">Cargando categorias...</p> : null}
-              {!isCategoriesLoading && categories.length === 0 ? (
-                <p className="card__subtitle">No hay categorias registradas.</p>
-              ) : null}
-
-              {!isCategoriesLoading
-                ? categories.map((category) => (
-                  <article key={category.id} className="category-card">
-                    <header className="category-card__header">
-                      <div>
-                        <h3 className="category-card__title">{category.name}</h3>
-                        <p className="category-card__meta">
-                          {getCategoryTypeLabel(category.type)} · {category.subcategories.length} subcategorias
-                        </p>
-                      </div>
-                      <div className="category-card__badges">
-                        {category.isSystem ? <span className="badge badge--info">Sistema</span> : null}
-                        {category.canDelete ? <span className="badge badge--success">Eliminable</span> : <span className="badge badge--warning">Protegida</span>}
-                      </div>
-                    </header>
-
-                    <div className="table-wrap">
-                      <table className="table">
-                        <thead>
-                          <tr>
-                            <th>Subcategoria</th>
-                            <th>Icono</th>
-                            <th>Acciones</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {category.subcategories.length === 0 ? (
-                            <tr>
-                              <td colSpan={3}>No hay subcategorias en esta categoria.</td>
-                            </tr>
-                          ) : null}
-                          {category.subcategories.map((subcategory) => (
-                            <tr key={subcategory.id}>
-                              <td>{subcategory.name}</td>
-                              <td>{subcategory.iconName ?? '-'}</td>
-                              <td>
-                                <div className="table__actions">
-                                  <button
-                                    className="button button--secondary"
-                                    type="button"
-                                    onClick={() => {
-                                      setEditingSubcategoryId(subcategory.id)
-                                      setSubcategoryForm(toEditableSubcategory(subcategory))
-                                    }}
-                                  >
-                                    Editar
-                                  </button>
-                                  <button
-                                    className="button button--danger"
-                                    type="button"
-                                    onClick={() => {
-                                      void handleSubcategoryDelete(subcategory.id)
-                                    }}
-                                  >
-                                    Eliminar
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    <div className="category-card__actions">
-                      <button
-                        className="button button--secondary"
-                        type="button"
-                        onClick={() => {
-                          setEditingCategoryId(category.id)
-                          setCategoryForm(toEditableCategory(category))
-                        }}
-                      >
-                        Editar categoria
-                      </button>
-                      <button
-                        className="button button--danger"
-                        type="button"
-                        disabled={!category.canDelete}
-                        onClick={() => {
-                          void handleCategoryDelete(category.id)
-                        }}
-                      >
-                        Eliminar categoria
-                      </button>
-                    </div>
-                  </article>
-                ))
-                : null}
-            </div>
-          </section>
+          <CategoriesSection
+            hasConfig={hasConfig}
+            categories={categories}
+            isCategoriesLoading={isCategoriesLoading}
+            categoryForm={categoryForm}
+            subcategoryForm={subcategoryForm}
+            categoryOptions={categoryOptions}
+            selectedSubcategoryCategoryId={selectedSubcategoryCategoryId}
+            editingCategoryId={editingCategoryId}
+            editingSubcategoryId={editingSubcategoryId}
+            categoryError={categoryError}
+            categoryMessage={categoryMessage}
+            subcategoryError={subcategoryError}
+            subcategoryMessage={subcategoryMessage}
+            onCategoryFormChange={setCategoryForm}
+            onSubcategoryFormChange={setSubcategoryForm}
+            onCategorySubmit={handleCategorySubmit}
+            onSubcategorySubmit={handleSubcategorySubmit}
+            onCategoryReset={resetCategoryEditor}
+            onSubcategoryReset={resetSubcategoryEditor}
+            onReload={() => {
+              void loadCategories()
+            }}
+            onEditCategory={(category) => {
+              setEditingCategoryId(category.id)
+              setCategoryForm(toEditableCategory(category))
+            }}
+            onDeleteCategory={(categoryId) => {
+              void handleCategoryDelete(categoryId)
+            }}
+            onEditSubcategory={(subcategory) => {
+              setEditingSubcategoryId(subcategory.id)
+              setSubcategoryForm(toEditableSubcategory(subcategory))
+            }}
+            onDeleteSubcategory={(subcategoryId) => {
+              void handleSubcategoryDelete(subcategoryId)
+            }}
+          />
         ) : null}
 
         {activeSection === 'transactions' ? (
