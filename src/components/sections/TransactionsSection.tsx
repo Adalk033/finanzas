@@ -1,4 +1,4 @@
-import type { SyntheticEvent } from 'react'
+import { useEffect, useState, type SyntheticEvent } from 'react'
 import { MSI_OPTIONS, formatCurrency } from '../../app/appHelpers'
 import type {
   Category,
@@ -73,6 +73,15 @@ export function TransactionsSection({
   onClearFilters,
   onReload,
 }: TransactionsSectionProps) {
+  const [isTransactionFormOpen, setIsTransactionFormOpen] = useState(editingTransactionId !== null)
+  const [isFiltersFormOpen, setIsFiltersFormOpen] = useState(false)
+
+  useEffect(() => {
+    if (editingTransactionId !== null) {
+      setIsTransactionFormOpen(true)
+    }
+  }, [editingTransactionId])
+
   const isAutoAdjustmentTransaction = (transaction: Transaction): boolean => {
     const notes = transaction.notes ?? ''
     const description = transaction.description ?? ''
@@ -87,6 +96,17 @@ export function TransactionsSection({
         <p className="card__subtitle">Registro de gastos/ingresos, filtros y vista de MSI activas.</p>
       </header>
 
+      <div className="section-toolbar">
+        <button className="button button--primary" type="button" onClick={() => setIsTransactionFormOpen((value) => !value)}>
+          {isTransactionFormOpen ? 'Ocultar formulario' : editingTransactionId === null ? 'Nueva transaccion' : 'Editar transaccion'}
+        </button>
+        <button className="button button--secondary" type="button" onClick={() => setIsFiltersFormOpen((value) => !value)}>
+          {isFiltersFormOpen ? 'Ocultar filtros' : 'Filtros'}
+        </button>
+        <div className="section-toolbar__spacer" />
+        <button className="button button--secondary" type="button" onClick={onReload}>Recargar</button>
+      </div>
+
       <div className="transaction-layout">
         <section className="mini-card">
           <header className="mini-card__header">
@@ -94,7 +114,9 @@ export function TransactionsSection({
             <p className="mini-card__subtitle">Crea gastos o ingresos asociados a instrumento y categoria.</p>
           </header>
 
-          <form className="form-grid" onSubmit={onTransactionSubmit}>
+          {isTransactionFormOpen ? (
+            <div className="section-panel">
+              <form className="form-grid" onSubmit={onTransactionSubmit}>
             <label className="form-grid__field" htmlFor="transactionInstrument">Instrumento</label>
             <select
               id="transactionInstrument"
@@ -237,15 +259,17 @@ export function TransactionsSection({
               </>
             ) : null}
 
-            <div className="form-grid__actions">
-              <button className="button button--primary" type="submit" disabled={!hasConfig || instruments.length === 0}>
-                {editingTransactionId === null ? 'Crear transaccion' : 'Guardar cambios'}
-              </button>
-              <button className="button button--secondary" type="button" onClick={onResetTransactionForm}>
-                {editingTransactionId === null ? 'Limpiar' : 'Cancelar edicion'}
-              </button>
+                <div className="form-grid__actions">
+                  <button className="button button--primary" type="submit" disabled={!hasConfig || instruments.length === 0}>
+                    {editingTransactionId === null ? 'Crear transaccion' : 'Guardar cambios'}
+                  </button>
+                  <button className="button button--secondary" type="button" onClick={onResetTransactionForm}>
+                    {editingTransactionId === null ? 'Limpiar' : 'Cancelar edicion'}
+                  </button>
+                </div>
+              </form>
             </div>
-          </form>
+          ) : null}
         </section>
 
         <section className="mini-card">
@@ -254,7 +278,9 @@ export function TransactionsSection({
             <p className="mini-card__subtitle">Refina por fecha, tipo, categoria, instrumento y texto.</p>
           </header>
 
-          <form className="form-grid" onSubmit={onFiltersSubmit}>
+          {isFiltersFormOpen ? (
+            <div className="section-panel">
+              <form className="form-grid" onSubmit={onFiltersSubmit}>
             <label className="form-grid__field" htmlFor="filterFromDate">Desde</label>
             <input
               id="filterFromDate"
@@ -341,18 +367,17 @@ export function TransactionsSection({
               {' '}Solo mostrar Otros (por ajuste)
             </label>
 
-            <div className="form-grid__actions">
-              <button className="button button--primary" type="submit" disabled={!hasConfig}>
-                Aplicar filtros
-              </button>
-              <button className="button button--secondary" type="button" onClick={onClearFilters}>
-                Limpiar filtros
-              </button>
-              <button className="button button--secondary" type="button" onClick={onReload}>
-                Recargar
-              </button>
+                <div className="form-grid__actions">
+                  <button className="button button--primary" type="submit" disabled={!hasConfig}>
+                    Aplicar filtros
+                  </button>
+                  <button className="button button--secondary" type="button" onClick={onClearFilters}>
+                    Limpiar filtros
+                  </button>
+                </div>
+              </form>
             </div>
-          </form>
+          ) : null}
         </section>
       </div>
 

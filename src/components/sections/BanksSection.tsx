@@ -1,4 +1,4 @@
-import type { SyntheticEvent } from 'react'
+import { useEffect, useState, type SyntheticEvent } from 'react'
 import type { Bank, BankInput } from '../../types/domain'
 
 type BanksSectionProps = {
@@ -32,6 +32,14 @@ export function BanksSection({
   onEdit,
   onDelete,
 }: BanksSectionProps) {
+  const [isFormOpen, setIsFormOpen] = useState(editingBankId !== null)
+
+  useEffect(() => {
+    if (editingBankId !== null) {
+      setIsFormOpen(true)
+    }
+  }, [editingBankId])
+
   return (
     <section className="card">
       <header className="card__header">
@@ -39,60 +47,71 @@ export function BanksSection({
         <p className="card__subtitle">Alta, edicion y baja logica de entidades bancarias.</p>
       </header>
 
-      <form className="form-grid" onSubmit={onSubmit}>
-        <label className="form-grid__field" htmlFor="bankName">Nombre del banco</label>
-        <input
-          id="bankName"
-          className="form-grid__input"
-          type="text"
-          value={bankForm.name}
-          onChange={(event) => onBankFormChange({ ...bankForm, name: event.target.value })}
-          placeholder="BBVA"
-          required
-        />
+      <div className="section-toolbar">
+        <button className="button button--primary" type="button" onClick={() => setIsFormOpen((value) => !value)}>
+          {isFormOpen ? 'Ocultar formulario' : editingBankId === null ? 'Nuevo banco' : 'Editar banco'}
+        </button>
+        <div className="section-toolbar__spacer" />
+        <button className="button button--secondary" type="button" disabled={!hasConfig} onClick={onReload}>
+          Recargar
+        </button>
+      </div>
 
-        <label className="form-grid__field" htmlFor="bankShortName">Nombre corto</label>
-        <input
-          id="bankShortName"
-          className="form-grid__input"
-          type="text"
-          value={bankForm.shortName}
-          onChange={(event) => onBankFormChange({ ...bankForm, shortName: event.target.value })}
-          placeholder="BBVA"
-        />
+      {isFormOpen ? (
+        <div className="section-panel">
+          <form className="form-grid" onSubmit={onSubmit}>
+            <label className="form-grid__field" htmlFor="bankName">Nombre del banco</label>
+            <input
+              id="bankName"
+              className="form-grid__input"
+              type="text"
+              value={bankForm.name}
+              onChange={(event) => onBankFormChange({ ...bankForm, name: event.target.value })}
+              placeholder="BBVA"
+              required
+            />
 
-        <label className="form-grid__field" htmlFor="bankColor">Color Hex</label>
-        <input
-          id="bankColor"
-          className="form-grid__input"
-          type="text"
-          value={bankForm.color}
-          onChange={(event) => onBankFormChange({ ...bankForm, color: event.target.value })}
-          placeholder="#0057B8"
-        />
+            <label className="form-grid__field" htmlFor="bankShortName">Nombre corto</label>
+            <input
+              id="bankShortName"
+              className="form-grid__input"
+              type="text"
+              value={bankForm.shortName}
+              onChange={(event) => onBankFormChange({ ...bankForm, shortName: event.target.value })}
+              placeholder="BBVA"
+            />
 
-        <label className="form-grid__field" htmlFor="bankIcon">Icono (Lucide)</label>
-        <input
-          id="bankIcon"
-          className="form-grid__input"
-          type="text"
-          value={bankForm.iconName}
-          onChange={(event) => onBankFormChange({ ...bankForm, iconName: event.target.value })}
-          placeholder="Landmark"
-        />
+            <label className="form-grid__field" htmlFor="bankColor">Color Hex</label>
+            <input
+              id="bankColor"
+              className="form-grid__input"
+              type="text"
+              value={bankForm.color}
+              onChange={(event) => onBankFormChange({ ...bankForm, color: event.target.value })}
+              placeholder="#0057B8"
+            />
 
-        <div className="form-grid__actions">
-          <button className="button button--primary" type="submit" disabled={!hasConfig}>
-            {editingBankId === null ? 'Crear banco' : 'Guardar cambios'}
-          </button>
-          <button className="button button--secondary" type="button" onClick={onReset}>
-            Limpiar
-          </button>
-          <button className="button button--secondary" type="button" disabled={!hasConfig} onClick={onReload}>
-            Recargar
-          </button>
+            <label className="form-grid__field" htmlFor="bankIcon">Icono (Lucide)</label>
+            <input
+              id="bankIcon"
+              className="form-grid__input"
+              type="text"
+              value={bankForm.iconName}
+              onChange={(event) => onBankFormChange({ ...bankForm, iconName: event.target.value })}
+              placeholder="Landmark"
+            />
+
+            <div className="form-grid__actions">
+              <button className="button button--primary" type="submit" disabled={!hasConfig}>
+                {editingBankId === null ? 'Crear banco' : 'Guardar cambios'}
+              </button>
+              <button className="button button--secondary" type="button" onClick={onReset}>
+                Limpiar
+              </button>
+            </div>
+          </form>
         </div>
-      </form>
+      ) : null}
 
       {bankError ? <p className="message message--error">{bankError}</p> : null}
       {bankMessage ? <p className="message message--success">{bankMessage}</p> : null}

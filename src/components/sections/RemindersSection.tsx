@@ -1,4 +1,4 @@
-import type { SyntheticEvent } from 'react'
+import { useEffect, useState, type SyntheticEvent } from 'react'
 import { getReminderTypeLabel } from '../../app/appHelpers'
 import type { Reminder, ReminderInput, ReminderType } from '../../types/domain'
 
@@ -39,6 +39,14 @@ export function RemindersSection({
   onDismiss,
   onDelete,
 }: RemindersSectionProps) {
+  const [isFormOpen, setIsFormOpen] = useState(editingReminderId !== null)
+
+  useEffect(() => {
+    if (editingReminderId !== null) {
+      setIsFormOpen(true)
+    }
+  }, [editingReminderId])
+
   return (
     <section className="card">
       <header className="card__header">
@@ -49,13 +57,21 @@ export function RemindersSection({
       {reminderMessage ? <p className="message message--success">{reminderMessage}</p> : null}
       {reminderError ? <p className="message message--error">{reminderError}</p> : null}
 
+      <div className="section-toolbar">
+        <button className="button button--primary" type="button" onClick={() => setIsFormOpen((value) => !value)}>
+          {isFormOpen ? 'Ocultar formulario' : editingReminderId === null ? 'Nuevo recordatorio' : 'Editar recordatorio'}
+        </button>
+      </div>
+
       <div className="phase8-layout">
         <article className="mini-card">
           <header className="mini-card__header">
             <h3 className="mini-card__title">{editingReminderId === null ? 'Nuevo recordatorio' : 'Editar recordatorio'}</h3>
           </header>
 
-          <form className="form-grid" onSubmit={onSubmit}>
+          {isFormOpen ? (
+            <div className="section-panel">
+              <form className="form-grid" onSubmit={onSubmit}>
             <label className="form-grid__field" htmlFor="reminderTitle">Titulo</label>
             <input
               id="reminderTitle"
@@ -132,15 +148,17 @@ export function RemindersSection({
               }}
             />
 
-            <div className="form-grid__actions">
-              <button className="button button--primary" type="submit" disabled={!hasConfig || isRemindersLoading}>
-                {editingReminderId === null ? 'Guardar recordatorio' : 'Actualizar recordatorio'}
-              </button>
-              <button className="button button--secondary" type="button" onClick={onReset}>
-                Limpiar
-              </button>
+                <div className="form-grid__actions">
+                  <button className="button button--primary" type="submit" disabled={!hasConfig || isRemindersLoading}>
+                    {editingReminderId === null ? 'Guardar recordatorio' : 'Actualizar recordatorio'}
+                  </button>
+                  <button className="button button--secondary" type="button" onClick={onReset}>
+                    Limpiar
+                  </button>
+                </div>
+              </form>
             </div>
-          </form>
+          ) : null}
         </article>
 
         <article className="mini-card">

@@ -1,4 +1,4 @@
-import type { SyntheticEvent } from 'react'
+import { useEffect, useState, type SyntheticEvent } from 'react'
 import { formatCurrency } from '../../app/appHelpers'
 import type {
   Category,
@@ -47,6 +47,14 @@ export function SubscriptionsSection({
   onEdit,
   onDelete,
 }: SubscriptionsSectionProps) {
+  const [isFormOpen, setIsFormOpen] = useState(editingSubscriptionId !== null)
+
+  useEffect(() => {
+    if (editingSubscriptionId !== null) {
+      setIsFormOpen(true)
+    }
+  }, [editingSubscriptionId])
+
   return (
     <section className="card">
       <header className="card__header">
@@ -61,131 +69,142 @@ export function SubscriptionsSection({
             <p className="mini-card__subtitle">Define monto, ciclo y proximo cargo esperado.</p>
           </header>
 
-          <form className="form-grid" onSubmit={onSubmit}>
-            <label className="form-grid__field" htmlFor="subscriptionName">Nombre</label>
-            <input
-              id="subscriptionName"
-              className="form-grid__input"
-              type="text"
-              value={subscriptionForm.name}
-              onChange={(event) => onSubscriptionFormChange({ ...subscriptionForm, name: event.target.value })}
-              placeholder="Netflix"
-              required
-            />
+          <div className="section-toolbar">
+            <button className="button button--primary" type="button" onClick={() => setIsFormOpen((value) => !value)}>
+              {isFormOpen ? 'Ocultar formulario' : editingSubscriptionId === null ? 'Nueva suscripcion' : 'Editar suscripcion'}
+            </button>
+            <div className="section-toolbar__spacer" />
+            <button className="button button--secondary" type="button" onClick={onReload}>
+              Recargar
+            </button>
+          </div>
 
-            <label className="form-grid__field" htmlFor="subscriptionInstrument">Instrumento</label>
-            <select
-              id="subscriptionInstrument"
-              className="form-grid__input"
-              value={subscriptionForm.instrumentId}
-              onChange={(event) => onSubscriptionFormChange({ ...subscriptionForm, instrumentId: Number(event.target.value) })}
-              required
-            >
-              <option value={0}>Selecciona instrumento</option>
-              {instruments.map((instrument) => (
-                <option key={instrument.id} value={instrument.id}>{instrument.name}</option>
-              ))}
-            </select>
+          {isFormOpen ? (
+            <div className="section-panel">
+              <form className="form-grid" onSubmit={onSubmit}>
+                <label className="form-grid__field" htmlFor="subscriptionName">Nombre</label>
+                <input
+                  id="subscriptionName"
+                  className="form-grid__input"
+                  type="text"
+                  value={subscriptionForm.name}
+                  onChange={(event) => onSubscriptionFormChange({ ...subscriptionForm, name: event.target.value })}
+                  placeholder="Netflix"
+                  required
+                />
 
-            <label className="form-grid__field" htmlFor="subscriptionAmount">Monto</label>
-            <input
-              id="subscriptionAmount"
-              className="form-grid__input"
-              type="number"
-              min={0.01}
-              step="0.01"
-              value={subscriptionForm.amount}
-              onChange={(event) => onSubscriptionFormChange({ ...subscriptionForm, amount: Number(event.target.value) })}
-              required
-            />
+                <label className="form-grid__field" htmlFor="subscriptionInstrument">Instrumento</label>
+                <select
+                  id="subscriptionInstrument"
+                  className="form-grid__input"
+                  value={subscriptionForm.instrumentId}
+                  onChange={(event) => onSubscriptionFormChange({ ...subscriptionForm, instrumentId: Number(event.target.value) })}
+                  required
+                >
+                  <option value={0}>Selecciona instrumento</option>
+                  {instruments.map((instrument) => (
+                    <option key={instrument.id} value={instrument.id}>{instrument.name}</option>
+                  ))}
+                </select>
 
-            <label className="form-grid__field" htmlFor="subscriptionCycle">Ciclo</label>
-            <select
-              id="subscriptionCycle"
-              className="form-grid__input"
-              value={subscriptionForm.billingCycle}
-              onChange={(event) => onBillingCycleChange(event.target.value as SubscriptionBillingCycle)}
-            >
-              <option value="monthly">Mensual</option>
-              <option value="yearly">Anual</option>
-              <option value="weekly">Semanal</option>
-            </select>
+                <label className="form-grid__field" htmlFor="subscriptionAmount">Monto</label>
+                <input
+                  id="subscriptionAmount"
+                  className="form-grid__input"
+                  type="number"
+                  min={0.01}
+                  step="0.01"
+                  value={subscriptionForm.amount}
+                  onChange={(event) => onSubscriptionFormChange({ ...subscriptionForm, amount: Number(event.target.value) })}
+                  required
+                />
 
-            <label className="form-grid__field" htmlFor="subscriptionBillingDay">Dia de cargo</label>
-            <input
-              id="subscriptionBillingDay"
-              className="form-grid__input"
-              type="number"
-              min={1}
-              max={31}
-              value={subscriptionForm.billingDay ?? 1}
-              onChange={(event) => onSubscriptionFormChange({ ...subscriptionForm, billingDay: Number(event.target.value) })}
-            />
+                <label className="form-grid__field" htmlFor="subscriptionCycle">Ciclo</label>
+                <select
+                  id="subscriptionCycle"
+                  className="form-grid__input"
+                  value={subscriptionForm.billingCycle}
+                  onChange={(event) => onBillingCycleChange(event.target.value as SubscriptionBillingCycle)}
+                >
+                  <option value="monthly">Mensual</option>
+                  <option value="yearly">Anual</option>
+                  <option value="weekly">Semanal</option>
+                </select>
 
-            <label className="form-grid__field" htmlFor="subscriptionNextBilling">Proximo cargo</label>
-            <input
-              id="subscriptionNextBilling"
-              className="form-grid__input"
-              type="date"
-              value={subscriptionForm.nextBilling}
-              onChange={(event) => onSubscriptionFormChange({ ...subscriptionForm, nextBilling: event.target.value })}
-            />
+                <label className="form-grid__field" htmlFor="subscriptionBillingDay">Dia de cargo</label>
+                <input
+                  id="subscriptionBillingDay"
+                  className="form-grid__input"
+                  type="number"
+                  min={1}
+                  max={31}
+                  value={subscriptionForm.billingDay ?? 1}
+                  onChange={(event) => onSubscriptionFormChange({ ...subscriptionForm, billingDay: Number(event.target.value) })}
+                />
 
-            <label className="form-grid__field" htmlFor="subscriptionCategory">Categoria</label>
-            <select
-              id="subscriptionCategory"
-              className="form-grid__input"
-              value={subscriptionForm.categoryId ?? ''}
-              onChange={(event) => {
-                const nextCategoryId = event.target.value ? Number(event.target.value) : null
-                onSubscriptionFormChange({ ...subscriptionForm, categoryId: nextCategoryId, subcategoryId: null })
-              }}
-            >
-              <option value="">Sin categoria</option>
-              {expenseCategoryOptions.map((category) => (
-                <option key={category.id} value={category.id}>{category.name}</option>
-              ))}
-            </select>
+                <label className="form-grid__field" htmlFor="subscriptionNextBilling">Proximo cargo</label>
+                <input
+                  id="subscriptionNextBilling"
+                  className="form-grid__input"
+                  type="date"
+                  value={subscriptionForm.nextBilling}
+                  onChange={(event) => onSubscriptionFormChange({ ...subscriptionForm, nextBilling: event.target.value })}
+                />
 
-            <label className="form-grid__field" htmlFor="subscriptionSubcategory">Subcategoria</label>
-            <select
-              id="subscriptionSubcategory"
-              className="form-grid__input"
-              value={subscriptionForm.subcategoryId ?? ''}
-              onChange={(event) => {
-                const nextSubcategoryId = event.target.value ? Number(event.target.value) : null
-                onSubscriptionFormChange({ ...subscriptionForm, subcategoryId: nextSubcategoryId })
-              }}
-              disabled={!selectedSubscriptionCategory}
-            >
-              <option value="">Sin subcategoria</option>
-              {(selectedSubscriptionCategory?.subcategories ?? []).map((subcategory) => (
-                <option key={subcategory.id} value={subcategory.id}>{subcategory.name}</option>
-              ))}
-            </select>
+                <label className="form-grid__field" htmlFor="subscriptionCategory">Categoria</label>
+                <select
+                  id="subscriptionCategory"
+                  className="form-grid__input"
+                  value={subscriptionForm.categoryId ?? ''}
+                  onChange={(event) => {
+                    const nextCategoryId = event.target.value ? Number(event.target.value) : null
+                    onSubscriptionFormChange({ ...subscriptionForm, categoryId: nextCategoryId, subcategoryId: null })
+                  }}
+                >
+                  <option value="">Sin categoria</option>
+                  {expenseCategoryOptions.map((category) => (
+                    <option key={category.id} value={category.id}>{category.name}</option>
+                  ))}
+                </select>
 
-            <label className="form-grid__field" htmlFor="subscriptionNotes">Notas</label>
-            <input
-              id="subscriptionNotes"
-              className="form-grid__input"
-              type="text"
-              value={subscriptionForm.notes}
-              onChange={(event) => onSubscriptionFormChange({ ...subscriptionForm, notes: event.target.value })}
-              placeholder="Opcional"
-            />
+                <label className="form-grid__field" htmlFor="subscriptionSubcategory">Subcategoria</label>
+                <select
+                  id="subscriptionSubcategory"
+                  className="form-grid__input"
+                  value={subscriptionForm.subcategoryId ?? ''}
+                  onChange={(event) => {
+                    const nextSubcategoryId = event.target.value ? Number(event.target.value) : null
+                    onSubscriptionFormChange({ ...subscriptionForm, subcategoryId: nextSubcategoryId })
+                  }}
+                  disabled={!selectedSubscriptionCategory}
+                >
+                  <option value="">Sin subcategoria</option>
+                  {(selectedSubscriptionCategory?.subcategories ?? []).map((subcategory) => (
+                    <option key={subcategory.id} value={subcategory.id}>{subcategory.name}</option>
+                  ))}
+                </select>
 
-            <div className="form-grid__actions">
-              <button className="button button--primary" type="submit" disabled={!hasConfig || instruments.length === 0}>
-                {editingSubscriptionId === null ? 'Crear suscripcion' : 'Guardar cambios'}
-              </button>
-              <button className="button button--secondary" type="button" onClick={onReset}>
-                Limpiar
-              </button>
-              <button className="button button--secondary" type="button" onClick={onReload}>
-                Recargar
-              </button>
+                <label className="form-grid__field" htmlFor="subscriptionNotes">Notas</label>
+                <input
+                  id="subscriptionNotes"
+                  className="form-grid__input"
+                  type="text"
+                  value={subscriptionForm.notes}
+                  onChange={(event) => onSubscriptionFormChange({ ...subscriptionForm, notes: event.target.value })}
+                  placeholder="Opcional"
+                />
+
+                <div className="form-grid__actions">
+                  <button className="button button--primary" type="submit" disabled={!hasConfig || instruments.length === 0}>
+                    {editingSubscriptionId === null ? 'Crear suscripcion' : 'Guardar cambios'}
+                  </button>
+                  <button className="button button--secondary" type="button" onClick={onReset}>
+                    Limpiar
+                  </button>
+                </div>
+              </form>
             </div>
-          </form>
+          ) : null}
         </section>
 
         <section className="mini-card">

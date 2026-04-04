@@ -163,6 +163,17 @@ CREATE TABLE IF NOT EXISTS subscriptions (
 
 CREATE INDEX IF NOT EXISTS idx_subscriptions_instrument ON subscriptions(instrument_id);
 
+CREATE TABLE IF NOT EXISTS subscription_jobs (
+  subscription_id INT PRIMARY KEY REFERENCES subscriptions(id) ON DELETE CASCADE,
+  next_run_date DATE,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  last_run_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_subscription_jobs_next_run ON subscription_jobs(next_run_date);
+
 CREATE TABLE IF NOT EXISTS fixed_expenses (
   id SERIAL PRIMARY KEY,
   name VARCHAR(150) NOT NULL,

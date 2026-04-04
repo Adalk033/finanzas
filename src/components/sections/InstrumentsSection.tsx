@@ -1,4 +1,4 @@
-import type { SyntheticEvent } from 'react'
+import { useEffect, useState, type SyntheticEvent } from 'react'
 import { formatCurrency } from '../../app/appHelpers'
 import type { Bank, FinancialInstrument, FinancialInstrumentInput, InstrumentType } from '../../types/domain'
 
@@ -44,6 +44,14 @@ export function InstrumentsSection({
   onEdit,
   onDelete,
 }: InstrumentsSectionProps) {
+  const [isFormOpen, setIsFormOpen] = useState(editingInstrumentId !== null)
+
+  useEffect(() => {
+    if (editingInstrumentId !== null) {
+      setIsFormOpen(true)
+    }
+  }, [editingInstrumentId])
+
   return (
     <section className="card">
       <header className="card__header">
@@ -51,139 +59,150 @@ export function InstrumentsSection({
         <p className="card__subtitle">Gestion de TDC, TDD y cuentas agrupadas por banco.</p>
       </header>
 
-      <form className="form-grid" onSubmit={onSubmit}>
-        <label className="form-grid__field" htmlFor="instrumentBank">Banco</label>
-        <select
-          id="instrumentBank"
-          className="form-grid__input"
-          value={selectedBankId}
-          onChange={(event) => onInstrumentFormChange({ ...instrumentForm, bankId: Number(event.target.value) })}
-          required
-        >
-          <option value={0}>Selecciona banco</option>
-          {banks.map((bank) => (
-            <option key={bank.id} value={bank.id}>{bank.name}</option>
-          ))}
-        </select>
+      <div className="section-toolbar">
+        <button className="button button--primary" type="button" onClick={() => setIsFormOpen((value) => !value)}>
+          {isFormOpen ? 'Ocultar formulario' : editingInstrumentId === null ? 'Nuevo instrumento' : 'Editar instrumento'}
+        </button>
+        <div className="section-toolbar__spacer" />
+        <button className="button button--secondary" type="button" disabled={!hasConfig} onClick={onReload}>
+          Recargar
+        </button>
+      </div>
 
-        <label className="form-grid__field" htmlFor="instrumentName">Nombre del instrumento</label>
-        <input
-          id="instrumentName"
-          className="form-grid__input"
-          type="text"
-          value={instrumentForm.name}
-          onChange={(event) => onInstrumentFormChange({ ...instrumentForm, name: event.target.value })}
-          placeholder="Nu Platinum"
-          required
-        />
-
-        <label className="form-grid__field" htmlFor="instrumentType">Tipo</label>
-        <select
-          id="instrumentType"
-          className="form-grid__input"
-          value={instrumentForm.type}
-          onChange={(event) => onTypeChange(event.target.value as InstrumentType)}
-        >
-          <option value="credit_card">Tarjeta de credito</option>
-          <option value="debit_card">Tarjeta de debito</option>
-          <option value="account">Cuenta bancaria</option>
-        </select>
-
-        <label className="form-grid__field" htmlFor="instrumentLastFour">Ultimos 4 digitos</label>
-        <input
-          id="instrumentLastFour"
-          className="form-grid__input"
-          type="text"
-          value={instrumentForm.lastFour}
-          maxLength={4}
-          onChange={(event) => onInstrumentFormChange({ ...instrumentForm, lastFour: event.target.value })}
-          placeholder="1234"
-        />
-
-        {instrumentForm.type === 'credit_card' ? (
-          <>
-            <label className="form-grid__field" htmlFor="creditLimit">Limite de credito</label>
-            <input
-              id="creditLimit"
+      {isFormOpen ? (
+        <div className="section-panel">
+          <form className="form-grid" onSubmit={onSubmit}>
+            <label className="form-grid__field" htmlFor="instrumentBank">Banco</label>
+            <select
+              id="instrumentBank"
               className="form-grid__input"
-              type="number"
-              step="0.01"
-              value={instrumentForm.creditLimit ?? 0}
-              onChange={(event) => onInstrumentFormChange({ ...instrumentForm, creditLimit: Number(event.target.value) })}
+              value={selectedBankId}
+              onChange={(event) => onInstrumentFormChange({ ...instrumentForm, bankId: Number(event.target.value) })}
+              required
+            >
+              <option value={0}>Selecciona banco</option>
+              {banks.map((bank) => (
+                <option key={bank.id} value={bank.id}>{bank.name}</option>
+              ))}
+            </select>
+
+            <label className="form-grid__field" htmlFor="instrumentName">Nombre del instrumento</label>
+            <input
+              id="instrumentName"
+              className="form-grid__input"
+              type="text"
+              value={instrumentForm.name}
+              onChange={(event) => onInstrumentFormChange({ ...instrumentForm, name: event.target.value })}
+              placeholder="Nu Platinum"
               required
             />
 
-            <label className="form-grid__field" htmlFor="currentBalance">Saldo actual</label>
-            <input
-              id="currentBalance"
+            <label className="form-grid__field" htmlFor="instrumentType">Tipo</label>
+            <select
+              id="instrumentType"
               className="form-grid__input"
-              type="number"
-              step="0.01"
-              value={instrumentForm.currentBalance ?? 0}
-              onChange={(event) => onInstrumentFormChange({ ...instrumentForm, currentBalance: Number(event.target.value) })}
+              value={instrumentForm.type}
+              onChange={(event) => onTypeChange(event.target.value as InstrumentType)}
+            >
+              <option value="credit_card">Tarjeta de credito</option>
+              <option value="debit_card">Tarjeta de debito</option>
+              <option value="account">Cuenta bancaria</option>
+            </select>
+
+            <label className="form-grid__field" htmlFor="instrumentLastFour">Ultimos 4 digitos</label>
+            <input
+              id="instrumentLastFour"
+              className="form-grid__input"
+              type="text"
+              value={instrumentForm.lastFour}
+              maxLength={4}
+              onChange={(event) => onInstrumentFormChange({ ...instrumentForm, lastFour: event.target.value })}
+              placeholder="1234"
             />
 
-            <label className="form-grid__field" htmlFor="cutOffDay">Dia de corte</label>
+            {instrumentForm.type === 'credit_card' ? (
+              <>
+                <label className="form-grid__field" htmlFor="creditLimit">Limite de credito</label>
+                <input
+                  id="creditLimit"
+                  className="form-grid__input"
+                  type="number"
+                  step="0.01"
+                  value={instrumentForm.creditLimit ?? 0}
+                  onChange={(event) => onInstrumentFormChange({ ...instrumentForm, creditLimit: Number(event.target.value) })}
+                  required
+                />
+
+                <label className="form-grid__field" htmlFor="currentBalance">Saldo actual</label>
+                <input
+                  id="currentBalance"
+                  className="form-grid__input"
+                  type="number"
+                  step="0.01"
+                  value={instrumentForm.currentBalance ?? 0}
+                  onChange={(event) => onInstrumentFormChange({ ...instrumentForm, currentBalance: Number(event.target.value) })}
+                />
+
+                <label className="form-grid__field" htmlFor="cutOffDay">Dia de corte</label>
+                <input
+                  id="cutOffDay"
+                  className="form-grid__input"
+                  type="number"
+                  min={1}
+                  max={31}
+                  value={instrumentForm.cutOffDay ?? 1}
+                  onChange={(event) => onInstrumentFormChange({ ...instrumentForm, cutOffDay: Number(event.target.value) })}
+                  required
+                />
+
+                <label className="form-grid__field" htmlFor="paymentDueDay">Dia de pago</label>
+                <input
+                  id="paymentDueDay"
+                  className="form-grid__input"
+                  type="number"
+                  min={1}
+                  max={31}
+                  value={instrumentForm.paymentDueDay ?? 1}
+                  onChange={(event) => onInstrumentFormChange({ ...instrumentForm, paymentDueDay: Number(event.target.value) })}
+                  required
+                />
+              </>
+            ) : (
+              <>
+                <label className="form-grid__field" htmlFor="currentAmount">Saldo actual</label>
+                <input
+                  id="currentAmount"
+                  className="form-grid__input"
+                  type="number"
+                  step="0.01"
+                  value={instrumentForm.currentAmount ?? 0}
+                  onChange={(event) => onInstrumentFormChange({ ...instrumentForm, currentAmount: Number(event.target.value) })}
+                  required
+                />
+              </>
+            )}
+
+            <label className="form-grid__field" htmlFor="instrumentNotes">Notas</label>
             <input
-              id="cutOffDay"
+              id="instrumentNotes"
               className="form-grid__input"
-              type="number"
-              min={1}
-              max={31}
-              value={instrumentForm.cutOffDay ?? 1}
-              onChange={(event) => onInstrumentFormChange({ ...instrumentForm, cutOffDay: Number(event.target.value) })}
-              required
+              type="text"
+              value={instrumentForm.notes}
+              onChange={(event) => onInstrumentFormChange({ ...instrumentForm, notes: event.target.value })}
+              placeholder="Cuenta principal"
             />
 
-            <label className="form-grid__field" htmlFor="paymentDueDay">Dia de pago</label>
-            <input
-              id="paymentDueDay"
-              className="form-grid__input"
-              type="number"
-              min={1}
-              max={31}
-              value={instrumentForm.paymentDueDay ?? 1}
-              onChange={(event) => onInstrumentFormChange({ ...instrumentForm, paymentDueDay: Number(event.target.value) })}
-              required
-            />
-          </>
-        ) : (
-          <>
-            <label className="form-grid__field" htmlFor="currentAmount">Saldo actual</label>
-            <input
-              id="currentAmount"
-              className="form-grid__input"
-              type="number"
-              step="0.01"
-              value={instrumentForm.currentAmount ?? 0}
-              onChange={(event) => onInstrumentFormChange({ ...instrumentForm, currentAmount: Number(event.target.value) })}
-              required
-            />
-          </>
-        )}
-
-        <label className="form-grid__field" htmlFor="instrumentNotes">Notas</label>
-        <input
-          id="instrumentNotes"
-          className="form-grid__input"
-          type="text"
-          value={instrumentForm.notes}
-          onChange={(event) => onInstrumentFormChange({ ...instrumentForm, notes: event.target.value })}
-          placeholder="Cuenta principal"
-        />
-
-        <div className="form-grid__actions">
-          <button className="button button--primary" type="submit" disabled={!hasConfig || banks.length === 0}>
-            {editingInstrumentId === null ? 'Crear instrumento' : 'Guardar cambios'}
-          </button>
-          <button className="button button--secondary" type="button" onClick={onReset}>
-            Limpiar
-          </button>
-          <button className="button button--secondary" type="button" disabled={!hasConfig} onClick={onReload}>
-            Recargar
-          </button>
+            <div className="form-grid__actions">
+              <button className="button button--primary" type="submit" disabled={!hasConfig || banks.length === 0}>
+                {editingInstrumentId === null ? 'Crear instrumento' : 'Guardar cambios'}
+              </button>
+              <button className="button button--secondary" type="button" onClick={onReset}>
+                Limpiar
+              </button>
+            </div>
+          </form>
         </div>
-      </form>
+      ) : null}
 
       {instrumentError ? <p className="message message--error">{instrumentError}</p> : null}
       {instrumentMessage ? <p className="message message--success">{instrumentMessage}</p> : null}

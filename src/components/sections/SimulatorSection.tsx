@@ -1,4 +1,4 @@
-import type { SyntheticEvent } from 'react'
+import { useState, type SyntheticEvent } from 'react'
 import { MSI_OPTIONS, formatCurrency, getSimulationScenarioLabel } from '../../app/appHelpers'
 import type {
   FinancialInstrument,
@@ -38,6 +38,8 @@ export function SimulatorSection({
   onReload,
   onDelete,
 }: SimulatorSectionProps) {
+  const [isFormOpen, setIsFormOpen] = useState(false)
+
   return (
     <section className="card">
       <header className="card__header">
@@ -48,13 +50,25 @@ export function SimulatorSection({
       {simulationMessage ? <p className="message message--success">{simulationMessage}</p> : null}
       {simulationError ? <p className="message message--error">{simulationError}</p> : null}
 
+      <div className="section-toolbar">
+        <button className="button button--primary" type="button" onClick={() => setIsFormOpen((value) => !value)}>
+          {isFormOpen ? 'Ocultar formulario' : 'Nueva simulacion'}
+        </button>
+        <div className="section-toolbar__spacer" />
+        <button className="button button--secondary" type="button" disabled={!hasConfig || isSimulationsLoading} onClick={onReload}>
+          {isSimulationsLoading ? 'Cargando...' : 'Recargar historial'}
+        </button>
+      </div>
+
       <div className="phase8-layout">
         <article className="mini-card">
           <header className="mini-card__header">
             <h3 className="mini-card__title">Nueva simulacion</h3>
           </header>
 
-          <form className="form-grid" onSubmit={onSubmit}>
+          {isFormOpen ? (
+            <div className="section-panel">
+              <form className="form-grid" onSubmit={onSubmit}>
             <label className="form-grid__field" htmlFor="simulationName">Nombre</label>
             <input
               id="simulationName"
@@ -187,32 +201,23 @@ export function SimulatorSection({
               }}
             />
 
-            <div className="form-grid__actions">
-              <button className="button button--primary" type="submit" disabled={!hasConfig || isSimulationsLoading}>
-                Guardar simulacion
-              </button>
-              <button className="button button--secondary" type="button" onClick={onReset}>
-                Limpiar
-              </button>
+                <div className="form-grid__actions">
+                  <button className="button button--primary" type="submit" disabled={!hasConfig || isSimulationsLoading}>
+                    Guardar simulacion
+                  </button>
+                  <button className="button button--secondary" type="button" onClick={onReset}>
+                    Limpiar
+                  </button>
+                </div>
+              </form>
             </div>
-          </form>
+          ) : null}
         </article>
 
         <article className="mini-card">
           <header className="mini-card__header">
             <h3 className="mini-card__title">Historial</h3>
           </header>
-
-          <div className="form-grid__actions">
-            <button
-              className="button button--secondary"
-              type="button"
-              disabled={!hasConfig || isSimulationsLoading}
-              onClick={onReload}
-            >
-              {isSimulationsLoading ? 'Cargando...' : 'Recargar historial'}
-            </button>
-          </div>
 
           <div className="table-wrap">
             <table className="table">
