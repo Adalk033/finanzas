@@ -350,6 +350,42 @@
   height: 280px;
 }
 
+.phase8-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.form-grid--inline {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+}
+
+.progress {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.progress__bar {
+  height: 100%;
+  border-radius: 999px;
+}
+
+.progress__bar--success {
+  background: var(--color-success);
+}
+
+.progress__bar--warning {
+  background: var(--color-warning);
+}
+
+.progress__bar--error {
+  background: var(--color-error);
+}
+
 .badge {
   display: inline-flex;
   align-items: center;
@@ -414,6 +450,14 @@
   }
 
   .dashboard-charts {
+    grid-template-columns: 1fr;
+  }
+
+  .phase8-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .form-grid--inline {
     grid-template-columns: 1fr;
   }
 

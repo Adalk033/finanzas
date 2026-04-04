@@ -691,13 +691,13 @@ Lambda única de .mjs con conexión a la dB de postgreSQL
 
 - [x]  **Backend:** CRUD presupuestos mensuales por categoría
 - [x]  **Backend:** Lógica de simulación financiera (snapshot + cálculo)
-- [ ]  **Frontend:** Página de Presupuestos — definir topes por categoría y mes
-- [ ]  **Frontend:** Indicador de progreso vs presupuesto
-- [ ]  **Frontend:** Página de Simulador "¿Qué pasa si…?"
+- [x]  **Frontend:** Página de Presupuestos — definir topes por categoría y mes
+- [x]  **Frontend:** Indicador de progreso vs presupuesto
+- [x]  **Frontend:** Página de Simulador "¿Qué pasa si…?"
     - Input: monto, tipo (compra directa, MSI, préstamo, meses con intereses)
     - Output: cómo queda tu situación financiera después
     - Indicador verde/rojo de viabilidad
-- [ ]  **Frontend:** Historial de simulaciones guardadas
+- [x]  **Frontend:** Historial de simulaciones guardadas
 
 ### Fase 9 — Módulo Recordatorios
 

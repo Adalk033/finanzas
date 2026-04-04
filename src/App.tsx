@@ -20,6 +20,9 @@ import './App.css'
 import { apiClient } from './api/client'
 import { useLocalConfig } from './hooks/useLocalConfig'
 import type {
+  Budget,
+  BudgetInput,
+  BudgetStatus,
   Bank,
   BankInput,
   Category,
@@ -50,6 +53,9 @@ import type {
   SubscriptionInput,
   Subcategory,
   SubcategoryInput,
+  Simulation,
+  SimulationInput,
+  SimulationScenarioType,
   Transfer,
   TransferInput,
   TransferType,
@@ -59,7 +65,7 @@ import type {
   TransactionType,
 } from './types/domain'
 
-type AppSection = 'dashboard' | 'settings' | 'banks' | 'instruments' | 'categories' | 'transactions' | 'creditCards' | 'subscriptions' | 'fixedExpenses' | 'loans'
+type AppSection = 'dashboard' | 'settings' | 'banks' | 'instruments' | 'categories' | 'transactions' | 'creditCards' | 'subscriptions' | 'fixedExpenses' | 'loans' | 'budgets' | 'simulator'
 
 const EMPTY_BANK_FORM: BankInput = {
   name: '',
@@ -215,6 +221,27 @@ const EMPTY_FIXED_EXPENSE_PAYMENT_FORM: FixedExpensePaymentInput = {
   notes: '',
 }
 
+const EMPTY_BUDGET_FORM: BudgetInput = {
+  categoryId: null,
+  currencyId: 1,
+  amount: 0,
+  month: new Date().getMonth() + 1,
+  year: new Date().getFullYear(),
+  notes: '',
+}
+
+const EMPTY_SIMULATION_FORM: SimulationInput = {
+  name: '',
+  description: '',
+  simulationDate: TODAY_ISO,
+  scenarioType: 'direct_purchase',
+  amount: 0,
+  instrumentId: null,
+  msiMonths: null,
+  loanMonths: null,
+  annualRate: null,
+}
+
 const MSI_OPTIONS = [3, 6, 9, 12, 18, 24]
 const DASHBOARD_CHART_COLORS = ['#57A6D8', '#2D8F85', '#F4C95D', '#E6A23C', '#F87171', '#A78BFA']
 const EMPTY_DASHBOARD_SUMMARY: DashboardSummary = {
@@ -329,6 +356,30 @@ function getCategoryTypeLabel(type: CategoryType): string {
   return 'Gasto'
 }
 
+function getBudgetStatusLabel(status: BudgetStatus): string {
+  if (status === 'exceeded') {
+    return 'Excedido'
+  }
+
+  if (status === 'warning') {
+    return 'Al limite'
+  }
+
+  return 'Bajo control'
+}
+
+function getSimulationScenarioLabel(type: SimulationScenarioType): string {
+  if (type === 'msi') {
+    return 'MSI'
+  }
+
+  if (type === 'loan') {
+    return 'Prestamo'
+  }
+
+  return 'Compra directa'
+}
+
 export function App() {
   const {
     config,
@@ -434,6 +485,21 @@ export function App() {
   const [isFixedExpensePaymentsLoading, setIsFixedExpensePaymentsLoading] = useState(false)
   const [fixedExpensePaymentForm, setFixedExpensePaymentForm] = useState<FixedExpensePaymentInput>(EMPTY_FIXED_EXPENSE_PAYMENT_FORM)
 
+  const [budgets, setBudgets] = useState<Budget[]>([])
+  const [isBudgetsLoading, setIsBudgetsLoading] = useState(false)
+  const [budgetMessage, setBudgetMessage] = useState('')
+  const [budgetError, setBudgetError] = useState('')
+  const [budgetForm, setBudgetForm] = useState<BudgetInput>(EMPTY_BUDGET_FORM)
+  const [editingBudgetId, setEditingBudgetId] = useState<number | null>(null)
+  const [budgetFilterMonth, setBudgetFilterMonth] = useState(new Date().getMonth() + 1)
+  const [budgetFilterYear, setBudgetFilterYear] = useState(new Date().getFullYear())
+
+  const [simulations, setSimulations] = useState<Simulation[]>([])
+  const [isSimulationsLoading, setIsSimulationsLoading] = useState(false)
+  const [simulationMessage, setSimulationMessage] = useState('')
+  const [simulationError, setSimulationError] = useState('')
+  const [simulationForm, setSimulationForm] = useState<SimulationInput>(EMPTY_SIMULATION_FORM)
+
   const hasConfig = Boolean(config.apiKey.trim() && config.apiEndpoint.trim() && config.awsRegion.trim())
 
   const banksById = useMemo(() => {
@@ -529,6 +595,18 @@ export function App() {
   const expenseCategoryOptions = useMemo(() => {
     return categories.filter((category) => category.type === 'expense' || category.type === 'both')
   }, [categories])
+
+  const simulationInstrumentOptions = useMemo(() => {
+    if (simulationForm.scenarioType === 'loan') {
+      return []
+    }
+
+    if (simulationForm.scenarioType === 'msi') {
+      return instruments.filter((instrument) => instrument.type === 'credit_card')
+    }
+
+    return instruments
+  }, [instruments, simulationForm.scenarioType])
 
   const selectedSubscriptionCategory = useMemo(() => {
     if (!subscriptionForm.categoryId) {
@@ -805,6 +883,38 @@ export function App() {
     setIsFixedExpensePaymentsLoading(false)
   }
 
+  const loadBudgets = async (month: number = budgetFilterMonth, year: number = budgetFilterYear): Promise<void> => {
+    setIsBudgetsLoading(true)
+    setBudgetError('')
+
+    const result = await apiClient.getBudgets(month, year)
+
+    if (!result.success) {
+      setBudgetError(result.error ?? 'No se pudieron cargar los presupuestos.')
+      setIsBudgetsLoading(false)
+      return
+    }
+
+    setBudgets(result.data ?? [])
+    setIsBudgetsLoading(false)
+  }
+
+  const loadSimulations = async (): Promise<void> => {
+    setIsSimulationsLoading(true)
+    setSimulationError('')
+
+    const result = await apiClient.getSimulations()
+
+    if (!result.success) {
+      setSimulationError(result.error ?? 'No se pudieron cargar las simulaciones.')
+      setIsSimulationsLoading(false)
+      return
+    }
+
+    setSimulations(result.data ?? [])
+    setIsSimulationsLoading(false)
+  }
+
   const selectedBankId = instrumentForm.bankId === 0 ? (banks[0]?.id ?? 0) : instrumentForm.bankId
 
   const handleSave = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
@@ -974,6 +1084,18 @@ export function App() {
     if (nextSection === 'loans') {
       void loadInstruments()
       void loadLoans()
+      return
+    }
+
+    if (nextSection === 'budgets') {
+      void loadCategories()
+      void loadBudgets()
+      return
+    }
+
+    if (nextSection === 'simulator') {
+      void loadInstruments()
+      void loadSimulations()
     }
   }
 
@@ -1741,6 +1863,164 @@ export function App() {
     await loadFixedExpensePayments(selectedFixedExpenseId)
   }
 
+  const resetBudgetEditor = (): void => {
+    setBudgetForm({
+      ...EMPTY_BUDGET_FORM,
+      month: budgetFilterMonth,
+      year: budgetFilterYear,
+    })
+    setEditingBudgetId(null)
+  }
+
+  const startBudgetEdit = (budget: Budget): void => {
+    setEditingBudgetId(budget.id)
+    setBudgetForm({
+      categoryId: budget.categoryId,
+      currencyId: budget.currencyId,
+      amount: budget.amount,
+      month: budget.month,
+      year: budget.year,
+      notes: budget.notes ?? '',
+    })
+  }
+
+  const handleBudgetSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault()
+    setBudgetError('')
+    setBudgetMessage('')
+
+    if (budgetForm.amount <= 0) {
+      setBudgetError('Ingresa un monto de presupuesto mayor a cero.')
+      return
+    }
+
+    const payload: BudgetInput = {
+      ...budgetForm,
+      notes: budgetForm.notes.trim(),
+    }
+
+    if (editingBudgetId === null) {
+      const created = await apiClient.createBudget(payload)
+      if (!created.success) {
+        setBudgetError(created.error ?? 'No se pudo crear el presupuesto.')
+        return
+      }
+      setBudgetMessage('Presupuesto creado correctamente.')
+    } else {
+      const updated = await apiClient.updateBudget(editingBudgetId, payload)
+      if (!updated.success) {
+        setBudgetError(updated.error ?? 'No se pudo actualizar el presupuesto.')
+        return
+      }
+      setBudgetMessage('Presupuesto actualizado correctamente.')
+    }
+
+    resetBudgetEditor()
+    await loadBudgets(budgetFilterMonth, budgetFilterYear)
+  }
+
+  const handleBudgetDelete = async (budgetId: number): Promise<void> => {
+    setBudgetError('')
+    setBudgetMessage('')
+
+    const deleted = await apiClient.deleteBudget(budgetId)
+    if (!deleted.success) {
+      setBudgetError(deleted.error ?? 'No se pudo eliminar el presupuesto.')
+      return
+    }
+
+    setBudgetMessage('Presupuesto eliminado correctamente.')
+    if (editingBudgetId === budgetId) {
+      resetBudgetEditor()
+    }
+    await loadBudgets(budgetFilterMonth, budgetFilterYear)
+  }
+
+  const resetSimulationForm = (): void => {
+    setSimulationForm({
+      ...EMPTY_SIMULATION_FORM,
+      instrumentId: instruments[0]?.id ?? null,
+    })
+  }
+
+  const handleSimulationScenarioTypeChange = (scenarioType: SimulationScenarioType): void => {
+    setSimulationForm((previous) => ({
+      ...previous,
+      scenarioType,
+      instrumentId: scenarioType === 'loan' ? null : previous.instrumentId,
+      msiMonths: scenarioType === 'msi' ? (previous.msiMonths ?? MSI_OPTIONS[0]) : null,
+      loanMonths: scenarioType === 'loan' ? (previous.loanMonths ?? 12) : null,
+      annualRate: scenarioType === 'loan' ? (previous.annualRate ?? 0) : null,
+    }))
+  }
+
+  const handleSimulationSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault()
+    setSimulationError('')
+    setSimulationMessage('')
+
+    if (simulationForm.amount <= 0) {
+      setSimulationError('Ingresa un monto mayor a cero para simular.')
+      return
+    }
+
+    if (simulationForm.scenarioType === 'msi') {
+      if (!simulationForm.instrumentId) {
+        setSimulationError('Selecciona una tarjeta de credito para escenario MSI.')
+        return
+      }
+
+      if (!simulationForm.msiMonths) {
+        setSimulationError('Selecciona los meses MSI.')
+        return
+      }
+    }
+
+    if (simulationForm.scenarioType === 'loan') {
+      if (!simulationForm.loanMonths || simulationForm.loanMonths < 1) {
+        setSimulationError('Ingresa un plazo de prestamo valido.')
+        return
+      }
+
+      if (simulationForm.annualRate === null || simulationForm.annualRate < 0) {
+        setSimulationError('Ingresa una tasa anual valida para la simulacion de prestamo.')
+        return
+      }
+    }
+
+    const payload: SimulationInput = {
+      ...simulationForm,
+      name: simulationForm.name.trim(),
+      description: simulationForm.description.trim(),
+      simulationDate: simulationForm.simulationDate.trim(),
+      instrumentId: simulationForm.scenarioType === 'loan' ? null : simulationForm.instrumentId,
+    }
+
+    const created = await apiClient.createSimulation(payload)
+    if (!created.success) {
+      setSimulationError(created.error ?? 'No se pudo crear la simulacion.')
+      return
+    }
+
+    setSimulationMessage('Simulacion creada correctamente.')
+    resetSimulationForm()
+    await loadSimulations()
+  }
+
+  const handleSimulationDelete = async (simulationId: number): Promise<void> => {
+    setSimulationError('')
+    setSimulationMessage('')
+
+    const deleted = await apiClient.deleteSimulation(simulationId)
+    if (!deleted.success) {
+      setSimulationError(deleted.error ?? 'No se pudo eliminar la simulacion.')
+      return
+    }
+
+    setSimulationMessage('Simulacion eliminada correctamente.')
+    await loadSimulations()
+  }
+
   if (isLoading) {
     return (
       <main className="settings-screen settings-screen--centered">
@@ -1822,6 +2102,20 @@ export function App() {
           onClick={() => handleSectionChange('loans')}
         >
           Prestamos
+        </button>
+        <button
+          className={`nav-button ${activeSection === 'budgets' ? 'nav-button--active' : ''}`}
+          type="button"
+          onClick={() => handleSectionChange('budgets')}
+        >
+          Presupuestos
+        </button>
+        <button
+          className={`nav-button ${activeSection === 'simulator' ? 'nav-button--active' : ''}`}
+          type="button"
+          onClick={() => handleSectionChange('simulator')}
+        >
+          Simulador
         </button>
       </aside>
 
@@ -4441,6 +4735,500 @@ export function App() {
                   </div>
                 </article>
               ) : null}
+            </div>
+          </section>
+        ) : null}
+
+        {activeSection === 'budgets' ? (
+          <section className="card">
+            <header className="card__header">
+              <h2 className="card__title">Presupuestos mensuales</h2>
+              <p className="card__subtitle">Define topes por categoria y monitorea el avance contra tus gastos reales.</p>
+            </header>
+
+            {budgetMessage ? <p className="message message--success">{budgetMessage}</p> : null}
+            {budgetError ? <p className="message message--error">{budgetError}</p> : null}
+
+            <div className="phase8-layout">
+              <article className="mini-card">
+                <header className="mini-card__header">
+                  <h3 className="mini-card__title">{editingBudgetId === null ? 'Nuevo presupuesto' : 'Editar presupuesto'}</h3>
+                </header>
+
+                <form className="form-grid" onSubmit={handleBudgetSubmit}>
+                  <label className="form-grid__field" htmlFor="budgetCategory">Categoria</label>
+                  <select
+                    id="budgetCategory"
+                    className="form-grid__input"
+                    value={budgetForm.categoryId ?? 0}
+                    onChange={(event) => {
+                      const value = Number.parseInt(event.target.value, 10)
+                      setBudgetForm((previous) => ({
+                        ...previous,
+                        categoryId: value === 0 ? null : value,
+                      }))
+                    }}
+                  >
+                    <option value={0}>Global (todas las categorias)</option>
+                    {expenseCategoryOptions.map((category) => (
+                      <option key={category.id} value={category.id}>{category.name}</option>
+                    ))}
+                  </select>
+
+                  <label className="form-grid__field" htmlFor="budgetAmount">Monto mensual</label>
+                  <input
+                    id="budgetAmount"
+                    className="form-grid__input"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={budgetForm.amount}
+                    onChange={(event) => {
+                      setBudgetForm((previous) => ({ ...previous, amount: Number(event.target.value) }))
+                    }}
+                  />
+
+                  <label className="form-grid__field" htmlFor="budgetMonth">Mes</label>
+                  <input
+                    id="budgetMonth"
+                    className="form-grid__input"
+                    type="number"
+                    min={1}
+                    max={12}
+                    value={budgetForm.month}
+                    onChange={(event) => {
+                      setBudgetForm((previous) => ({ ...previous, month: Number(event.target.value) }))
+                    }}
+                  />
+
+                  <label className="form-grid__field" htmlFor="budgetYear">Anio</label>
+                  <input
+                    id="budgetYear"
+                    className="form-grid__input"
+                    type="number"
+                    min={2000}
+                    max={2200}
+                    value={budgetForm.year}
+                    onChange={(event) => {
+                      setBudgetForm((previous) => ({ ...previous, year: Number(event.target.value) }))
+                    }}
+                  />
+
+                  <label className="form-grid__field" htmlFor="budgetNotes">Notas</label>
+                  <textarea
+                    id="budgetNotes"
+                    className="form-grid__input"
+                    rows={3}
+                    value={budgetForm.notes}
+                    onChange={(event) => {
+                      setBudgetForm((previous) => ({ ...previous, notes: event.target.value }))
+                    }}
+                  />
+
+                  <div className="form-grid__actions">
+                    <button className="button button--primary" type="submit" disabled={!hasConfig || isBudgetsLoading}>
+                      {editingBudgetId === null ? 'Guardar presupuesto' : 'Actualizar presupuesto'}
+                    </button>
+                    <button
+                      className="button button--secondary"
+                      type="button"
+                      onClick={() => {
+                        resetBudgetEditor()
+                      }}
+                    >
+                      Limpiar
+                    </button>
+                  </div>
+                </form>
+              </article>
+
+              <article className="mini-card">
+                <header className="mini-card__header">
+                  <h3 className="mini-card__title">Listado y progreso</h3>
+                </header>
+
+                <div className="form-grid form-grid--inline">
+                  <label className="form-grid__field" htmlFor="budgetFilterMonth">Mes filtro</label>
+                  <input
+                    id="budgetFilterMonth"
+                    className="form-grid__input"
+                    type="number"
+                    min={1}
+                    max={12}
+                    value={budgetFilterMonth}
+                    onChange={(event) => {
+                      setBudgetFilterMonth(Number(event.target.value))
+                    }}
+                  />
+
+                  <label className="form-grid__field" htmlFor="budgetFilterYear">Anio filtro</label>
+                  <input
+                    id="budgetFilterYear"
+                    className="form-grid__input"
+                    type="number"
+                    min={2000}
+                    max={2200}
+                    value={budgetFilterYear}
+                    onChange={(event) => {
+                      setBudgetFilterYear(Number(event.target.value))
+                    }}
+                  />
+
+                  <div className="form-grid__actions">
+                    <button
+                      className="button button--secondary"
+                      type="button"
+                      disabled={!hasConfig || isBudgetsLoading}
+                      onClick={() => {
+                        void loadBudgets(budgetFilterMonth, budgetFilterYear)
+                      }}
+                    >
+                      {isBudgetsLoading ? 'Cargando...' : 'Aplicar filtro'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="table-wrap">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Categoria</th>
+                        <th>Periodo</th>
+                        <th>Presupuesto</th>
+                        <th>Gastado</th>
+                        <th>Avance</th>
+                        <th>Estado</th>
+                        <th>Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {isBudgetsLoading ? (
+                        <tr>
+                          <td colSpan={7}>Cargando presupuestos...</td>
+                        </tr>
+                      ) : null}
+
+                      {!isBudgetsLoading && budgets.length === 0 ? (
+                        <tr>
+                          <td colSpan={7}>No hay presupuestos para este periodo.</td>
+                        </tr>
+                      ) : null}
+
+                      {!isBudgetsLoading
+                        ? budgets.map((budget) => (
+                          <tr key={budget.id}>
+                            <td>{budget.categoryName ?? 'Global'}</td>
+                            <td>{String(budget.month).padStart(2, '0')}/{budget.year}</td>
+                            <td>{formatCurrency(budget.amount)}</td>
+                            <td>{formatCurrency(budget.spentAmount)}</td>
+                            <td>
+                              <div className="progress">
+                                <div
+                                  className={`progress__bar ${budget.status === 'exceeded' ? 'progress__bar--error' : budget.status === 'warning' ? 'progress__bar--warning' : 'progress__bar--success'}`}
+                                  style={{ width: `${Math.min(100, budget.progressPercent)}%` }}
+                                />
+                              </div>
+                              <p className="category-card__meta">{budget.progressPercent.toFixed(2)}%</p>
+                            </td>
+                            <td>
+                              <span className={`badge ${budget.status === 'exceeded' ? 'badge--warning' : budget.status === 'warning' ? 'badge--info' : 'badge--success'}`}>
+                                {getBudgetStatusLabel(budget.status)}
+                              </span>
+                            </td>
+                            <td>
+                              <div className="table__actions">
+                                <button
+                                  className="button button--secondary"
+                                  type="button"
+                                  onClick={() => {
+                                    startBudgetEdit(budget)
+                                  }}
+                                >
+                                  Editar
+                                </button>
+                                <button
+                                  className="button button--danger"
+                                  type="button"
+                                  onClick={() => {
+                                    void handleBudgetDelete(budget.id)
+                                  }}
+                                >
+                                  Eliminar
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                        : null}
+                    </tbody>
+                  </table>
+                </div>
+              </article>
+            </div>
+          </section>
+        ) : null}
+
+        {activeSection === 'simulator' ? (
+          <section className="card">
+            <header className="card__header">
+              <h2 className="card__title">Simulador financiero</h2>
+              <p className="card__subtitle">Analiza escenarios antes de comprometer tu flujo financiero.</p>
+            </header>
+
+            {simulationMessage ? <p className="message message--success">{simulationMessage}</p> : null}
+            {simulationError ? <p className="message message--error">{simulationError}</p> : null}
+
+            <div className="phase8-layout">
+              <article className="mini-card">
+                <header className="mini-card__header">
+                  <h3 className="mini-card__title">Nueva simulacion</h3>
+                </header>
+
+                <form className="form-grid" onSubmit={handleSimulationSubmit}>
+                  <label className="form-grid__field" htmlFor="simulationName">Nombre</label>
+                  <input
+                    id="simulationName"
+                    className="form-grid__input"
+                    type="text"
+                    value={simulationForm.name}
+                    onChange={(event) => {
+                      setSimulationForm((previous) => ({ ...previous, name: event.target.value }))
+                    }}
+                  />
+
+                  <label className="form-grid__field" htmlFor="simulationDate">Fecha</label>
+                  <input
+                    id="simulationDate"
+                    className="form-grid__input"
+                    type="date"
+                    value={simulationForm.simulationDate}
+                    onChange={(event) => {
+                      setSimulationForm((previous) => ({ ...previous, simulationDate: event.target.value }))
+                    }}
+                  />
+
+                  <label className="form-grid__field" htmlFor="simulationType">Escenario</label>
+                  <select
+                    id="simulationType"
+                    className="form-grid__input"
+                    value={simulationForm.scenarioType}
+                    onChange={(event) => {
+                      handleSimulationScenarioTypeChange(event.target.value as SimulationScenarioType)
+                    }}
+                  >
+                    <option value="direct_purchase">Compra directa</option>
+                    <option value="msi">Compra MSI</option>
+                    <option value="loan">Prestamo</option>
+                  </select>
+
+                  {simulationForm.scenarioType !== 'loan' ? (
+                    <>
+                      <label className="form-grid__field" htmlFor="simulationInstrument">Instrumento</label>
+                      <select
+                        id="simulationInstrument"
+                        className="form-grid__input"
+                        value={simulationForm.instrumentId ?? 0}
+                        onChange={(event) => {
+                          const value = Number.parseInt(event.target.value, 10)
+                          setSimulationForm((previous) => ({
+                            ...previous,
+                            instrumentId: value === 0 ? null : value,
+                          }))
+                        }}
+                      >
+                        <option value={0}>Seleccionar instrumento</option>
+                        {simulationInstrumentOptions.map((instrument) => (
+                          <option key={instrument.id} value={instrument.id}>{instrument.name}</option>
+                        ))}
+                      </select>
+                    </>
+                  ) : null}
+
+                  <label className="form-grid__field" htmlFor="simulationAmount">Monto</label>
+                  <input
+                    id="simulationAmount"
+                    className="form-grid__input"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={simulationForm.amount}
+                    onChange={(event) => {
+                      setSimulationForm((previous) => ({ ...previous, amount: Number(event.target.value) }))
+                    }}
+                  />
+
+                  {simulationForm.scenarioType === 'msi' ? (
+                    <>
+                      <label className="form-grid__field" htmlFor="simulationMsiMonths">Meses MSI</label>
+                      <select
+                        id="simulationMsiMonths"
+                        className="form-grid__input"
+                        value={simulationForm.msiMonths ?? MSI_OPTIONS[0]}
+                        onChange={(event) => {
+                          setSimulationForm((previous) => ({ ...previous, msiMonths: Number.parseInt(event.target.value, 10) }))
+                        }}
+                      >
+                        {MSI_OPTIONS.map((months) => (
+                          <option key={months} value={months}>{months} meses</option>
+                        ))}
+                      </select>
+                    </>
+                  ) : null}
+
+                  {simulationForm.scenarioType === 'loan' ? (
+                    <>
+                      <label className="form-grid__field" htmlFor="simulationLoanMonths">Plazo (meses)</label>
+                      <input
+                        id="simulationLoanMonths"
+                        className="form-grid__input"
+                        type="number"
+                        min={1}
+                        max={600}
+                        value={simulationForm.loanMonths ?? 12}
+                        onChange={(event) => {
+                          setSimulationForm((previous) => ({ ...previous, loanMonths: Number(event.target.value) }))
+                        }}
+                      />
+
+                      <label className="form-grid__field" htmlFor="simulationAnnualRate">Tasa anual (%)</label>
+                      <input
+                        id="simulationAnnualRate"
+                        className="form-grid__input"
+                        type="number"
+                        min={0}
+                        max={100}
+                        step="0.01"
+                        value={simulationForm.annualRate ?? 0}
+                        onChange={(event) => {
+                          setSimulationForm((previous) => ({ ...previous, annualRate: Number(event.target.value) }))
+                        }}
+                      />
+                    </>
+                  ) : null}
+
+                  <label className="form-grid__field" htmlFor="simulationDescription">Descripcion</label>
+                  <textarea
+                    id="simulationDescription"
+                    className="form-grid__input"
+                    rows={3}
+                    value={simulationForm.description}
+                    onChange={(event) => {
+                      setSimulationForm((previous) => ({ ...previous, description: event.target.value }))
+                    }}
+                  />
+
+                  <div className="form-grid__actions">
+                    <button className="button button--primary" type="submit" disabled={!hasConfig || isSimulationsLoading}>
+                      Guardar simulacion
+                    </button>
+                    <button
+                      className="button button--secondary"
+                      type="button"
+                      onClick={() => {
+                        resetSimulationForm()
+                      }}
+                    >
+                      Limpiar
+                    </button>
+                  </div>
+                </form>
+              </article>
+
+              <article className="mini-card">
+                <header className="mini-card__header">
+                  <h3 className="mini-card__title">Historial</h3>
+                </header>
+
+                <div className="form-grid__actions">
+                  <button
+                    className="button button--secondary"
+                    type="button"
+                    disabled={!hasConfig || isSimulationsLoading}
+                    onClick={() => {
+                      void loadSimulations()
+                    }}
+                  >
+                    {isSimulationsLoading ? 'Cargando...' : 'Recargar historial'}
+                  </button>
+                </div>
+
+                <div className="table-wrap">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Fecha</th>
+                        <th>Nombre</th>
+                        <th>Escenario</th>
+                        <th>Monto</th>
+                        <th>Compromiso mensual</th>
+                        <th>Balance neto proyectado</th>
+                        <th>Viabilidad</th>
+                        <th>Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {isSimulationsLoading ? (
+                        <tr>
+                          <td colSpan={8}>Cargando simulaciones...</td>
+                        </tr>
+                      ) : null}
+
+                      {!isSimulationsLoading && simulations.length === 0 ? (
+                        <tr>
+                          <td colSpan={8}>No hay simulaciones registradas.</td>
+                        </tr>
+                      ) : null}
+
+                      {!isSimulationsLoading
+                        ? simulations.map((simulation) => {
+                          const result = simulation.resultJson as {
+                            scenarioType?: SimulationScenarioType
+                            amount?: number
+                            monthlyCommitmentIncrease?: number
+                            projectedSummary?: {
+                              netBalance?: number
+                            }
+                          }
+
+                          const scenarioType = result.scenarioType ?? 'direct_purchase'
+                          const amount = result.amount ?? 0
+                          const monthlyCommitmentIncrease = result.monthlyCommitmentIncrease ?? 0
+                          const projectedNetBalance = result.projectedSummary?.netBalance ?? 0
+
+                          return (
+                            <tr key={simulation.id}>
+                              <td>{simulation.simulationDate}</td>
+                              <td>{simulation.name}</td>
+                              <td>{getSimulationScenarioLabel(scenarioType)}</td>
+                              <td>{formatCurrency(amount)}</td>
+                              <td>{formatCurrency(monthlyCommitmentIncrease)}</td>
+                              <td>{formatCurrency(projectedNetBalance)}</td>
+                              <td>
+                                <span className={`badge ${simulation.isFavorable ? 'badge--success' : 'badge--warning'}`}>
+                                  {simulation.isFavorable ? 'Favorable' : 'No favorable'}
+                                </span>
+                              </td>
+                              <td>
+                                <div className="table__actions">
+                                  <button
+                                    className="button button--danger"
+                                    type="button"
+                                    onClick={() => {
+                                      void handleSimulationDelete(simulation.id)
+                                    }}
+                                  >
+                                    Eliminar
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })
+                        : null}
+                    </tbody>
+                  </table>
+                </div>
+              </article>
             </div>
           </section>
         ) : null}
