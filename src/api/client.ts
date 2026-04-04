@@ -195,191 +195,274 @@ async function request<T>(
   }
 }
 
-function sanitizeBankPayload(payload: BankInput): Omit<BankInput, 'shortName' | 'color' | 'iconName'> & {
-  shortName: string | null
-  color: string | null
-  iconName: string | null
-} {
-  return {
-    ...payload,
-    shortName: payload.shortName.trim() || null,
-    color: payload.color.trim() || null,
-    iconName: payload.iconName.trim() || null,
+function setTrimmedIfPresent(target: Record<string, unknown>, key: string, value: string): void {
+  const normalized = value.trim()
+  if (normalized) {
+    target[key] = normalized
   }
 }
 
-function sanitizeInstrumentPayload(payload: FinancialInstrumentInput): Omit<FinancialInstrumentInput, 'lastFour' | 'notes'> & {
-  lastFour: string | null
-  notes: string | null
-} {
-  return {
-    ...payload,
-    lastFour: payload.lastFour.trim() || null,
-    notes: payload.notes.trim() || null,
+function setIfNotNull(target: Record<string, unknown>, key: string, value: unknown): void {
+  if (value !== null && value !== undefined) {
+    target[key] = value
   }
 }
 
-function sanitizeCategoryPayload(payload: CategoryInput): Omit<CategoryInput, 'iconName' | 'color'> & {
-  iconName: string | null
-  color: string | null
-} {
-  return {
-    ...payload,
-    iconName: payload.iconName.trim() || null,
-    color: payload.color.trim() || null,
+function sanitizeBankPayload(payload: BankInput): Record<string, unknown> {
+  const sanitized: Record<string, unknown> = {
+    name: payload.name.trim(),
+    isActive: payload.isActive,
   }
+
+  setTrimmedIfPresent(sanitized, 'shortName', payload.shortName)
+  setTrimmedIfPresent(sanitized, 'color', payload.color)
+  setTrimmedIfPresent(sanitized, 'iconName', payload.iconName)
+
+  return sanitized
 }
 
-function sanitizeSubcategoryPayload(payload: SubcategoryInput): Omit<SubcategoryInput, 'iconName'> & {
-  iconName: string | null
-} {
-  return {
-    ...payload,
-    iconName: payload.iconName.trim() || null,
+function sanitizeInstrumentPayload(payload: FinancialInstrumentInput): Record<string, unknown> {
+  const sanitized: Record<string, unknown> = {
+    bankId: payload.bankId,
+    name: payload.name.trim(),
+    type: payload.type,
+    currencyId: payload.currencyId,
+    isActive: payload.isActive,
   }
+
+  setTrimmedIfPresent(sanitized, 'lastFour', payload.lastFour)
+  setTrimmedIfPresent(sanitized, 'notes', payload.notes)
+
+  if (payload.type === 'credit_card') {
+    setIfNotNull(sanitized, 'creditLimit', payload.creditLimit)
+    setIfNotNull(sanitized, 'currentBalance', payload.currentBalance)
+    setIfNotNull(sanitized, 'availableCredit', payload.availableCredit)
+    setIfNotNull(sanitized, 'cutOffDay', payload.cutOffDay)
+    setIfNotNull(sanitized, 'paymentDueDay', payload.paymentDueDay)
+    setIfNotNull(sanitized, 'annualRate', payload.annualRate)
+  } else {
+    setIfNotNull(sanitized, 'currentAmount', payload.currentAmount)
+  }
+
+  return sanitized
 }
 
-function sanitizeTransactionPayload(payload: TransactionInput): Omit<TransactionInput, 'description' | 'notes'> & {
-  description: string | null
-  notes: string | null
-} {
-  return {
-    ...payload,
-    description: payload.description.trim() || null,
-    notes: payload.notes.trim() || null,
+function sanitizeCategoryPayload(payload: CategoryInput): Record<string, unknown> {
+  const sanitized: Record<string, unknown> = {
+    name: payload.name.trim(),
+    type: payload.type,
+    isActive: payload.isActive,
   }
+
+  setTrimmedIfPresent(sanitized, 'iconName', payload.iconName)
+  setTrimmedIfPresent(sanitized, 'color', payload.color)
+
+  return sanitized
 }
 
-function sanitizeStatementPayload(payload: CreditCardStatementInput): {
-  instrumentId: number
-  cutOffDate: string
-  paymentDueDate: string | null
-  minimumPayment: number | null
-  noInterestPayment: number | null
-} {
-  return {
+function sanitizeSubcategoryPayload(payload: SubcategoryInput): Record<string, unknown> {
+  const sanitized: Record<string, unknown> = {
+    categoryId: payload.categoryId,
+    name: payload.name.trim(),
+    isActive: payload.isActive,
+  }
+
+  setTrimmedIfPresent(sanitized, 'iconName', payload.iconName)
+
+  return sanitized
+}
+
+function sanitizeTransactionPayload(payload: TransactionInput): Record<string, unknown> {
+  const sanitized: Record<string, unknown> = {
+    instrumentId: payload.instrumentId,
+    currencyId: payload.currencyId,
+    type: payload.type,
+    amount: payload.amount,
+    transactionDate: payload.transactionDate,
+    isMsi: payload.isMsi,
+  }
+
+  setIfNotNull(sanitized, 'categoryId', payload.categoryId)
+  setIfNotNull(sanitized, 'subcategoryId', payload.subcategoryId)
+  setIfNotNull(sanitized, 'msiMonths', payload.msiMonths)
+  setTrimmedIfPresent(sanitized, 'description', payload.description)
+  setTrimmedIfPresent(sanitized, 'notes', payload.notes)
+
+  return sanitized
+}
+
+function sanitizeStatementPayload(payload: CreditCardStatementInput): Record<string, unknown> {
+  const sanitized: Record<string, unknown> = {
     instrumentId: payload.instrumentId,
     cutOffDate: payload.cutOffDate,
-    paymentDueDate: payload.paymentDueDate.trim() || null,
-    minimumPayment: payload.minimumPayment,
-    noInterestPayment: payload.noInterestPayment,
   }
+
+  setTrimmedIfPresent(sanitized, 'paymentDueDate', payload.paymentDueDate)
+  setIfNotNull(sanitized, 'minimumPayment', payload.minimumPayment)
+  setIfNotNull(sanitized, 'noInterestPayment', payload.noInterestPayment)
+
+  return sanitized
 }
 
-function sanitizeStatementUpdatePayload(payload: CreditCardStatementUpdateInput): {
-  paymentDueDate: string | null
-  minimumPayment: number | null
-  noInterestPayment: number | null
-  isPaid: boolean | null
-  paidAmount: number | null
-  paidDate: string | null
-} {
-  return {
-    paymentDueDate: payload.paymentDueDate.trim() || null,
-    minimumPayment: payload.minimumPayment,
-    noInterestPayment: payload.noInterestPayment,
-    isPaid: payload.isPaid,
-    paidAmount: payload.paidAmount,
-    paidDate: payload.paidDate.trim() || null,
-  }
+function sanitizeStatementUpdatePayload(payload: CreditCardStatementUpdateInput): Record<string, unknown> {
+  const sanitized: Record<string, unknown> = {}
+
+  setTrimmedIfPresent(sanitized, 'paymentDueDate', payload.paymentDueDate)
+  setIfNotNull(sanitized, 'minimumPayment', payload.minimumPayment)
+  setIfNotNull(sanitized, 'noInterestPayment', payload.noInterestPayment)
+  setIfNotNull(sanitized, 'isPaid', payload.isPaid)
+  setIfNotNull(sanitized, 'paidAmount', payload.paidAmount)
+  setTrimmedIfPresent(sanitized, 'paidDate', payload.paidDate)
+
+  return sanitized
 }
 
-function sanitizeTransferPayload(payload: TransferInput): Omit<TransferInput, 'description' | 'notes'> & {
-  description: string | null
-  notes: string | null
-} {
-  return {
-    ...payload,
-    description: payload.description.trim() || null,
-    notes: payload.notes.trim() || null,
-  }
-}
-
-function sanitizeLoanPayload(payload: LoanInput): Omit<LoanInput, 'lender' | 'endDate' | 'notes'> & {
-  lender: string | null
-  endDate: string | null
-  notes: string | null
-} {
-  return {
-    ...payload,
-    lender: payload.lender.trim() || null,
-    endDate: payload.endDate.trim() || null,
-    notes: payload.notes.trim() || null,
-  }
-}
-
-function sanitizeLoanPaymentRegisterPayload(payload: LoanPaymentRegisterInput): {
-  paidDate: string | null
-  amount: number | null
-  notes: string | null
-} {
-  return {
-    paidDate: payload.paidDate.trim() || null,
+function sanitizeTransferPayload(payload: TransferInput): Record<string, unknown> {
+  const sanitized: Record<string, unknown> = {
+    sourceInstrumentId: payload.sourceInstrumentId,
+    destinationInstrumentId: payload.destinationInstrumentId,
     amount: payload.amount,
-    notes: payload.notes.trim() || null,
+    currencyId: payload.currencyId,
+    transferDate: payload.transferDate,
+    type: payload.type,
   }
+
+  setIfNotNull(sanitized, 'statementId', payload.statementId)
+  setIfNotNull(sanitized, 'loanId', payload.loanId)
+  setTrimmedIfPresent(sanitized, 'description', payload.description)
+  setTrimmedIfPresent(sanitized, 'notes', payload.notes)
+
+  return sanitized
 }
 
-function sanitizeSubscriptionPayload(payload: SubscriptionInput): Omit<SubscriptionInput, 'nextBilling' | 'notes'> & {
-  nextBilling: string | null
-  notes: string | null
-} {
-  return {
-    ...payload,
-    nextBilling: payload.nextBilling.trim() || null,
-    notes: payload.notes.trim() || null,
+function sanitizeLoanPayload(payload: LoanInput): Record<string, unknown> {
+  const sanitized: Record<string, unknown> = {
+    name: payload.name.trim(),
+    currencyId: payload.currencyId,
+    originalAmount: payload.originalAmount,
+    totalInstallments: payload.totalInstallments,
+    paymentType: payload.paymentType,
+    startDate: payload.startDate,
+    isActive: payload.isActive,
   }
+
+  setIfNotNull(sanitized, 'annualRate', payload.annualRate)
+  setIfNotNull(sanitized, 'fixedPayment', payload.fixedPayment)
+  setIfNotNull(sanitized, 'paymentDay', payload.paymentDay)
+  setIfNotNull(sanitized, 'instrumentId', payload.instrumentId)
+  setTrimmedIfPresent(sanitized, 'lender', payload.lender)
+  setTrimmedIfPresent(sanitized, 'endDate', payload.endDate)
+  setTrimmedIfPresent(sanitized, 'notes', payload.notes)
+
+  return sanitized
 }
 
-function sanitizeFixedExpensePayload(payload: FixedExpenseInput): Omit<FixedExpenseInput, 'notes'> & {
-  notes: string | null
-} {
-  return {
-    ...payload,
-    notes: payload.notes.trim() || null,
-  }
+function sanitizeLoanPaymentRegisterPayload(payload: LoanPaymentRegisterInput): Record<string, unknown> {
+  const sanitized: Record<string, unknown> = {}
+
+  setTrimmedIfPresent(sanitized, 'paidDate', payload.paidDate)
+  setIfNotNull(sanitized, 'amount', payload.amount)
+  setTrimmedIfPresent(sanitized, 'notes', payload.notes)
+
+  return sanitized
 }
 
-function sanitizeFixedExpensePaymentPayload(payload: FixedExpensePaymentInput): Omit<FixedExpensePaymentInput, 'paymentDate' | 'notes'> & {
-  paymentDate: string | null
-  notes: string | null
-} {
-  return {
-    ...payload,
-    paymentDate: payload.paymentDate.trim() || null,
-    notes: payload.notes.trim() || null,
+function sanitizeSubscriptionPayload(payload: SubscriptionInput): Record<string, unknown> {
+  const sanitized: Record<string, unknown> = {
+    name: payload.name.trim(),
+    instrumentId: payload.instrumentId,
+    currencyId: payload.currencyId,
+    amount: payload.amount,
+    billingCycle: payload.billingCycle,
+    billingDay: payload.billingDay,
+    isActive: payload.isActive,
   }
+
+  setIfNotNull(sanitized, 'categoryId', payload.categoryId)
+  setIfNotNull(sanitized, 'subcategoryId', payload.subcategoryId)
+  setTrimmedIfPresent(sanitized, 'nextBilling', payload.nextBilling)
+  setTrimmedIfPresent(sanitized, 'notes', payload.notes)
+
+  return sanitized
 }
 
-function sanitizeBudgetPayload(payload: BudgetInput): Omit<BudgetInput, 'notes'> & {
-  notes: string | null
-} {
-  return {
-    ...payload,
-    notes: payload.notes.trim() || null,
+function sanitizeFixedExpensePayload(payload: FixedExpenseInput): Record<string, unknown> {
+  const sanitized: Record<string, unknown> = {
+    name: payload.name.trim(),
+    currencyId: payload.currencyId,
+    estimatedAmount: payload.estimatedAmount,
+    isVariable: payload.isVariable,
+    paymentDay: payload.paymentDay,
+    isActive: payload.isActive,
   }
+
+  setIfNotNull(sanitized, 'instrumentId', payload.instrumentId)
+  setIfNotNull(sanitized, 'categoryId', payload.categoryId)
+  setIfNotNull(sanitized, 'subcategoryId', payload.subcategoryId)
+  setTrimmedIfPresent(sanitized, 'notes', payload.notes)
+
+  return sanitized
 }
 
-function sanitizeSimulationPayload(payload: SimulationInput): Omit<SimulationInput, 'description' | 'simulationDate'> & {
-  description: string | null
-  simulationDate: string | null
-} {
-  return {
-    ...payload,
-    description: payload.description.trim() || null,
-    simulationDate: payload.simulationDate.trim() || null,
+function sanitizeFixedExpensePaymentPayload(payload: FixedExpensePaymentInput): Record<string, unknown> {
+  const sanitized: Record<string, unknown> = {
+    amount: payload.amount,
+    periodMonth: payload.periodMonth,
+    periodYear: payload.periodYear,
+    isPaid: payload.isPaid,
   }
+
+  setTrimmedIfPresent(sanitized, 'paymentDate', payload.paymentDate)
+  setTrimmedIfPresent(sanitized, 'notes', payload.notes)
+
+  return sanitized
 }
 
-function sanitizeReminderPayload(payload: ReminderInput): Omit<ReminderInput, 'description' | 'referenceType'> & {
-  description: string | null
-  referenceType: string | null
-} {
-  return {
-    ...payload,
-    description: payload.description.trim() || null,
-    referenceType: payload.referenceType.trim() || null,
+function sanitizeBudgetPayload(payload: BudgetInput): Record<string, unknown> {
+  const sanitized: Record<string, unknown> = {
+    currencyId: payload.currencyId,
+    amount: payload.amount,
+    month: payload.month,
+    year: payload.year,
   }
+
+  setIfNotNull(sanitized, 'categoryId', payload.categoryId)
+  setTrimmedIfPresent(sanitized, 'notes', payload.notes)
+
+  return sanitized
+}
+
+function sanitizeSimulationPayload(payload: SimulationInput): Record<string, unknown> {
+  const sanitized: Record<string, unknown> = {
+    name: payload.name.trim(),
+    scenarioType: payload.scenarioType,
+    amount: payload.amount,
+  }
+
+  setIfNotNull(sanitized, 'instrumentId', payload.instrumentId)
+  setIfNotNull(sanitized, 'msiMonths', payload.msiMonths)
+  setIfNotNull(sanitized, 'loanMonths', payload.loanMonths)
+  setIfNotNull(sanitized, 'annualRate', payload.annualRate)
+  setTrimmedIfPresent(sanitized, 'description', payload.description)
+  setTrimmedIfPresent(sanitized, 'simulationDate', payload.simulationDate)
+
+  return sanitized
+}
+
+function sanitizeReminderPayload(payload: ReminderInput): Record<string, unknown> {
+  const sanitized: Record<string, unknown> = {
+    title: payload.title.trim(),
+    reminderDate: payload.reminderDate,
+    type: payload.type,
+    isRead: payload.isRead,
+    isDismissed: payload.isDismissed,
+  }
+
+  setIfNotNull(sanitized, 'referenceId', payload.referenceId)
+  setTrimmedIfPresent(sanitized, 'description', payload.description)
+  setTrimmedIfPresent(sanitized, 'referenceType', payload.referenceType)
+
+  return sanitized
 }
 
 function buildTransactionQuery(filters: TransactionFilters): string {
