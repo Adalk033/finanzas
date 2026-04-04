@@ -1,10 +1,40 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { apiClient } from '../api/client'
+
+export type CloudConnectionStatus = 'unconfigured' | 'checking' | 'connected' | 'disconnected'
 
 export function useSettingsPing() {
   const [pingResponse, setPingResponse] = useState('')
   const [pingError, setPingError] = useState('')
   const [isPinging, setIsPinging] = useState(false)
+  const [cloudConnectionStatus, setCloudConnectionStatus] = useState<CloudConnectionStatus>('unconfigured')
+
+  const refreshCloudConnection = useCallback(async (): Promise<void> => {
+    setPingError('')
+    setCloudConnectionStatus('checking')
+
+    let configExists = false
+
+    try {
+      configExists = Boolean(await window.localConfig?.getConfig())
+    } catch {
+      configExists = false
+    }
+
+    if (!configExists) {
+      setCloudConnectionStatus('unconfigured')
+      return
+    }
+
+    const healthResult = await apiClient.health()
+
+    if (!healthResult.success) {
+      setCloudConnectionStatus('disconnected')
+      return
+    }
+
+    setCloudConnectionStatus('connected')
+  }, [])
 
   const handlePing = async (): Promise<void> => {
     setIsPinging(true)
@@ -15,9 +45,12 @@ export function useSettingsPing() {
 
     if (!healthResult.success) {
       setPingError(healthResult.error ?? 'Fallo health check.')
+      setCloudConnectionStatus('disconnected')
       setIsPinging(false)
       return
     }
+
+    setCloudConnectionStatus('connected')
 
     const pingResult = await apiClient.bootstrapPing('conexion inicial ok')
 
@@ -31,10 +64,24 @@ export function useSettingsPing() {
     setIsPinging(false)
   }
 
+  useEffect(() => {
+    void refreshCloudConnection()
+
+    const intervalId = window.setInterval(() => {
+      void refreshCloudConnection()
+    }, 60000)
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [refreshCloudConnection])
+
   return {
     pingResponse,
     pingError,
     isPinging,
+    cloudConnectionStatus,
+    refreshCloudConnection,
     handlePing,
   }
 }

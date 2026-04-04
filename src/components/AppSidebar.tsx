@@ -1,8 +1,10 @@
+import type { CloudConnectionStatus } from '../hooks/useSettingsPing'
 import type { AppSection } from '../app/appHelpers'
 
 type AppSidebarProps = {
   activeSection: AppSection
   pendingRemindersCount: number
+  cloudConnectionStatus: CloudConnectionStatus
   onSectionChange: (section: AppSection) => void
 }
 
@@ -24,11 +26,22 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'loans', label: 'Prestamos' },
   { key: 'budgets', label: 'Presupuestos' },
 ]
+const CLOUD_STATUS_LABELS: Record<CloudConnectionStatus, string> = {
+  connected: 'Conectado a la nube',
+  disconnected: 'Sin conexión',
+  checking: 'Verificando nube',
+  unconfigured: 'Sin configurar',
+}
 
-export function AppSidebar({ activeSection, pendingRemindersCount, onSectionChange }: AppSidebarProps) {
+export function AppSidebar({ activeSection, pendingRemindersCount, cloudConnectionStatus, onSectionChange }: AppSidebarProps) {
   return (
     <aside className="app-shell__sidebar">
       <h1 className="app-shell__brand">Finanzas Lit</h1>
+
+      <div className={`app-shell__cloud-pill app-shell__cloud-pill--${cloudConnectionStatus}`}>
+        <span className="app-shell__cloud-pill-dot" aria-hidden="true" />
+        <span>{CLOUD_STATUS_LABELS[cloudConnectionStatus]}</span>
+      </div>
 
       {NAV_ITEMS.map((item) => (
         <button

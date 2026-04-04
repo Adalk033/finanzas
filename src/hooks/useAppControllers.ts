@@ -80,6 +80,7 @@ export function useAppControllers() {
 
   const handleSave = async (): Promise<void> => {
     await configController.saveConfig()
+    await settingsPingController.refreshCloudConnection()
   }
 
   return {

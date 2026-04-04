@@ -53,6 +53,7 @@ export function App() {
       <AppSidebar
         activeSection={activeSection}
         pendingRemindersCount={remindersController.pendingRemindersCount}
+        cloudConnectionStatus={settingsPingController.cloudConnectionStatus}
         onSectionChange={handleSectionChange}
       />
 
