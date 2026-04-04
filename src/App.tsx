@@ -1,13 +1,8 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { Suspense, lazy, useMemo, useState, type FormEvent } from 'react'
 import './App.css'
 import { apiClient } from './api/client'
 import { useLocalConfig } from './hooks/useLocalConfig'
 import { AppSidebar } from './components/AppSidebar'
-import { BanksSection } from './components/sections/BanksSection'
-import { CategoriesSection } from './components/sections/CategoriesSection'
-import { DashboardSection } from './components/sections/DashboardSection'
-import { InstrumentsSection } from './components/sections/InstrumentsSection'
-import { SettingsSection } from './components/sections/SettingsSection'
 import {
   EMPTY_BANK_FORM,
   EMPTY_BUDGET_FORM,
@@ -85,6 +80,17 @@ import type {
   TransactionType,
   ReminderType,
 } from './types/domain'
+
+const DashboardSection = lazy(() => import('./components/sections/DashboardSection').then((module) => ({ default: module.DashboardSection })))
+const SettingsSection = lazy(() => import('./components/sections/SettingsSection').then((module) => ({ default: module.SettingsSection })))
+const BanksSection = lazy(() => import('./components/sections/BanksSection').then((module) => ({ default: module.BanksSection })))
+const InstrumentsSection = lazy(() => import('./components/sections/InstrumentsSection').then((module) => ({ default: module.InstrumentsSection })))
+const CategoriesSection = lazy(() => import('./components/sections/CategoriesSection').then((module) => ({ default: module.CategoriesSection })))
+const TransactionsSection = lazy(() => import('./components/sections/TransactionsSection').then((module) => ({ default: module.TransactionsSection })))
+const CreditCardsSection = lazy(() => import('./components/sections/CreditCardsSection').then((module) => ({ default: module.CreditCardsSection })))
+const SubscriptionsSection = lazy(() => import('./components/sections/SubscriptionsSection').then((module) => ({ default: module.SubscriptionsSection })))
+const FixedExpensesSection = lazy(() => import('./components/sections/FixedExpensesSection').then((module) => ({ default: module.FixedExpensesSection })))
+const LoansSection = lazy(() => import('./components/sections/LoansSection').then((module) => ({ default: module.LoansSection })))
 
 export function App() {
   const {
@@ -1904,6 +1910,13 @@ export function App() {
       />
 
       <section className="app-shell__content">
+        <Suspense
+          fallback={(
+            <section className="card">
+              <p className="settings-screen__status">Cargando seccion...</p>
+            </section>
+          )}
+        >
         {activeSection === 'dashboard' ? (
           <DashboardSection
             hasConfig={hasConfig}
@@ -2032,1815 +2045,207 @@ export function App() {
         ) : null}
 
         {activeSection === 'transactions' ? (
-          <section className="card">
-            <header className="card__header">
-              <h2 className="card__title">Transacciones</h2>
-              <p className="card__subtitle">Registro de gastos/ingresos, filtros y vista de MSI activas.</p>
-            </header>
-
-            <div className="transaction-layout">
-              <section className="mini-card">
-                <header className="mini-card__header">
-                  <h3 className="mini-card__title">Nueva transaccion</h3>
-                  <p className="mini-card__subtitle">Crea gastos o ingresos asociados a instrumento y categoria.</p>
-                </header>
-
-                <form className="form-grid" onSubmit={handleTransactionSubmit}>
-                  <label className="form-grid__field" htmlFor="transactionInstrument">Instrumento</label>
-                  <select
-                    id="transactionInstrument"
-                    className="form-grid__input"
-                    value={selectedTransactionInstrumentId}
-                    onChange={(event) => {
-                      setTransactionForm({ ...transactionForm, instrumentId: Number(event.target.value) })
-                    }}
-                    required
-                  >
-                    <option value={0}>Selecciona instrumento</option>
-                    {instruments.map((instrument) => (
-                      <option key={instrument.id} value={instrument.id}>{instrument.name}</option>
-                    ))}
-                  </select>
-
-                  <label className="form-grid__field" htmlFor="transactionType">Tipo</label>
-                  <select
-                    id="transactionType"
-                    className="form-grid__input"
-                    value={transactionForm.type}
-                    onChange={(event) => handleTransactionTypeChange(event.target.value as TransactionType)}
-                  >
-                    <option value="expense">Gasto</option>
-                    <option value="income">Ingreso</option>
-                  </select>
-
-                  <label className="form-grid__field" htmlFor="transactionAmount">Monto</label>
-                  <input
-                    id="transactionAmount"
-                    className="form-grid__input"
-                    type="number"
-                    min={0.01}
-                    step="0.01"
-                    value={transactionForm.amount}
-                    onChange={(event) => setTransactionForm({ ...transactionForm, amount: Number(event.target.value) })}
-                    required
-                  />
-
-                  <label className="form-grid__field" htmlFor="transactionDate">Fecha</label>
-                  <input
-                    id="transactionDate"
-                    className="form-grid__input"
-                    type="date"
-                    value={transactionForm.transactionDate}
-                    onChange={(event) => setTransactionForm({ ...transactionForm, transactionDate: event.target.value })}
-                    required
-                  />
-
-                  <label className="form-grid__field" htmlFor="transactionCategory">Categoria</label>
-                  <select
-                    id="transactionCategory"
-                    className="form-grid__input"
-                    value={selectedTransactionCategoryId ?? ''}
-                    onChange={(event) => {
-                      const nextCategoryId = event.target.value ? Number(event.target.value) : null
-                      setTransactionForm({ ...transactionForm, categoryId: nextCategoryId, subcategoryId: null })
-                    }}
-                  >
-                    <option value="">Sin categoria</option>
-                    {categories.map((category) => (
-                      <option key={category.id} value={category.id}>{category.name}</option>
-                    ))}
-                  </select>
-
-                  <label className="form-grid__field" htmlFor="transactionSubcategory">Subcategoria</label>
-                  <select
-                    id="transactionSubcategory"
-                    className="form-grid__input"
-                    value={transactionForm.subcategoryId ?? ''}
-                    onChange={(event) => {
-                      const nextSubcategoryId = event.target.value ? Number(event.target.value) : null
-                      setTransactionForm({ ...transactionForm, subcategoryId: nextSubcategoryId })
-                    }}
-                    disabled={transactionSubcategoryOptions.length === 0}
-                  >
-                    <option value="">Sin subcategoria</option>
-                    {transactionSubcategoryOptions.map((subcategory) => (
-                      <option key={subcategory.id} value={subcategory.id}>{subcategory.name}</option>
-                    ))}
-                  </select>
-
-                  <label className="form-grid__field" htmlFor="transactionDescription">Descripcion</label>
-                  <input
-                    id="transactionDescription"
-                    className="form-grid__input"
-                    type="text"
-                    value={transactionForm.description}
-                    onChange={(event) => setTransactionForm({ ...transactionForm, description: event.target.value })}
-                    placeholder="Supermercado, nomina, etc."
-                  />
-
-                  <label className="form-grid__field" htmlFor="transactionNotes">Notas</label>
-                  <input
-                    id="transactionNotes"
-                    className="form-grid__input"
-                    type="text"
-                    value={transactionForm.notes}
-                    onChange={(event) => setTransactionForm({ ...transactionForm, notes: event.target.value })}
-                    placeholder="Opcional"
-                  />
-
-                  {transactionForm.type === 'expense' && selectedTransactionInstrument?.type === 'credit_card' ? (
-                    <>
-                      <label className="form-grid__field" htmlFor="transactionIsMsi">MSI</label>
-                      <select
-                        id="transactionIsMsi"
-                        className="form-grid__input"
-                        value={transactionForm.isMsi ? 'yes' : 'no'}
-                        onChange={(event) => {
-                          const enabled = event.target.value === 'yes'
-                          setTransactionForm({
-                            ...transactionForm,
-                            isMsi: enabled,
-                            msiMonths: enabled ? (transactionForm.msiMonths ?? MSI_OPTIONS[0]) : null,
-                          })
-                        }}
-                      >
-                        <option value="no">No</option>
-                        <option value="yes">Si</option>
-                      </select>
-
-                      {transactionForm.isMsi ? (
-                        <>
-                          <label className="form-grid__field" htmlFor="transactionMsiMonths">Meses MSI</label>
-                          <select
-                            id="transactionMsiMonths"
-                            className="form-grid__input"
-                            value={transactionForm.msiMonths ?? MSI_OPTIONS[0]}
-                            onChange={(event) => {
-                              setTransactionForm({ ...transactionForm, msiMonths: Number(event.target.value) })
-                            }}
-                          >
-                            {MSI_OPTIONS.map((months) => (
-                              <option key={months} value={months}>{months} meses</option>
-                            ))}
-                          </select>
-                        </>
-                      ) : null}
-                    </>
-                  ) : null}
-
-                  <div className="form-grid__actions">
-                    <button className="button button--primary" type="submit" disabled={!hasConfig || instruments.length === 0}>
-                      Crear transaccion
-                    </button>
-                    <button className="button button--secondary" type="button" onClick={resetTransactionForm}>
-                      Limpiar
-                    </button>
-                  </div>
-                </form>
-              </section>
-
-              <section className="mini-card">
-                <header className="mini-card__header">
-                  <h3 className="mini-card__title">Filtros</h3>
-                  <p className="mini-card__subtitle">Refina por fecha, tipo, categoria, instrumento y texto.</p>
-                </header>
-
-                <form className="form-grid" onSubmit={handleTransactionFiltersSubmit}>
-                  <label className="form-grid__field" htmlFor="filterFromDate">Desde</label>
-                  <input
-                    id="filterFromDate"
-                    className="form-grid__input"
-                    type="date"
-                    value={transactionFilters.fromDate ?? ''}
-                    onChange={(event) => setTransactionFilters({ ...transactionFilters, fromDate: event.target.value })}
-                  />
-
-                  <label className="form-grid__field" htmlFor="filterToDate">Hasta</label>
-                  <input
-                    id="filterToDate"
-                    className="form-grid__input"
-                    type="date"
-                    value={transactionFilters.toDate ?? ''}
-                    onChange={(event) => setTransactionFilters({ ...transactionFilters, toDate: event.target.value })}
-                  />
-
-                  <label className="form-grid__field" htmlFor="filterType">Tipo</label>
-                  <select
-                    id="filterType"
-                    className="form-grid__input"
-                    value={transactionFilters.type ?? ''}
-                    onChange={(event) => {
-                      const nextType = event.target.value ? (event.target.value as TransactionType) : undefined
-                      setTransactionFilters({ ...transactionFilters, type: nextType })
-                    }}
-                  >
-                    <option value="">Todos</option>
-                    <option value="expense">Gasto</option>
-                    <option value="income">Ingreso</option>
-                  </select>
-
-                  <label className="form-grid__field" htmlFor="filterCategory">Categoria</label>
-                  <select
-                    id="filterCategory"
-                    className="form-grid__input"
-                    value={transactionFilters.categoryId ?? ''}
-                    onChange={(event) => {
-                      const nextCategoryId = event.target.value ? Number(event.target.value) : undefined
-                      setTransactionFilters({ ...transactionFilters, categoryId: nextCategoryId })
-                    }}
-                  >
-                    <option value="">Todas</option>
-                    {categories.map((category) => (
-                      <option key={category.id} value={category.id}>{category.name}</option>
-                    ))}
-                  </select>
-
-                  <label className="form-grid__field" htmlFor="filterInstrument">Instrumento</label>
-                  <select
-                    id="filterInstrument"
-                    className="form-grid__input"
-                    value={transactionFilters.instrumentId ?? ''}
-                    onChange={(event) => {
-                      const nextInstrumentId = event.target.value ? Number(event.target.value) : undefined
-                      setTransactionFilters({ ...transactionFilters, instrumentId: nextInstrumentId })
-                    }}
-                  >
-                    <option value="">Todos</option>
-                    {instruments.map((instrument) => (
-                      <option key={instrument.id} value={instrument.id}>{instrument.name}</option>
-                    ))}
-                  </select>
-
-                  <label className="form-grid__field" htmlFor="filterSearch">Busqueda</label>
-                  <input
-                    id="filterSearch"
-                    className="form-grid__input"
-                    type="text"
-                    value={transactionFilters.search ?? ''}
-                    onChange={(event) => setTransactionFilters({ ...transactionFilters, search: event.target.value })}
-                    placeholder="Descripcion, categoria o instrumento"
-                  />
-
-                  <div className="form-grid__actions">
-                    <button className="button button--primary" type="submit" disabled={!hasConfig}>
-                      Aplicar filtros
-                    </button>
-                    <button
-                      className="button button--secondary"
-                      type="button"
-                      onClick={() => {
-                        void clearTransactionFilters()
-                      }}
-                    >
-                      Limpiar filtros
-                    </button>
-                    <button
-                      className="button button--secondary"
-                      type="button"
-                      onClick={() => {
-                        void loadTransactions()
-                      }}
-                    >
-                      Recargar
-                    </button>
-                  </div>
-                </form>
-              </section>
-            </div>
-
-            {transactionError ? <p className="message message--error">{transactionError}</p> : null}
-            {transactionMessage ? <p className="message message--success">{transactionMessage}</p> : null}
-
-            <div className="table-wrap">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Fecha</th>
-                    <th>Tipo</th>
-                    <th>Monto</th>
-                    <th>Instrumento</th>
-                    <th>Categoria</th>
-                    <th>MSI</th>
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {isTransactionsLoading ? (
-                    <tr>
-                      <td colSpan={7}>Cargando transacciones...</td>
-                    </tr>
-                  ) : null}
-
-                  {!isTransactionsLoading && transactions.length === 0 ? (
-                    <tr>
-                      <td colSpan={7}>No hay transacciones registradas.</td>
-                    </tr>
-                  ) : null}
-
-                  {!isTransactionsLoading
-                    ? transactions.map((transaction) => (
-                      <tr key={transaction.id}>
-                        <td>{transaction.transactionDate}</td>
-                        <td>{transaction.type === 'expense' ? 'Gasto' : 'Ingreso'}</td>
-                        <td>{formatCurrency(transaction.amount)}</td>
-                        <td>{transaction.instrumentName ?? '-'}</td>
-                        <td>
-                          {transaction.categoryName ?? '-'}
-                          {transaction.subcategoryName ? ` / ${transaction.subcategoryName}` : ''}
-                        </td>
-                        <td>{transaction.isMsi ? `${transaction.msiMonths ?? '-'} meses` : '-'}</td>
-                        <td>
-                          <div className="table__actions">
-                            <button
-                              className="button button--danger"
-                              type="button"
-                              onClick={() => {
-                                void handleTransactionDelete(transaction.id)
-                              }}
-                            >
-                              Eliminar
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                    : null}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="category-list">
-              <article className="category-card">
-                <header className="category-card__header">
-                  <div>
-                    <h3 className="category-card__title">Compras MSI activas</h3>
-                    <p className="category-card__meta">Desglose de montos mensuales de compras en meses sin intereses.</p>
-                  </div>
-                </header>
-
-                <div className="table-wrap">
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th>Descripcion</th>
-                        <th>Instrumento</th>
-                        <th>Monto total</th>
-                        <th>Mensual</th>
-                        <th>Meses</th>
-                        <th>Inicio</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {activeMsiTransactions.length === 0 ? (
-                        <tr>
-                          <td colSpan={6}>No hay compras MSI activas.</td>
-                        </tr>
-                      ) : null}
-
-                      {activeMsiTransactions.map((transaction) => (
-                        <tr key={`msi-${transaction.id}`}>
-                          <td>{transaction.description ?? 'Compra MSI'}</td>
-                          <td>{transaction.instrumentName ?? '-'}</td>
-                          <td>{formatCurrency(transaction.amount)}</td>
-                          <td>{formatCurrency(transaction.msiMonthlyAmount)}</td>
-                          <td>{transaction.msiRemaining ?? transaction.msiMonths ?? '-'}</td>
-                          <td>{transaction.msiStartDate ?? '-'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </article>
-            </div>
-          </section>
+          <TransactionsSection
+            hasConfig={hasConfig}
+            instruments={instruments}
+            categories={categories}
+            transactionForm={transactionForm}
+            selectedTransactionInstrumentId={selectedTransactionInstrumentId}
+            selectedTransactionCategoryId={selectedTransactionCategoryId}
+            selectedTransactionInstrument={selectedTransactionInstrument}
+            transactionSubcategoryOptions={transactionSubcategoryOptions}
+            transactionFilters={transactionFilters}
+            transactions={transactions}
+            activeMsiTransactions={activeMsiTransactions}
+            isTransactionsLoading={isTransactionsLoading}
+            transactionError={transactionError}
+            transactionMessage={transactionMessage}
+            onTransactionFormChange={setTransactionForm}
+            onTransactionTypeChange={handleTransactionTypeChange}
+            onTransactionSubmit={handleTransactionSubmit}
+            onTransactionDelete={(transactionId) => {
+              void handleTransactionDelete(transactionId)
+            }}
+            onResetTransactionForm={resetTransactionForm}
+            onFiltersChange={setTransactionFilters}
+            onFiltersSubmit={handleTransactionFiltersSubmit}
+            onClearFilters={() => {
+              void clearTransactionFilters()
+            }}
+            onReload={() => {
+              void loadTransactions()
+            }}
+          />
         ) : null}
 
         {activeSection === 'creditCards' ? (
-          <section className="card">
-            <header className="card__header">
-              <h2 className="card__title">Tarjetas de Credito y Transferencias</h2>
-              <p className="card__subtitle">Estados de cuenta por corte y registro de abonos/transferencias.</p>
-            </header>
-
-            <div className="summary-grid">
-              <article className="summary-card">
-                <p className="summary-card__label">Deuda total en tarjetas</p>
-                <p className="summary-card__value">{formatCurrency(totalCreditCardDebt)}</p>
-              </article>
-              <article className="summary-card">
-                <p className="summary-card__label">Credito disponible total</p>
-                <p className="summary-card__value summary-card__value--positive">{formatCurrency(totalAvailableCredit)}</p>
-              </article>
-            </div>
-
-            <div className="transaction-layout">
-              <section className="mini-card">
-                <header className="mini-card__header">
-                  <h3 className="mini-card__title">Nuevo estado de cuenta</h3>
-                  <p className="mini-card__subtitle">El total se calcula automaticamente con las compras del periodo.</p>
-                </header>
-
-                <form className="form-grid" onSubmit={handleStatementSubmit}>
-                  <label className="form-grid__field" htmlFor="statementInstrument">Tarjeta</label>
-                  <select
-                    id="statementInstrument"
-                    className="form-grid__input"
-                    value={selectedStatementInstrumentId}
-                    onChange={(event) => setStatementForm({ ...statementForm, instrumentId: Number(event.target.value) })}
-                    required
-                  >
-                    <option value={0}>Selecciona tarjeta</option>
-                    {creditCardInstruments.map((instrument) => (
-                      <option key={instrument.id} value={instrument.id}>{instrument.name}</option>
-                    ))}
-                  </select>
-
-                  <label className="form-grid__field" htmlFor="statementCutOffDate">Fecha de corte</label>
-                  <input
-                    id="statementCutOffDate"
-                    className="form-grid__input"
-                    type="date"
-                    value={statementForm.cutOffDate}
-                    onChange={(event) => setStatementForm({ ...statementForm, cutOffDate: event.target.value })}
-                    required
-                  />
-
-                  <label className="form-grid__field" htmlFor="statementPaymentDueDate">Fecha de pago (opcional)</label>
-                  <input
-                    id="statementPaymentDueDate"
-                    className="form-grid__input"
-                    type="date"
-                    value={statementForm.paymentDueDate}
-                    onChange={(event) => setStatementForm({ ...statementForm, paymentDueDate: event.target.value })}
-                  />
-
-                  <div className="form-grid__actions">
-                    <button className="button button--primary" type="submit" disabled={!hasConfig || creditCardInstruments.length === 0}>
-                      Crear estado
-                    </button>
-                    <button className="button button--secondary" type="button" onClick={resetStatementForm}>
-                      Limpiar
-                    </button>
-                    <button
-                      className="button button--secondary"
-                      type="button"
-                      onClick={() => {
-                        void loadStatements()
-                      }}
-                    >
-                      Recargar
-                    </button>
-                  </div>
-                </form>
-              </section>
-
-              <section className="mini-card">
-                <header className="mini-card__header">
-                  <h3 className="mini-card__title">Nueva transferencia</h3>
-                  <p className="mini-card__subtitle">Abona tarjeta o mueve dinero entre cuentas propias.</p>
-                </header>
-
-                <form className="form-grid" onSubmit={handleTransferSubmit}>
-                  <label className="form-grid__field" htmlFor="transferType">Tipo</label>
-                  <select
-                    id="transferType"
-                    className="form-grid__input"
-                    value={transferForm.type}
-                    onChange={(event) => handleTransferTypeChange(event.target.value as TransferType)}
-                  >
-                    <option value="card_payment">Pago de tarjeta</option>
-                    <option value="inter_account">Entre cuentas</option>
-                    <option value="loan_payment">Pago de prestamo</option>
-                    <option value="other">Otro</option>
-                  </select>
-
-                  <label className="form-grid__field" htmlFor="transferSource">Origen</label>
-                  <select
-                    id="transferSource"
-                    className="form-grid__input"
-                    value={selectedTransferSourceInstrumentId}
-                    onChange={(event) => setTransferForm({ ...transferForm, sourceInstrumentId: Number(event.target.value) })}
-                    required
-                  >
-                    <option value={0}>Selecciona origen</option>
-                    {sourceTransferInstruments.map((instrument) => (
-                      <option key={instrument.id} value={instrument.id}>{instrument.name}</option>
-                    ))}
-                  </select>
-
-                  <label className="form-grid__field" htmlFor="transferDestination">Destino</label>
-                  <select
-                    id="transferDestination"
-                    className="form-grid__input"
-                    value={selectedTransferDestinationInstrumentId}
-                    onChange={(event) => setTransferForm({ ...transferForm, destinationInstrumentId: Number(event.target.value) })}
-                    required
-                  >
-                    <option value={0}>Selecciona destino</option>
-                    {availableTransferDestinations.map((instrument) => (
-                      <option key={instrument.id} value={instrument.id}>{instrument.name}</option>
-                    ))}
-                  </select>
-
-                  <label className="form-grid__field" htmlFor="transferAmount">Monto</label>
-                  <input
-                    id="transferAmount"
-                    className="form-grid__input"
-                    type="number"
-                    step="0.01"
-                    min={0.01}
-                    value={transferForm.amount}
-                    onChange={(event) => setTransferForm({ ...transferForm, amount: Number(event.target.value) })}
-                    required
-                  />
-
-                  <label className="form-grid__field" htmlFor="transferDate">Fecha</label>
-                  <input
-                    id="transferDate"
-                    className="form-grid__input"
-                    type="date"
-                    value={transferForm.transferDate}
-                    onChange={(event) => setTransferForm({ ...transferForm, transferDate: event.target.value })}
-                    required
-                  />
-
-                  <label className="form-grid__field" htmlFor="transferDescription">Descripcion</label>
-                  <input
-                    id="transferDescription"
-                    className="form-grid__input"
-                    type="text"
-                    value={transferForm.description}
-                    onChange={(event) => setTransferForm({ ...transferForm, description: event.target.value })}
-                    placeholder="Abono, movimiento interno, etc."
-                  />
-
-                  {transferForm.type === 'loan_payment' ? (
-                    <>
-                      <label className="form-grid__field" htmlFor="transferLoanId">ID de prestamo</label>
-                      <input
-                        id="transferLoanId"
-                        className="form-grid__input"
-                        type="number"
-                        min={1}
-                        value={transferForm.loanId ?? ''}
-                        onChange={(event) => {
-                          const rawValue = event.target.value
-                          setTransferForm({ ...transferForm, loanId: rawValue ? Number(rawValue) : null })
-                        }}
-                        required
-                      />
-                    </>
-                  ) : null}
-
-                  <div className="form-grid__actions">
-                    <button className="button button--primary" type="submit" disabled={!hasConfig || sourceTransferInstruments.length === 0}>
-                      Crear transferencia
-                    </button>
-                    <button className="button button--secondary" type="button" onClick={resetTransferForm}>
-                      Limpiar
-                    </button>
-                    <button
-                      className="button button--secondary"
-                      type="button"
-                      onClick={() => {
-                        void loadTransfers()
-                      }}
-                    >
-                      Recargar
-                    </button>
-                  </div>
-                </form>
-              </section>
-            </div>
-
-            {statementError ? <p className="message message--error">{statementError}</p> : null}
-            {statementMessage ? <p className="message message--success">{statementMessage}</p> : null}
-            {transferError ? <p className="message message--error">{transferError}</p> : null}
-            {transferMessage ? <p className="message message--success">{transferMessage}</p> : null}
-
-            <div className="category-list">
-              <article className="category-card">
-                <header className="category-card__header">
-                  <div>
-                    <h3 className="category-card__title">Estados de cuenta</h3>
-                    <p className="category-card__meta">Detalle por corte, fecha de pago y montos calculados.</p>
-                  </div>
-                </header>
-
-                <div className="table-wrap">
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th>Tarjeta</th>
-                        <th>Corte</th>
-                        <th>Pago</th>
-                        <th>Total</th>
-                        <th>Minimo</th>
-                        <th>Sin intereses</th>
-                        <th>Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {isStatementsLoading ? (
-                        <tr>
-                          <td colSpan={7}>Cargando estados...</td>
-                        </tr>
-                      ) : null}
-
-                      {!isStatementsLoading && statements.length === 0 ? (
-                        <tr>
-                          <td colSpan={7}>No hay estados de cuenta registrados.</td>
-                        </tr>
-                      ) : null}
-
-                      {!isStatementsLoading
-                        ? statements.map((statement) => (
-                          <tr key={statement.id}>
-                            <td>{statement.instrumentName ?? '-'}</td>
-                            <td>{statement.cutOffDate}</td>
-                            <td>{statement.paymentDueDate}</td>
-                            <td>{formatCurrency(statement.totalAmount)}</td>
-                            <td>{formatCurrency(statement.minimumPayment)}</td>
-                            <td>{formatCurrency(statement.noInterestPayment)}</td>
-                            <td>
-                              <div className="table__actions">
-                                <button
-                                  className="button button--secondary"
-                                  type="button"
-                                  onClick={() => {
-                                    void loadStatementMovements(statement)
-                                  }}
-                                >
-                                  Ver movimientos
-                                </button>
-                                <button
-                                  className="button button--secondary"
-                                  type="button"
-                                  onClick={() => {
-                                    startStatementEdit(statement)
-                                  }}
-                                >
-                                  Editar pago
-                                </button>
-                                <button
-                                  className="button button--danger"
-                                  type="button"
-                                  onClick={() => {
-                                    void handleStatementDelete(statement.id)
-                                  }}
-                                >
-                                  Eliminar
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                        : null}
-                    </tbody>
-                  </table>
-                </div>
-
-                {editingStatementId !== null ? (
-                  <div className="form-grid statement-edit-form">
-                    <label className="form-grid__field" htmlFor="statementEditPaymentDueDate">Nueva fecha de pago</label>
-                    <input
-                      id="statementEditPaymentDueDate"
-                      className="form-grid__input"
-                      type="date"
-                      value={statementUpdateForm.paymentDueDate}
-                      onChange={(event) => setStatementUpdateForm({ ...statementUpdateForm, paymentDueDate: event.target.value })}
-                    />
-                    <div className="form-grid__actions">
-                      <button
-                        className="button button--primary"
-                        type="button"
-                        onClick={() => {
-                          void handleStatementUpdate()
-                        }}
-                      >
-                        Guardar fecha
-                      </button>
-                      <button className="button button--secondary" type="button" onClick={resetStatementUpdateForm}>
-                        Cancelar
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-
-                {selectedStatementDetail !== null ? (
-                  <div className="statement-movements">
-                    <header className="mini-card__header">
-                      <h4 className="mini-card__title">
-                        Movimientos del corte {selectedStatementDetail.cutOffDate} · {selectedStatementDetail.instrumentName ?? 'Tarjeta'}
-                      </h4>
-                      <p className="mini-card__subtitle">Incluye compras e ingresos del periodo del estado de cuenta.</p>
-                    </header>
-
-                    <div className="table-wrap">
-                      <table className="table">
-                        <thead>
-                          <tr>
-                            <th>Fecha</th>
-                            <th>Descripcion</th>
-                            <th>Categoria</th>
-                            <th>Tipo</th>
-                            <th>Monto</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {isStatementMovementsLoading ? (
-                            <tr>
-                              <td colSpan={5}>Cargando movimientos...</td>
-                            </tr>
-                          ) : null}
-
-                          {!isStatementMovementsLoading && statementMovements.length === 0 ? (
-                            <tr>
-                              <td colSpan={5}>No hay movimientos para este estado de cuenta.</td>
-                            </tr>
-                          ) : null}
-
-                          {!isStatementMovementsLoading
-                            ? statementMovements.map((movement) => (
-                              <tr key={`statement-movement-${movement.id}`}>
-                                <td>{movement.transactionDate}</td>
-                                <td>{movement.description ?? 'Sin descripcion'}</td>
-                                <td>
-                                  {movement.categoryName ?? '-'}
-                                  {movement.subcategoryName ? ` / ${movement.subcategoryName}` : ''}
-                                </td>
-                                <td>{movement.type === 'expense' ? 'Gasto' : 'Ingreso'}</td>
-                                <td>{formatCurrency(movement.amount)}</td>
-                              </tr>
-                            ))
-                            : null}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                ) : null}
-              </article>
-
-              <article className="category-card">
-                <header className="category-card__header">
-                  <div>
-                    <h3 className="category-card__title">Historial de transferencias</h3>
-                    <p className="category-card__meta">Pagos y movimientos entre instrumentos propios.</p>
-                  </div>
-                </header>
-
-                <div className="table-wrap">
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th>Fecha</th>
-                        <th>Tipo</th>
-                        <th>Origen</th>
-                        <th>Destino</th>
-                        <th>Monto</th>
-                        <th>Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {isTransfersLoading ? (
-                        <tr>
-                          <td colSpan={6}>Cargando transferencias...</td>
-                        </tr>
-                      ) : null}
-
-                      {!isTransfersLoading && transfers.length === 0 ? (
-                        <tr>
-                          <td colSpan={6}>No hay transferencias registradas.</td>
-                        </tr>
-                      ) : null}
-
-                      {!isTransfersLoading
-                        ? transfers.map((transfer) => (
-                          <tr key={transfer.id}>
-                            <td>{transfer.transferDate}</td>
-                            <td>{transfer.type}</td>
-                            <td>{transfer.sourceInstrumentName ?? '-'}</td>
-                            <td>{transfer.destinationInstrumentName ?? '-'}</td>
-                            <td>{formatCurrency(transfer.amount)}</td>
-                            <td>
-                              <div className="table__actions">
-                                <button
-                                  className="button button--danger"
-                                  type="button"
-                                  onClick={() => {
-                                    void handleTransferDelete(transfer.id)
-                                  }}
-                                >
-                                  Eliminar
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                        : null}
-                    </tbody>
-                  </table>
-                </div>
-              </article>
-            </div>
-          </section>
+          <CreditCardsSection
+            hasConfig={hasConfig}
+            totalCreditCardDebt={totalCreditCardDebt}
+            totalAvailableCredit={totalAvailableCredit}
+            creditCardInstruments={creditCardInstruments}
+            sourceTransferInstruments={sourceTransferInstruments}
+            availableTransferDestinations={availableTransferDestinations}
+            selectedStatementInstrumentId={selectedStatementInstrumentId}
+            selectedTransferSourceInstrumentId={selectedTransferSourceInstrumentId}
+            selectedTransferDestinationInstrumentId={selectedTransferDestinationInstrumentId}
+            statementForm={statementForm}
+            transferForm={transferForm}
+            statements={statements}
+            transfers={transfers}
+            statementUpdateForm={statementUpdateForm}
+            editingStatementId={editingStatementId}
+            selectedStatementDetail={selectedStatementDetail}
+            statementMovements={statementMovements}
+            isStatementsLoading={isStatementsLoading}
+            isTransfersLoading={isTransfersLoading}
+            isStatementMovementsLoading={isStatementMovementsLoading}
+            statementError={statementError}
+            statementMessage={statementMessage}
+            transferError={transferError}
+            transferMessage={transferMessage}
+            onStatementFormChange={setStatementForm}
+            onTransferFormChange={setTransferForm}
+            onStatementUpdateFormChange={setStatementUpdateForm}
+            onTransferTypeChange={handleTransferTypeChange}
+            onStatementSubmit={handleStatementSubmit}
+            onTransferSubmit={handleTransferSubmit}
+            onResetStatementForm={resetStatementForm}
+            onResetTransferForm={resetTransferForm}
+            onReloadStatements={() => {
+              void loadStatements()
+            }}
+            onReloadTransfers={() => {
+              void loadTransfers()
+            }}
+            onLoadStatementMovements={(statement) => {
+              void loadStatementMovements(statement)
+            }}
+            onStartStatementEdit={startStatementEdit}
+            onDeleteStatement={(statementId) => {
+              void handleStatementDelete(statementId)
+            }}
+            onSaveStatementUpdate={() => {
+              void handleStatementUpdate()
+            }}
+            onCancelStatementUpdate={resetStatementUpdateForm}
+            onDeleteTransfer={(transferId) => {
+              void handleTransferDelete(transferId)
+            }}
+          />
         ) : null}
 
         {activeSection === 'subscriptions' ? (
-          <section className="card">
-            <header className="card__header">
-              <h2 className="card__title">Suscripciones</h2>
-              <p className="card__subtitle">Listado y gestion de cargos recurrentes por instrumento y ciclo.</p>
-            </header>
-
-            <div className="transaction-layout">
-              <section className="mini-card">
-                <header className="mini-card__header">
-                  <h3 className="mini-card__title">Nueva suscripcion</h3>
-                  <p className="mini-card__subtitle">Define monto, ciclo y proximo cargo esperado.</p>
-                </header>
-
-                <form className="form-grid" onSubmit={handleSubscriptionSubmit}>
-                  <label className="form-grid__field" htmlFor="subscriptionName">Nombre</label>
-                  <input
-                    id="subscriptionName"
-                    className="form-grid__input"
-                    type="text"
-                    value={subscriptionForm.name}
-                    onChange={(event) => setSubscriptionForm({ ...subscriptionForm, name: event.target.value })}
-                    placeholder="Netflix"
-                    required
-                  />
-
-                  <label className="form-grid__field" htmlFor="subscriptionInstrument">Instrumento</label>
-                  <select
-                    id="subscriptionInstrument"
-                    className="form-grid__input"
-                    value={subscriptionForm.instrumentId}
-                    onChange={(event) => setSubscriptionForm({ ...subscriptionForm, instrumentId: Number(event.target.value) })}
-                    required
-                  >
-                    <option value={0}>Selecciona instrumento</option>
-                    {instruments.map((instrument) => (
-                      <option key={instrument.id} value={instrument.id}>{instrument.name}</option>
-                    ))}
-                  </select>
-
-                  <label className="form-grid__field" htmlFor="subscriptionAmount">Monto</label>
-                  <input
-                    id="subscriptionAmount"
-                    className="form-grid__input"
-                    type="number"
-                    min={0.01}
-                    step="0.01"
-                    value={subscriptionForm.amount}
-                    onChange={(event) => setSubscriptionForm({ ...subscriptionForm, amount: Number(event.target.value) })}
-                    required
-                  />
-
-                  <label className="form-grid__field" htmlFor="subscriptionCycle">Ciclo</label>
-                  <select
-                    id="subscriptionCycle"
-                    className="form-grid__input"
-                    value={subscriptionForm.billingCycle}
-                    onChange={(event) => handleSubscriptionBillingCycleChange(event.target.value as SubscriptionBillingCycle)}
-                  >
-                    <option value="monthly">Mensual</option>
-                    <option value="yearly">Anual</option>
-                    <option value="weekly">Semanal</option>
-                  </select>
-
-                  <label className="form-grid__field" htmlFor="subscriptionBillingDay">Dia de cargo</label>
-                  <input
-                    id="subscriptionBillingDay"
-                    className="form-grid__input"
-                    type="number"
-                    min={1}
-                    max={31}
-                    value={subscriptionForm.billingDay ?? 1}
-                    onChange={(event) => setSubscriptionForm({ ...subscriptionForm, billingDay: Number(event.target.value) })}
-                  />
-
-                  <label className="form-grid__field" htmlFor="subscriptionNextBilling">Proximo cargo</label>
-                  <input
-                    id="subscriptionNextBilling"
-                    className="form-grid__input"
-                    type="date"
-                    value={subscriptionForm.nextBilling}
-                    onChange={(event) => setSubscriptionForm({ ...subscriptionForm, nextBilling: event.target.value })}
-                  />
-
-                  <label className="form-grid__field" htmlFor="subscriptionCategory">Categoria</label>
-                  <select
-                    id="subscriptionCategory"
-                    className="form-grid__input"
-                    value={subscriptionForm.categoryId ?? ''}
-                    onChange={(event) => {
-                      const nextCategoryId = event.target.value ? Number(event.target.value) : null
-                      setSubscriptionForm({ ...subscriptionForm, categoryId: nextCategoryId, subcategoryId: null })
-                    }}
-                  >
-                    <option value="">Sin categoria</option>
-                    {expenseCategoryOptions.map((category) => (
-                      <option key={category.id} value={category.id}>{category.name}</option>
-                    ))}
-                  </select>
-
-                  <label className="form-grid__field" htmlFor="subscriptionSubcategory">Subcategoria</label>
-                  <select
-                    id="subscriptionSubcategory"
-                    className="form-grid__input"
-                    value={subscriptionForm.subcategoryId ?? ''}
-                    onChange={(event) => {
-                      const nextSubcategoryId = event.target.value ? Number(event.target.value) : null
-                      setSubscriptionForm({ ...subscriptionForm, subcategoryId: nextSubcategoryId })
-                    }}
-                    disabled={!selectedSubscriptionCategory}
-                  >
-                    <option value="">Sin subcategoria</option>
-                    {(selectedSubscriptionCategory?.subcategories ?? []).map((subcategory) => (
-                      <option key={subcategory.id} value={subcategory.id}>{subcategory.name}</option>
-                    ))}
-                  </select>
-
-                  <label className="form-grid__field" htmlFor="subscriptionNotes">Notas</label>
-                  <input
-                    id="subscriptionNotes"
-                    className="form-grid__input"
-                    type="text"
-                    value={subscriptionForm.notes}
-                    onChange={(event) => setSubscriptionForm({ ...subscriptionForm, notes: event.target.value })}
-                    placeholder="Opcional"
-                  />
-
-                  <div className="form-grid__actions">
-                    <button className="button button--primary" type="submit" disabled={!hasConfig || instruments.length === 0}>
-                      {editingSubscriptionId === null ? 'Crear suscripcion' : 'Guardar cambios'}
-                    </button>
-                    <button className="button button--secondary" type="button" onClick={resetSubscriptionEditor}>
-                      Limpiar
-                    </button>
-                    <button
-                      className="button button--secondary"
-                      type="button"
-                      onClick={() => {
-                        void loadSubscriptions()
-                      }}
-                    >
-                      Recargar
-                    </button>
-                  </div>
-                </form>
-              </section>
-
-              <section className="mini-card">
-                <header className="mini-card__header">
-                  <h3 className="mini-card__title">Resumen</h3>
-                  <p className="mini-card__subtitle">Vista rapida del comportamiento recurrente.</p>
-                </header>
-
-                <div className="summary-grid">
-                  <article className="summary-card">
-                    <p className="summary-card__label">Suscripciones activas</p>
-                    <p className="summary-card__value">{subscriptions.length}</p>
-                  </article>
-                  <article className="summary-card">
-                    <p className="summary-card__label">Total mensual aproximado</p>
-                    <p className="summary-card__value">{formatCurrency(subscriptions.reduce((total, item) => total + item.amount, 0))}</p>
-                  </article>
-                </div>
-              </section>
-            </div>
-
-            {subscriptionError ? <p className="message message--error">{subscriptionError}</p> : null}
-            {subscriptionMessage ? <p className="message message--success">{subscriptionMessage}</p> : null}
-
-            <div className="table-wrap">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Nombre</th>
-                    <th>Instrumento</th>
-                    <th>Monto</th>
-                    <th>Ciclo</th>
-                    <th>Proximo cargo</th>
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {isSubscriptionsLoading ? (
-                    <tr>
-                      <td colSpan={6}>Cargando suscripciones...</td>
-                    </tr>
-                  ) : null}
-
-                  {!isSubscriptionsLoading && subscriptions.length === 0 ? (
-                    <tr>
-                      <td colSpan={6}>No hay suscripciones registradas.</td>
-                    </tr>
-                  ) : null}
-
-                  {!isSubscriptionsLoading
-                    ? subscriptions.map((subscription) => (
-                      <tr key={subscription.id}>
-                        <td>{subscription.name}</td>
-                        <td>{subscription.instrumentName ?? '-'}</td>
-                        <td>{formatCurrency(subscription.amount)}</td>
-                        <td>{subscription.billingCycle}</td>
-                        <td>{subscription.nextBilling ?? '-'}</td>
-                        <td>
-                          <div className="table__actions">
-                            <button
-                              className="button button--secondary"
-                              type="button"
-                              onClick={() => {
-                                setEditingSubscriptionId(subscription.id)
-                                setSubscriptionForm(toEditableSubscription(subscription))
-                              }}
-                            >
-                              Editar
-                            </button>
-                            <button
-                              className="button button--danger"
-                              type="button"
-                              onClick={() => {
-                                void handleSubscriptionDelete(subscription.id)
-                              }}
-                            >
-                              Eliminar
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                    : null}
-                </tbody>
-              </table>
-            </div>
-          </section>
+          <SubscriptionsSection
+            hasConfig={hasConfig}
+            instruments={instruments}
+            expenseCategoryOptions={expenseCategoryOptions}
+            selectedSubscriptionCategory={selectedSubscriptionCategory}
+            subscriptions={subscriptions}
+            isSubscriptionsLoading={isSubscriptionsLoading}
+            subscriptionForm={subscriptionForm}
+            editingSubscriptionId={editingSubscriptionId}
+            subscriptionError={subscriptionError}
+            subscriptionMessage={subscriptionMessage}
+            onSubscriptionFormChange={setSubscriptionForm}
+            onBillingCycleChange={handleSubscriptionBillingCycleChange}
+            onSubmit={handleSubscriptionSubmit}
+            onReset={resetSubscriptionEditor}
+            onReload={() => {
+              void loadSubscriptions()
+            }}
+            onEdit={(subscription) => {
+              setEditingSubscriptionId(subscription.id)
+              setSubscriptionForm(toEditableSubscription(subscription))
+            }}
+            onDelete={(subscriptionId) => {
+              void handleSubscriptionDelete(subscriptionId)
+            }}
+          />
         ) : null}
 
         {activeSection === 'fixedExpenses' ? (
-          <section className="card">
-            <header className="card__header">
-              <h2 className="card__title">Gastos Fijos</h2>
-              <p className="card__subtitle">Gestion de gastos recurrentes y registro de pagos mensuales.</p>
-            </header>
-
-            <div className="transaction-layout">
-              <section className="mini-card">
-                <header className="mini-card__header">
-                  <h3 className="mini-card__title">Nuevo gasto fijo</h3>
-                  <p className="mini-card__subtitle">Renta, luz, agua, internet y otros compromisos.</p>
-                </header>
-
-                <form className="form-grid" onSubmit={handleFixedExpenseSubmit}>
-                  <label className="form-grid__field" htmlFor="fixedExpenseName">Nombre</label>
-                  <input
-                    id="fixedExpenseName"
-                    className="form-grid__input"
-                    type="text"
-                    value={fixedExpenseForm.name}
-                    onChange={(event) => setFixedExpenseForm({ ...fixedExpenseForm, name: event.target.value })}
-                    placeholder="Renta departamento"
-                    required
-                  />
-
-                  <label className="form-grid__field" htmlFor="fixedExpenseAmount">Monto estimado</label>
-                  <input
-                    id="fixedExpenseAmount"
-                    className="form-grid__input"
-                    type="number"
-                    min={0.01}
-                    step="0.01"
-                    value={fixedExpenseForm.estimatedAmount}
-                    onChange={(event) => setFixedExpenseForm({ ...fixedExpenseForm, estimatedAmount: Number(event.target.value) })}
-                    required
-                  />
-
-                  <label className="form-grid__field" htmlFor="fixedExpenseInstrument">Instrumento (opcional)</label>
-                  <select
-                    id="fixedExpenseInstrument"
-                    className="form-grid__input"
-                    value={fixedExpenseForm.instrumentId ?? ''}
-                    onChange={(event) => {
-                      const raw = event.target.value
-                      setFixedExpenseForm({ ...fixedExpenseForm, instrumentId: raw ? Number(raw) : null })
-                    }}
-                  >
-                    <option value="">Sin instrumento</option>
-                    {instruments.map((instrument) => (
-                      <option key={instrument.id} value={instrument.id}>{instrument.name}</option>
-                    ))}
-                  </select>
-
-                  <label className="form-grid__field" htmlFor="fixedExpenseCategory">Categoria</label>
-                  <select
-                    id="fixedExpenseCategory"
-                    className="form-grid__input"
-                    value={fixedExpenseForm.categoryId ?? ''}
-                    onChange={(event) => {
-                      const nextCategoryId = event.target.value ? Number(event.target.value) : null
-                      setFixedExpenseForm({ ...fixedExpenseForm, categoryId: nextCategoryId, subcategoryId: null })
-                    }}
-                  >
-                    <option value="">Sin categoria</option>
-                    {expenseCategoryOptions.map((category) => (
-                      <option key={category.id} value={category.id}>{category.name}</option>
-                    ))}
-                  </select>
-
-                  <label className="form-grid__field" htmlFor="fixedExpenseSubcategory">Subcategoria</label>
-                  <select
-                    id="fixedExpenseSubcategory"
-                    className="form-grid__input"
-                    value={fixedExpenseForm.subcategoryId ?? ''}
-                    onChange={(event) => {
-                      const nextSubcategoryId = event.target.value ? Number(event.target.value) : null
-                      setFixedExpenseForm({ ...fixedExpenseForm, subcategoryId: nextSubcategoryId })
-                    }}
-                    disabled={!selectedFixedExpenseCategory}
-                  >
-                    <option value="">Sin subcategoria</option>
-                    {(selectedFixedExpenseCategory?.subcategories ?? []).map((subcategory) => (
-                      <option key={subcategory.id} value={subcategory.id}>{subcategory.name}</option>
-                    ))}
-                  </select>
-
-                  <label className="form-grid__field" htmlFor="fixedExpenseIsVariable">Tipo de monto</label>
-                  <select
-                    id="fixedExpenseIsVariable"
-                    className="form-grid__input"
-                    value={fixedExpenseForm.isVariable ? 'yes' : 'no'}
-                    onChange={(event) => setFixedExpenseForm({ ...fixedExpenseForm, isVariable: event.target.value === 'yes' })}
-                  >
-                    <option value="no">Fijo</option>
-                    <option value="yes">Variable</option>
-                  </select>
-
-                  <label className="form-grid__field" htmlFor="fixedExpensePaymentDay">Dia de pago</label>
-                  <input
-                    id="fixedExpensePaymentDay"
-                    className="form-grid__input"
-                    type="number"
-                    min={1}
-                    max={31}
-                    value={fixedExpenseForm.paymentDay ?? 1}
-                    onChange={(event) => setFixedExpenseForm({ ...fixedExpenseForm, paymentDay: Number(event.target.value) })}
-                  />
-
-                  <label className="form-grid__field" htmlFor="fixedExpenseNotes">Notas</label>
-                  <input
-                    id="fixedExpenseNotes"
-                    className="form-grid__input"
-                    type="text"
-                    value={fixedExpenseForm.notes}
-                    onChange={(event) => setFixedExpenseForm({ ...fixedExpenseForm, notes: event.target.value })}
-                    placeholder="Opcional"
-                  />
-
-                  <div className="form-grid__actions">
-                    <button className="button button--primary" type="submit" disabled={!hasConfig}>
-                      {editingFixedExpenseId === null ? 'Crear gasto fijo' : 'Guardar cambios'}
-                    </button>
-                    <button className="button button--secondary" type="button" onClick={resetFixedExpenseEditor}>
-                      Limpiar
-                    </button>
-                    <button
-                      className="button button--secondary"
-                      type="button"
-                      onClick={() => {
-                        void loadFixedExpenses()
-                      }}
-                    >
-                      Recargar
-                    </button>
-                  </div>
-                </form>
-              </section>
-
-              <section className="mini-card">
-                <header className="mini-card__header">
-                  <h3 className="mini-card__title">Registrar pago mensual</h3>
-                  <p className="mini-card__subtitle">Selecciona un gasto fijo y registra el pago del periodo.</p>
-                </header>
-
-                <form className="form-grid" onSubmit={handleFixedExpensePaymentSubmit}>
-                  <label className="form-grid__field" htmlFor="fixedExpenseSelected">Gasto fijo</label>
-                  <select
-                    id="fixedExpenseSelected"
-                    className="form-grid__input"
-                    value={selectedFixedExpenseId ?? ''}
-                    onChange={(event) => {
-                      const nextId = event.target.value ? Number(event.target.value) : null
-                      setSelectedFixedExpenseId(nextId)
-                      setFixedExpensePayments([])
-                      if (nextId) {
-                        void loadFixedExpensePayments(nextId)
-                      }
-                    }}
-                  >
-                    <option value="">Selecciona gasto fijo</option>
-                    {fixedExpenses.map((expense) => (
-                      <option key={expense.id} value={expense.id}>{expense.name}</option>
-                    ))}
-                  </select>
-
-                  <label className="form-grid__field" htmlFor="fixedExpensePaymentAmount">Monto pagado</label>
-                  <input
-                    id="fixedExpensePaymentAmount"
-                    className="form-grid__input"
-                    type="number"
-                    min={0.01}
-                    step="0.01"
-                    value={fixedExpensePaymentForm.amount}
-                    onChange={(event) => setFixedExpensePaymentForm({ ...fixedExpensePaymentForm, amount: Number(event.target.value) })}
-                    required
-                  />
-
-                  <label className="form-grid__field" htmlFor="fixedExpensePaymentMonth">Mes</label>
-                  <input
-                    id="fixedExpensePaymentMonth"
-                    className="form-grid__input"
-                    type="number"
-                    min={1}
-                    max={12}
-                    value={fixedExpensePaymentForm.periodMonth}
-                    onChange={(event) => setFixedExpensePaymentForm({ ...fixedExpensePaymentForm, periodMonth: Number(event.target.value) })}
-                    required
-                  />
-
-                  <label className="form-grid__field" htmlFor="fixedExpensePaymentYear">Anio</label>
-                  <input
-                    id="fixedExpensePaymentYear"
-                    className="form-grid__input"
-                    type="number"
-                    min={2000}
-                    max={2200}
-                    value={fixedExpensePaymentForm.periodYear}
-                    onChange={(event) => setFixedExpensePaymentForm({ ...fixedExpensePaymentForm, periodYear: Number(event.target.value) })}
-                    required
-                  />
-
-                  <label className="form-grid__field" htmlFor="fixedExpensePaymentDate">Fecha de pago</label>
-                  <input
-                    id="fixedExpensePaymentDate"
-                    className="form-grid__input"
-                    type="date"
-                    value={fixedExpensePaymentForm.paymentDate}
-                    onChange={(event) => setFixedExpensePaymentForm({ ...fixedExpensePaymentForm, paymentDate: event.target.value })}
-                  />
-
-                  <label className="form-grid__field" htmlFor="fixedExpensePaymentNotes">Notas</label>
-                  <input
-                    id="fixedExpensePaymentNotes"
-                    className="form-grid__input"
-                    type="text"
-                    value={fixedExpensePaymentForm.notes}
-                    onChange={(event) => setFixedExpensePaymentForm({ ...fixedExpensePaymentForm, notes: event.target.value })}
-                    placeholder="Opcional"
-                  />
-
-                  <div className="form-grid__actions">
-                    <button className="button button--primary" type="submit" disabled={!selectedFixedExpenseId}>
-                      Registrar pago
-                    </button>
-                    <button className="button button--secondary" type="button" onClick={resetFixedExpensePaymentForm}>
-                      Limpiar
-                    </button>
-                  </div>
-                </form>
-              </section>
-            </div>
-
-            {fixedExpenseError ? <p className="message message--error">{fixedExpenseError}</p> : null}
-            {fixedExpenseMessage ? <p className="message message--success">{fixedExpenseMessage}</p> : null}
-
-            <div className="category-list">
-              <article className="category-card">
-                <header className="category-card__header">
-                  <div>
-                    <h3 className="category-card__title">Listado de gastos fijos</h3>
-                    <p className="category-card__meta">Renta, servicios y compromisos mensuales.</p>
-                  </div>
-                </header>
-
-                <div className="table-wrap">
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th>Nombre</th>
-                        <th>Monto estimado</th>
-                        <th>Variable</th>
-                        <th>Dia pago</th>
-                        <th>Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {isFixedExpensesLoading ? (
-                        <tr>
-                          <td colSpan={5}>Cargando gastos fijos...</td>
-                        </tr>
-                      ) : null}
-
-                      {!isFixedExpensesLoading && fixedExpenses.length === 0 ? (
-                        <tr>
-                          <td colSpan={5}>No hay gastos fijos registrados.</td>
-                        </tr>
-                      ) : null}
-
-                      {!isFixedExpensesLoading
-                        ? fixedExpenses.map((expense) => (
-                          <tr key={expense.id}>
-                            <td>{expense.name}</td>
-                            <td>{formatCurrency(expense.estimatedAmount)}</td>
-                            <td>{expense.isVariable ? 'Si' : 'No'}</td>
-                            <td>{expense.paymentDay ?? '-'}</td>
-                            <td>
-                              <div className="table__actions">
-                                <button
-                                  className="button button--secondary"
-                                  type="button"
-                                  onClick={() => {
-                                    setEditingFixedExpenseId(expense.id)
-                                    setFixedExpenseForm(toEditableFixedExpense(expense))
-                                  }}
-                                >
-                                  Editar
-                                </button>
-                                <button
-                                  className="button button--secondary"
-                                  type="button"
-                                  onClick={() => {
-                                    void loadFixedExpensePayments(expense.id)
-                                  }}
-                                >
-                                  Historial
-                                </button>
-                                <button
-                                  className="button button--danger"
-                                  type="button"
-                                  onClick={() => {
-                                    void handleFixedExpenseDelete(expense.id)
-                                  }}
-                                >
-                                  Eliminar
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                        : null}
-                    </tbody>
-                  </table>
-                </div>
-              </article>
-
-              {selectedFixedExpense !== null ? (
-                <article className="category-card">
-                  <header className="category-card__header">
-                    <div>
-                      <h3 className="category-card__title">Historial de pagos · {selectedFixedExpense.name}</h3>
-                      <p className="category-card__meta">Pagos registrados por mes y anio.</p>
-                    </div>
-                  </header>
-
-                  <div className="table-wrap">
-                    <table className="table">
-                      <thead>
-                        <tr>
-                          <th>Periodo</th>
-                          <th>Monto</th>
-                          <th>Fecha pago</th>
-                          <th>Estado</th>
-                          <th>Acciones</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {isFixedExpensePaymentsLoading ? (
-                          <tr>
-                            <td colSpan={5}>Cargando historial de pagos...</td>
-                          </tr>
-                        ) : null}
-
-                        {!isFixedExpensePaymentsLoading && fixedExpensePayments.length === 0 ? (
-                          <tr>
-                            <td colSpan={5}>No hay pagos registrados para este gasto fijo.</td>
-                          </tr>
-                        ) : null}
-
-                        {!isFixedExpensePaymentsLoading
-                          ? fixedExpensePayments.map((payment) => (
-                            <tr key={payment.id}>
-                              <td>{`${payment.periodMonth}/${payment.periodYear}`}</td>
-                              <td>{formatCurrency(payment.amount)}</td>
-                              <td>{payment.paymentDate ?? '-'}</td>
-                              <td>{payment.isPaid ? 'Pagado' : 'Pendiente'}</td>
-                              <td>
-                                <div className="table__actions">
-                                  <button
-                                    className="button button--danger"
-                                    type="button"
-                                    onClick={() => {
-                                      void handleFixedExpensePaymentDelete(payment.id)
-                                    }}
-                                  >
-                                    Eliminar
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))
-                          : null}
-                      </tbody>
-                    </table>
-                  </div>
-                </article>
-              ) : null}
-            </div>
-          </section>
+          <FixedExpensesSection
+            hasConfig={hasConfig}
+            instruments={instruments}
+            expenseCategoryOptions={expenseCategoryOptions}
+            selectedFixedExpenseCategory={selectedFixedExpenseCategory}
+            fixedExpenses={fixedExpenses}
+            fixedExpenseForm={fixedExpenseForm}
+            editingFixedExpenseId={editingFixedExpenseId}
+            fixedExpensePayments={fixedExpensePayments}
+            selectedFixedExpenseId={selectedFixedExpenseId}
+            selectedFixedExpense={selectedFixedExpense}
+            fixedExpensePaymentForm={fixedExpensePaymentForm}
+            isFixedExpensesLoading={isFixedExpensesLoading}
+            isFixedExpensePaymentsLoading={isFixedExpensePaymentsLoading}
+            fixedExpenseError={fixedExpenseError}
+            fixedExpenseMessage={fixedExpenseMessage}
+            onFixedExpenseFormChange={setFixedExpenseForm}
+            onFixedExpensePaymentFormChange={setFixedExpensePaymentForm}
+            onFixedExpenseSubmit={handleFixedExpenseSubmit}
+            onFixedExpensePaymentSubmit={handleFixedExpensePaymentSubmit}
+            onResetFixedExpenseEditor={resetFixedExpenseEditor}
+            onResetFixedExpensePaymentForm={resetFixedExpensePaymentForm}
+            onReloadFixedExpenses={() => {
+              void loadFixedExpenses()
+            }}
+            onSelectFixedExpense={(fixedExpenseId) => {
+              setSelectedFixedExpenseId(fixedExpenseId)
+              setFixedExpensePayments([])
+              if (fixedExpenseId) {
+                void loadFixedExpensePayments(fixedExpenseId)
+              }
+            }}
+            onEditFixedExpense={(expense) => {
+              setEditingFixedExpenseId(expense.id)
+              setFixedExpenseForm(toEditableFixedExpense(expense))
+            }}
+            onLoadFixedExpensePayments={(fixedExpenseId) => {
+              void loadFixedExpensePayments(fixedExpenseId)
+            }}
+            onDeleteFixedExpense={(fixedExpenseId) => {
+              void handleFixedExpenseDelete(fixedExpenseId)
+            }}
+            onDeleteFixedExpensePayment={(paymentId) => {
+              void handleFixedExpensePaymentDelete(paymentId)
+            }}
+          />
         ) : null}
 
         {activeSection === 'loans' ? (
-          <section className="card">
-            <header className="card__header">
-              <h2 className="card__title">Prestamos</h2>
-              <p className="card__subtitle">Gestion de prestamos, tabla de amortizacion y registro de cuotas pagadas.</p>
-            </header>
-
-            <div className="transaction-layout">
-              <section className="mini-card">
-                <header className="mini-card__header">
-                  <h3 className="mini-card__title">Nuevo prestamo</h3>
-                  <p className="mini-card__subtitle">Configura tipo de pago fijo o variable y genera su calendario.</p>
-                </header>
-
-                <form className="form-grid" onSubmit={handleLoanSubmit}>
-                  <label className="form-grid__field" htmlFor="loanName">Nombre</label>
-                  <input
-                    id="loanName"
-                    className="form-grid__input"
-                    type="text"
-                    value={loanForm.name}
-                    onChange={(event) => setLoanForm({ ...loanForm, name: event.target.value })}
-                    placeholder="Prestamo auto"
-                    required
-                  />
-
-                  <label className="form-grid__field" htmlFor="loanLender">Acreedor</label>
-                  <input
-                    id="loanLender"
-                    className="form-grid__input"
-                    type="text"
-                    value={loanForm.lender}
-                    onChange={(event) => setLoanForm({ ...loanForm, lender: event.target.value })}
-                    placeholder="Banco o financiera"
-                  />
-
-                  <label className="form-grid__field" htmlFor="loanInstrument">Cuenta de pago (opcional)</label>
-                  <select
-                    id="loanInstrument"
-                    className="form-grid__input"
-                    value={loanForm.instrumentId ?? ''}
-                    onChange={(event) => {
-                      const raw = event.target.value
-                      setLoanForm({ ...loanForm, instrumentId: raw ? Number(raw) : null })
-                    }}
-                  >
-                    <option value="">Sin cuenta vinculada</option>
-                    {loanPaymentInstruments.map((instrument) => (
-                      <option key={instrument.id} value={instrument.id}>{instrument.name}</option>
-                    ))}
-                  </select>
-
-                  <label className="form-grid__field" htmlFor="loanOriginalAmount">Monto original</label>
-                  <input
-                    id="loanOriginalAmount"
-                    className="form-grid__input"
-                    type="number"
-                    min={0.01}
-                    step="0.01"
-                    value={loanForm.originalAmount}
-                    onChange={(event) => setLoanForm({ ...loanForm, originalAmount: Number(event.target.value) })}
-                    required
-                  />
-
-                  <label className="form-grid__field" htmlFor="loanTotalInstallments">Total de cuotas</label>
-                  <input
-                    id="loanTotalInstallments"
-                    className="form-grid__input"
-                    type="number"
-                    min={1}
-                    value={loanForm.totalInstallments}
-                    onChange={(event) => setLoanForm({ ...loanForm, totalInstallments: Number(event.target.value) })}
-                    required
-                  />
-
-                  <label className="form-grid__field" htmlFor="loanPaymentType">Tipo de pago</label>
-                  <select
-                    id="loanPaymentType"
-                    className="form-grid__input"
-                    value={loanForm.paymentType}
-                    onChange={(event) => handleLoanPaymentTypeChange(event.target.value as LoanPaymentType)}
-                  >
-                    <option value="fixed">Fijo</option>
-                    <option value="variable">Variable</option>
-                  </select>
-
-                  {loanForm.paymentType === 'fixed' ? (
-                    <>
-                      <label className="form-grid__field" htmlFor="loanFixedPayment">Pago fijo mensual</label>
-                      <input
-                        id="loanFixedPayment"
-                        className="form-grid__input"
-                        type="number"
-                        min={0.01}
-                        step="0.01"
-                        value={loanForm.fixedPayment ?? 0}
-                        onChange={(event) => setLoanForm({ ...loanForm, fixedPayment: Number(event.target.value) })}
-                        required
-                      />
-                    </>
-                  ) : (
-                    <>
-                      <label className="form-grid__field" htmlFor="loanAnnualRate">Tasa anual (decimal)</label>
-                      <input
-                        id="loanAnnualRate"
-                        className="form-grid__input"
-                        type="number"
-                        min={0.0001}
-                        step="0.0001"
-                        value={loanForm.annualRate ?? ''}
-                        onChange={(event) => {
-                          const raw = event.target.value
-                          setLoanForm({ ...loanForm, annualRate: raw ? Number(raw) : null })
-                        }}
-                        required
-                      />
-                    </>
-                  )}
-
-                  <label className="form-grid__field" htmlFor="loanPaymentDay">Dia de pago</label>
-                  <input
-                    id="loanPaymentDay"
-                    className="form-grid__input"
-                    type="number"
-                    min={1}
-                    max={31}
-                    value={loanForm.paymentDay ?? 1}
-                    onChange={(event) => setLoanForm({ ...loanForm, paymentDay: Number(event.target.value) })}
-                  />
-
-                  <label className="form-grid__field" htmlFor="loanStartDate">Fecha inicial</label>
-                  <input
-                    id="loanStartDate"
-                    className="form-grid__input"
-                    type="date"
-                    value={loanForm.startDate}
-                    onChange={(event) => setLoanForm({ ...loanForm, startDate: event.target.value })}
-                    required
-                  />
-
-                  <label className="form-grid__field" htmlFor="loanEndDate">Fecha fin estimada (opcional)</label>
-                  <input
-                    id="loanEndDate"
-                    className="form-grid__input"
-                    type="date"
-                    value={loanForm.endDate}
-                    onChange={(event) => setLoanForm({ ...loanForm, endDate: event.target.value })}
-                  />
-
-                  <label className="form-grid__field" htmlFor="loanNotes">Notas</label>
-                  <input
-                    id="loanNotes"
-                    className="form-grid__input"
-                    type="text"
-                    value={loanForm.notes}
-                    onChange={(event) => setLoanForm({ ...loanForm, notes: event.target.value })}
-                    placeholder="Opcional"
-                  />
-
-                  <div className="form-grid__actions">
-                    <button className="button button--primary" type="submit" disabled={!hasConfig}>
-                      {editingLoanId === null ? 'Crear prestamo' : 'Guardar cambios'}
-                    </button>
-                    <button className="button button--secondary" type="button" onClick={resetLoanEditor}>
-                      Limpiar
-                    </button>
-                    <button
-                      className="button button--secondary"
-                      type="button"
-                      onClick={() => {
-                        void loadLoans()
-                      }}
-                    >
-                      Recargar
-                    </button>
-                  </div>
-                </form>
-              </section>
-
-              <section className="mini-card">
-                <header className="mini-card__header">
-                  <h3 className="mini-card__title">Registro de cuota</h3>
-                  <p className="mini-card__subtitle">Selecciona un prestamo y registra cuotas pendientes.</p>
-                </header>
-
-                <form className="form-grid" onSubmit={(event) => event.preventDefault()}>
-                  <label className="form-grid__field" htmlFor="loanRegisterPaidDate">Fecha de pago</label>
-                  <input
-                    id="loanRegisterPaidDate"
-                    className="form-grid__input"
-                    type="date"
-                    value={loanPaymentRegister.paidDate}
-                    onChange={(event) => setLoanPaymentRegister({ ...loanPaymentRegister, paidDate: event.target.value })}
-                  />
-
-                  <label className="form-grid__field" htmlFor="loanRegisterAmount">Monto (opcional, debe coincidir)</label>
-                  <input
-                    id="loanRegisterAmount"
-                    className="form-grid__input"
-                    type="number"
-                    min={0.01}
-                    step="0.01"
-                    value={loanPaymentRegister.amount ?? ''}
-                    onChange={(event) => {
-                      const raw = event.target.value
-                      setLoanPaymentRegister({ ...loanPaymentRegister, amount: raw ? Number(raw) : null })
-                    }}
-                  />
-
-                  <label className="form-grid__field" htmlFor="loanRegisterNotes">Notas</label>
-                  <input
-                    id="loanRegisterNotes"
-                    className="form-grid__input"
-                    type="text"
-                    value={loanPaymentRegister.notes}
-                    onChange={(event) => setLoanPaymentRegister({ ...loanPaymentRegister, notes: event.target.value })}
-                    placeholder="Comprobante o comentario"
-                  />
-
-                  <p className="card__subtitle">
-                    Usa el boton Pagar de la tabla para registrar cada cuota pendiente con esta configuracion.
-                  </p>
-                </form>
-              </section>
-            </div>
-
-            {loanError ? <p className="message message--error">{loanError}</p> : null}
-            {loanMessage ? <p className="message message--success">{loanMessage}</p> : null}
-
-            <div className="category-list">
-              <article className="category-card">
-                <header className="category-card__header">
-                  <div>
-                    <h3 className="category-card__title">Listado de prestamos</h3>
-                    <p className="category-card__meta">Progreso de pago y acciones por prestamo.</p>
-                  </div>
-                </header>
-
-                <div className="table-wrap">
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th>Nombre</th>
-                        <th>Tipo</th>
-                        <th>Monto original</th>
-                        <th>Saldo pendiente</th>
-                        <th>Progreso</th>
-                        <th>Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {isLoansLoading ? (
-                        <tr>
-                          <td colSpan={6}>Cargando prestamos...</td>
-                        </tr>
-                      ) : null}
-
-                      {!isLoansLoading && loans.length === 0 ? (
-                        <tr>
-                          <td colSpan={6}>No hay prestamos registrados.</td>
-                        </tr>
-                      ) : null}
-
-                      {!isLoansLoading
-                        ? loans.map((loan) => (
-                          <tr key={loan.id}>
-                            <td>{loan.name}</td>
-                            <td>{loan.paymentType === 'fixed' ? 'Fijo' : 'Variable'}</td>
-                            <td>{formatCurrency(loan.originalAmount)}</td>
-                            <td>{formatCurrency(loan.remainingAmount)}</td>
-                            <td>{loan.paidInstallments}/{loan.totalInstallments}</td>
-                            <td>
-                              <div className="table__actions">
-                                <button
-                                  className="button button--secondary"
-                                  type="button"
-                                  onClick={() => {
-                                    void loadLoanPayments(loan.id)
-                                  }}
-                                >
-                                  Ver detalle
-                                </button>
-                                <button
-                                  className="button button--secondary"
-                                  type="button"
-                                  onClick={() => {
-                                    startLoanEdit(loan)
-                                  }}
-                                >
-                                  Editar
-                                </button>
-                                <button
-                                  className="button button--danger"
-                                  type="button"
-                                  onClick={() => {
-                                    void handleLoanDelete(loan.id)
-                                  }}
-                                >
-                                  Eliminar
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                        : null}
-                    </tbody>
-                  </table>
-                </div>
-              </article>
-
-              {selectedLoan !== null ? (
-                <article className="category-card">
-                  <header className="category-card__header">
-                    <div>
-                      <h3 className="category-card__title">Tabla de amortizacion · {selectedLoan.name}</h3>
-                      <p className="category-card__meta">
-                        {selectedLoan.paymentType === 'fixed' ? 'Pago fijo' : 'Pago variable'} · Saldo pendiente {formatCurrency(selectedLoan.remainingAmount)}
-                      </p>
-                    </div>
-                  </header>
-
-                  <div className="table-wrap">
-                    <table className="table">
-                      <thead>
-                        <tr>
-                          <th>Cuota</th>
-                          <th>Fecha programada</th>
-                          <th>Monto</th>
-                          <th>Capital</th>
-                          <th>Interes</th>
-                          <th>Estado</th>
-                          <th>Acciones</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {isLoanPaymentsLoading ? (
-                          <tr>
-                            <td colSpan={7}>Cargando tabla de amortizacion...</td>
-                          </tr>
-                        ) : null}
-
-                        {!isLoanPaymentsLoading && loanPayments.length === 0 ? (
-                          <tr>
-                            <td colSpan={7}>No hay cuotas para este prestamo.</td>
-                          </tr>
-                        ) : null}
-
-                        {!isLoanPaymentsLoading
-                          ? loanPayments.map((payment) => (
-                            <tr key={payment.id}>
-                              <td>{payment.installmentNum}</td>
-                              <td>{payment.paymentDate}</td>
-                              <td>{formatCurrency(payment.amount)}</td>
-                              <td>{formatCurrency(payment.principal)}</td>
-                              <td>{formatCurrency(payment.interest)}</td>
-                              <td>{payment.isPaid ? `Pagada ${payment.paidDate ?? ''}` : 'Pendiente'}</td>
-                              <td>
-                                <div className="table__actions">
-                                  <button
-                                    className="button button--primary"
-                                    type="button"
-                                    disabled={payment.isPaid}
-                                    onClick={() => {
-                                      void handlePayInstallment(payment.installmentNum)
-                                    }}
-                                  >
-                                    Pagar
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))
-                          : null}
-                      </tbody>
-                    </table>
-                  </div>
-                </article>
-              ) : null}
-            </div>
-          </section>
+          <LoansSection
+            hasConfig={hasConfig}
+            loanForm={loanForm}
+            loans={loans}
+            selectedLoan={selectedLoan}
+            loanPayments={loanPayments}
+            loanPaymentRegister={loanPaymentRegister}
+            loanPaymentInstruments={loanPaymentInstruments}
+            editingLoanId={editingLoanId}
+            isLoansLoading={isLoansLoading}
+            isLoanPaymentsLoading={isLoanPaymentsLoading}
+            loanError={loanError}
+            loanMessage={loanMessage}
+            onLoanFormChange={setLoanForm}
+            onLoanPaymentRegisterChange={setLoanPaymentRegister}
+            onLoanPaymentTypeChange={handleLoanPaymentTypeChange}
+            onSubmit={handleLoanSubmit}
+            onReset={resetLoanEditor}
+            onReload={() => {
+              void loadLoans()
+            }}
+            onLoadLoanPayments={(loanId) => {
+              void loadLoanPayments(loanId)
+            }}
+            onEditLoan={startLoanEdit}
+            onDeleteLoan={(loanId) => {
+              void handleLoanDelete(loanId)
+            }}
+            onPayInstallment={(installmentNum) => {
+              void handlePayInstallment(installmentNum)
+            }}
+          />
         ) : null}
 
         {activeSection === 'budgets' ? (
@@ -4554,6 +2959,7 @@ export function App() {
             </div>
           </section>
         ) : null}
+        </Suspense>
       </section>
     </main>
   )
