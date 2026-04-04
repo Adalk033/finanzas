@@ -16,6 +16,8 @@ El font ya esta dentro del proyecto.
 
 El desing esta en docs/DESING.md
 
+Tienes que darme el sql solo para ejecutar en un archivo especifico
+
 ---
 
 ## 🏗️ Stack Tecnológico
@@ -374,6 +376,32 @@ CREATE TABLE credit_card_statements (
 );
 
 -- ============================================
+-- TABLA: transfers (pagos a TDC, transferencias entre cuentas)
+-- ============================================
+CREATE TABLE transfers (
+    id                      SERIAL PRIMARY KEY,
+    source_instrument_id    INT NOT NULL REFERENCES financial_instruments(id),
+    destination_instrument_id INT NOT NULL REFERENCES financial_instruments(id),
+    amount                  NUMERIC(12,2) NOT NULL,
+    currency_id             INT NOT NULL REFERENCES currencies(id),
+    transfer_date           DATE NOT NULL,
+    type                    VARCHAR(20) NOT NULL
+                            CHECK (type IN ('card_payment', 'inter_account', 'loan_payment', 'other')),
+    statement_id            INT REFERENCES credit_card_statements(id), -- Pago vinculado a estado de cuenta
+    loan_id                 INT REFERENCES loans(id),                  -- Pago vinculado a préstamo
+    description             VARCHAR(255),
+    notes                   TEXT,
+    created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CHECK (source_instrument_id != destination_instrument_id)
+);
+
+CREATE INDEX idx_transfers_source ON transfers(source_instrument_id);
+CREATE INDEX idx_transfers_destination ON transfers(destination_instrument_id);
+CREATE INDEX idx_transfers_date ON transfers(transfer_date);
+CREATE INDEX idx_transfers_type ON transfers(type);
+
+-- ============================================
 -- VISTAS ÚTILES
 -- ============================================
 
@@ -573,159 +601,121 @@ Lambda única de .mjs con conexión a la dB de postgreSQL
 
 ### Fase 0 — Setup e Infraestructura
 
-- [ ]  Inicializar proyecto Electron + React + Vite + TypeScript
-- [ ]  Configurar CSS nativo con variables de tema oscuro, vas a tener que editar un poco el archivo DESING.md para hacerlo full modo oscuro unicamente.
-- [ ]  Configurar better-sqlite3 en main process para config local
-- [ ]  Crear preload bridge seguro (contextBridge)
-- [ ]  Pantalla de Settings: captura de API Key, endpoint y región
+- [x]  Inicializar proyecto Electron + React + Vite + TypeScript
+- [x]  Configurar CSS nativo con variables de tema oscuro
+- [x]  Configurar better-sqlite3 en main process para config local
+- [x]  Crear preload bridge seguro (contextBridge)
+- [x]  Pantalla de Settings: captura de API Key, endpoint y región
 - [ ]  Configurar proyecto Lambda en AWS (API Gateway + Lambda + RDS PostgreSQL)
 - [ ]  Ejecutar esquema SQL completo en RDS
-- [ ]  Crear `api/client.ts` con fetch wrapper (headers, API key, error handling)
-- [ ]  crear código de lambda
-- [ ]  Middleware de autenticación por API key
+- [x]  Crear `api/client.ts` con fetch wrapper (headers, API key, error handling)
+- [x]  crear código de lambda
+- [x]  Middleware de autenticación por API key
 
 ### Fase 1 — Módulo Bancos e Instrumentos Financieros
 
-- [ ]  **Backend:** CRUD bancos (`POST/GET/PUT/DELETE /banks`)
-- [ ]  **Backend:** CRUD instrumentos financieros (`/instruments`)
-- [ ]  **Frontend:** Página de Bancos — listado, crear, editar, eliminar
-- [ ]  **Frontend:** Página de Instrumentos — alta de TDC, TDD, cuentas por banco
-- [ ]  **Frontend:** Detalle de TDC con fecha de corte, pago, límite, saldo
-- [ ]  **Frontend:** Vista agrupada por banco con todos sus instrumentos
+- [x]  **Backend:** CRUD bancos (`POST/GET/PUT/DELETE /banks`)
+- [x]  **Backend:** CRUD instrumentos financieros (`/instruments`)
+- [x]  **Frontend:** Página de Bancos — listado, crear, editar, eliminar
+- [x]  **Frontend:** Página de Instrumentos — alta de TDC, TDD, cuentas por banco
+- [x]  **Frontend:** Detalle de TDC con fecha de corte, pago, límite, saldo
+- [x]  **Frontend:** Vista agrupada por banco con todos sus instrumentos
 
 ### Fase 2 — Módulo Categorías y Subcategorías
 
-*Duración estimada: 2-3 días*
-
-- [ ]  **Backend:** CRUD categorías con validación de eliminación (fn_can_delete_category)
-- [ ]  **Backend:** CRUD subcategorías
-- [ ]  **Frontend:** Página de Categorías — CRUD con íconos Lucide y colores
-- [ ]  **Frontend:** Subcategorías anidadas dentro de cada categoría
-- [ ]  **Frontend:** Indicador visual de categorías no eliminables (asociadas a gastos)
+- [x]  **Backend:** CRUD categorías con validación de eliminación (fn_can_delete_category)
+- [x]  **Backend:** CRUD subcategorías
+- [x]  **Frontend:** Página de Categorías — CRUD con íconos Lucide y colores
+- [x]  **Frontend:** Subcategorías anidadas dentro de cada categoría
+- [x]  **Frontend:** Indicador visual de categorías no eliminables (asociadas a gastos)
 
 ### Fase 3 — Módulo Transacciones (Gastos e Ingresos)
 
-*Duración estimada: 5-6 días*
+- [x]  **Backend:** CRUD transacciones con filtros (fecha, categoría, instrumento, tipo)
+- [x]  **Backend:** Lógica MSI — cálculo automático de monto mensual y fechas
+- [x]  **Backend:** Al crear transacción, actualizar saldo del instrumento
+- [x]  **Frontend:** Página de Transacciones — listado con filtros y búsqueda
+- [x]  **Frontend:** Formulario de nueva transacción con selector de instrumento y categoría
+- [x]  **Frontend:** Opción MSI en formulario de gasto a TDC (3, 6, 9, 12, 18, 24 meses)
+- [x]  **Frontend:** Vista de compras MSI activas con desglose por mes
 
-- [ ]  **Backend:** CRUD transacciones con filtros (fecha, categoría, instrumento, tipo)
-- [ ]  **Backend:** Lógica MSI — cálculo automático de monto mensual y fechas
-- [ ]  **Backend:** Al crear transacción, actualizar saldo del instrumento
-- [ ]  **Frontend:** Página de Transacciones — listado con filtros y búsqueda
-- [ ]  **Frontend:** Formulario de nueva transacción con selector de instrumento y categoría
-- [ ]  **Frontend:** Opción MSI en formulario de gasto a TDC (3, 6, 9, 12, 18, 24 meses)
-- [ ]  **Frontend:** Vista de compras MSI activas con desglose por mes
+### Fase 4 — Módulo Tarjetas de Crédito (Estados de Cuenta + Pagos/Transferencias)
 
-### Fase 4 — Módulo Tarjetas de Crédito (Estados de Cuenta)
-
-*Duración estimada: 3-4 días*
-
-- [ ]  **Backend:** CRUD estados de cuenta TDC
-- [ ]  **Backend:** Cálculo automático del total por período de corte
-- [ ]  **Frontend:** Página de TDC — vista por tarjeta con período actual
-- [ ]  **Frontend:** Detalle de estado de cuenta con desglose de movimientos
-- [ ]  **Frontend:** Edición de fecha de pago (override del default)
-- [ ]  **Frontend:** Indicadores de crédito disponible y deuda total
+- [x]  **Backend:** CRUD estados de cuenta TDC
+- [x]  **Backend:** Cálculo automático del total por período de corte
+- [x]  **Backend:** CRUD transferencias (`/transfers`) con actualización automática de saldos en ambos instrumentos
+- [x]  **Backend:** Tipos de transferencia: `card_payment`, `inter_account`, `loan_payment`, `other`
+- [x]  **Backend:** Vinculación opcional de transferencia a estado de cuenta (`statement_id`) o préstamo (`loan_id`)
+- [x]  **Frontend:** Página de TDC — vista por tarjeta con período actual
+- [x]  **Frontend:** Detalle de estado de cuenta con desglose de movimientos
+- [x]  **Frontend:** Edición de fecha de pago (override del default)
+- [x]  **Frontend:** Indicadores de crédito disponible y deuda total
+- [x]  **Frontend:** Botón/formulario de "Abonar a tarjeta" desde cualquier cuenta/débito
+- [x]  **Frontend:** Sección de transferencias entre cuentas propias
+- [x]  **Frontend:** Historial de pagos/abonos por instrumento
 
 ### Fase 5 — Módulo Préstamos
 
-*Duración estimada: 4-5 días*
-
-- [ ]  **Backend:** CRUD préstamos
-- [ ]  **Backend:** Generación de tabla de amortización (fija y variable)
-- [ ]  **Backend:** Registro de pagos realizados
-- [ ]  **Frontend:** Página de Préstamos — listado con progreso de pago
-- [ ]  **Frontend:** Detalle de préstamo con tabla de amortización completa
-- [ ]  **Frontend:** Configuración de tipo de pago (fijo vs variable con tasa)
-- [ ]  **Frontend:** Registro de pago de cuota
+- [x]  **Backend:** CRUD préstamos
+- [x]  **Backend:** Generación de tabla de amortización (fija y variable)
+- [x]  **Backend:** Registro de pagos realizados
+- [x]  **Frontend:** Página de Préstamos — listado con progreso de pago
+- [x]  **Frontend:** Detalle de préstamo con tabla de amortización completa
+- [x]  **Frontend:** Configuración de tipo de pago (fijo vs variable con tasa)
+- [x]  **Frontend:** Registro de pago de cuota
 
 ### Fase 6 — Módulo Suscripciones y Gastos Fijos
 
-*Duración estimada: 3-4 días*
-
-- [ ]  **Backend:** CRUD suscripciones
-- [ ]  **Backend:** CRUD gastos fijos + historial de pagos
-- [ ]  **Frontend:** Página de Suscripciones — listado con montos y ciclos
-- [ ]  **Frontend:** Página de Gastos Fijos — renta, luz, agua, etc.
-- [ ]  **Frontend:** Registro de pago mensual de gastos fijos
+- [x]  **Backend:** CRUD suscripciones
+- [x]  **Backend:** CRUD gastos fijos + historial de pagos
+- [x]  **Frontend:** Página de Suscripciones — listado con montos y ciclos
+- [x]  **Frontend:** Página de Gastos Fijos — renta, luz, agua, etc.
+- [x]  **Frontend:** Registro de pago mensual de gastos fijos
 
 ### Fase 7 — Dashboard Principal
 
-*Duración estimada: 5-6 días*
-
-- [ ]  **Backend:** Endpoints de resumen financiero (vista v_financial_summary)
-- [ ]  **Backend:** Endpoints de agregados para gráficas
-- [ ]  **Frontend:** Dashboard con cards de resumen:
+- [x]  **Backend:** Endpoints de resumen financiero (vista v_financial_summary)
+- [x]  **Backend:** Endpoints de agregados para gráficas
+- [x]  **Frontend:** Dashboard con cards de resumen:
     - Dinero disponible total (todas las cuentas)
     - Deuda total en TDC
     - Deuda total en préstamos
     - Crédito disponible total
     - Balance neto (disponible − deudas)
-- [ ]  **Gráfica:** Gasto por categoría (Pie chart — Recharts)
-- [ ]  **Gráfica:** Flujo de efectivo mensual — ingresos vs egresos (Bar chart)
-- [ ]  **Gráfica:** Evolución de saldo por cuenta (Line chart)
-- [ ]  **Gráfica:** Proyección de gastos futuros (Area chart)
+- [x]  **Gráfica:** Gasto por categoría (Pie chart — Recharts)
+- [x]  **Gráfica:** Flujo de efectivo mensual — ingresos vs egresos (Bar chart)
+- [x]  **Gráfica:** Evolución de saldo por cuenta (Line chart)
+- [x]  **Gráfica:** Proyección de gastos futuros (Area chart)
 
 ### Fase 8 — Módulo Presupuestos y Simulador
 
-*Duración estimada: 4-5 días*
-
-- [ ]  **Backend:** CRUD presupuestos mensuales por categoría
-- [ ]  **Backend:** Lógica de simulación financiera (snapshot + cálculo)
-- [ ]  **Frontend:** Página de Presupuestos — definir topes por categoría y mes
-- [ ]  **Frontend:** Indicador de progreso vs presupuesto
-- [ ]  **Frontend:** Página de Simulador "¿Qué pasa si…?"
+- [x]  **Backend:** CRUD presupuestos mensuales por categoría
+- [x]  **Backend:** Lógica de simulación financiera (snapshot + cálculo)
+- [x]  **Frontend:** Página de Presupuestos — definir topes por categoría y mes
+- [x]  **Frontend:** Indicador de progreso vs presupuesto
+- [x]  **Frontend:** Página de Simulador "¿Qué pasa si…?"
     - Input: monto, tipo (compra directa, MSI, préstamo, meses con intereses)
     - Output: cómo queda tu situación financiera después
     - Indicador verde/rojo de viabilidad
-- [ ]  **Frontend:** Historial de simulaciones guardadas
+- [x]  **Frontend:** Historial de simulaciones guardadas
 
 ### Fase 9 — Módulo Recordatorios
 
-*Duración estimada: 2-3 días*
-
-- [ ]  **Backend:** CRUD recordatorios
-- [ ]  **Backend:** Endpoint de recordatorios pendientes (no leídos)
-- [ ]  **Frontend:** Página/sección de Recordatorios con badges de no leídos
-- [ ]  **Frontend:** Tipos de recordatorio: pago TDC, corte, suscripción, préstamo, custom
-- [ ]  **Frontend:** Marcar como leído/descartado
+- [x]  **Backend:** CRUD recordatorios
+- [x]  **Backend:** Endpoint de recordatorios pendientes (no leídos)
+- [x]  **Frontend:** Página/sección de Recordatorios con badges de no leídos
+- [x]  **Frontend:** Tipos de recordatorio: pago TDC, corte, suscripción, préstamo, custom
+- [x]  **Frontend:** Marcar como leído/descartado
 
 ### Fase 10 — Pulido, Testing y Build
 
-*Duración estimada: 4-5 días*
-
 - [ ]  Revisión completa de flujos y edge cases
-- [ ]  Manejo de errores global (frontend + backend)
+- [x]  Manejo de errores global (frontend + backend)
 - [ ]  Loading states y empty states en todas las páginas
 - [ ]  Responsive dentro de la ventana Electron
 - [ ]  Build de Electron para Windows (.exe) y Mac (.dmg)
 - [ ]  Documentación de endpoints API
 - [ ]  README del proyecto
-
----
-
-## ⏱️ Estimación Total
-
-| Fase | Módulo | Días estimados |
-| --- | --- | --- |
-| 0 | Setup e Infraestructura | 3-4 |
-| 1 | Bancos e Instrumentos | 4-5 |
-| 2 | Categorías y Subcategorías | 2-3 |
-| 3 | Transacciones + MSI | 5-6 |
-| 4 | Tarjetas de Crédito | 3-4 |
-| 5 | Préstamos | 4-5 |
-| 6 | Suscripciones y Gastos Fijos | 3-4 |
-| 7 | Dashboard + Gráficas | 5-6 |
-| 8 | Presupuestos y Simulador | 4-5 |
-| 9 | Recordatorios | 2-3 |
-| 10 | Pulido, Testing y Build | 4-5 |
-| **Total** | **Todas las fases** | **~40-50 días** |
-
-<aside>
-💡
-
-**Nota:** Las estimaciones asumen trabajo de una persona dedicada ~6-8 hrs/día. Si trabajas en paralelo backend/frontend o tienes tiempo parcial, ajusta proporcionalmente.
-
-</aside>
 
 ---
 
@@ -737,3 +727,4 @@ Lambda única de .mjs con conexión a la dB de postgreSQL
 4. **MSI como campo en transactions** — No como tabla separada. Cada transacción MSI tiene sus campos de desglose.
 5. **Simulaciones con snapshot** — Se guarda el estado financiero al momento de la simulación en JSONB para poder revisarlo después.
 6. **Categorías protegidas** — Función SQL `fn_can_delete_category` garantiza que no se borren categorías en uso.
+7. **Transfers independientes de transacciones** — Los pagos a TDC y movimientos entre cuentas son `transfers`, no `transactions`. Esto permite que el pago de una tarjeta sea independiente de las compras (contado, MSI, MCI). El usuario puede hacer abonos parciales, totales o adelantados a cualquier TDC en cualquier momento.

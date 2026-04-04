@@ -1,0 +1,108 @@
+name: Build and Release Desktop
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build-packages:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win
+            artifact_name: windows
+          - os: macos-latest
+            platform: mac
+            artifact_name: mac
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+        with:
+          node-version: 24.14.1
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build desktop package
+        run: npm run electron:build -- --${{ matrix.platform }} --x64 --publish never
+
+      - name: Upload package artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.artifact_name }}
+          path: release/*
+
+  publish-release:
+    runs-on: ubuntu-latest
+    needs: build-packages
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-windows
+          path: release/windows
+
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-mac
+          path: release/mac
+
+      - name: Merge artifacts
+        run: |
+          mkdir -p release/all
+          cp -R release/windows/. release/all/
+          cp -R release/mac/. release/all/
+
+      - name: Create release tag
+        id: release_tag
+        shell: bash
+        run: |
+          short_sha="${GITHUB_SHA::7}"
+          tag="desktop-v${{ github.run_number }}-${{ github.run_attempt }}-${short_sha}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Build release name
+        id: release_name
+        shell: bash
+        run: |
+          release_date="$(date +'%Y-%m-%d')"
+          version="$(node -p "require('./package.json').version")"
+          actor="${GITHUB_ACTOR}"
+          name="${release_date}, Version ${version} (Desktop), @${actor} Latest"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_tag.outputs.tag }}
+          name: ${{ steps.release_name.outputs.name }}
+          body: |
+            Build automatico para Windows x64 y macOS x64.
+            Commit: ${{ github.sha }}
+          generate_release_notes: true
+          files: |
+            release/all/*.exe
+            release/all/*.dmg
+            release/all/*.zip
+            release/all/*.yml
+            release/all/*.blockmap
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,1230 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "version": "1.0.0",
+    "title": "Finanzas API"
+  },
+  "schemes": ["https"],
+  "consumes": ["application/json"],
+  "produces": ["application/json"],
+  "securityDefinitions": {
+    "api_key": {
+      "type": "apiKey",
+      "name": "x-api-key",
+      "in": "header"
+    }
+  },
+  "x-amazon-apigateway-request-validators": {
+    "Validate headers and body": {
+      "validateRequestParameters": true,
+      "validateRequestBody": true
+    }
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-client-version",
+            "in": "header",
+            "required": true,
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Health status"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      }
+    },
+    "/bootstrap/ping": {
+      "post": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-client-version",
+            "in": "header",
+            "required": true,
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/BootstrapPingRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ping response"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      }
+    },
+    "/dashboard/summary": {
+      "get": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-client-version",
+            "in": "header",
+            "required": true,
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dashboard summary"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      }
+    },
+    "/dashboard/charts/expenses-by-category": {
+      "get": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-client-version",
+            "in": "header",
+            "required": true,
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Expenses by category"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      }
+    },
+    "/dashboard/charts/cash-flow": {
+      "get": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-client-version",
+            "in": "header",
+            "required": true,
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cash flow chart"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      }
+    },
+    "/dashboard/charts/balance-evolution": {
+      "get": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-client-version",
+            "in": "header",
+            "required": true,
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Balance evolution chart"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      }
+    },
+    "/dashboard/charts/future-expenses": {
+      "get": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-client-version",
+            "in": "header",
+            "required": true,
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Future expenses chart"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      }
+    },
+    "/categories": {
+      "get": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Categories list"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      },
+      "post": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/CategoryPayload"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Category created"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      }
+    },
+    "/categories/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "integer",
+          "minimum": 1
+        }
+      ],
+      "put": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "minimum": 1
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/CategoryPayload"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Category updated"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      },
+      "delete": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "minimum": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Category deleted"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Category protected"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      }
+    },
+    "/subcategories": {
+      "get": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "category_id",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "minimum": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Subcategories list"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      },
+      "post": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SubcategoryPayload"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Subcategory created"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      }
+    },
+    "/subcategories/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "integer",
+          "minimum": 1
+        }
+      ],
+      "put": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "minimum": 1
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SubcategoryPayload"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Subcategory updated"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      },
+      "delete": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "minimum": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Subcategory deleted"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      }
+    },
+    "/banks": {
+      "get": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Banks list"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      },
+      "post": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/BankPayload"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Bank created"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      }
+    },
+    "/banks/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "integer",
+          "minimum": 1
+        }
+      ],
+      "put": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "minimum": 1
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/BankPayload"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bank updated"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      },
+      "delete": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "minimum": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bank deleted"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      }
+    },
+    "/instruments": {
+      "get": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "bank_id",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "minimum": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Instruments list"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      },
+      "post": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/InstrumentPayload"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Instrument created"
+          },
+          "400": {
+            "description": "Validation error"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      }
+    },
+    "/instruments/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "integer",
+          "minimum": 1
+        }
+      ],
+      "put": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "minimum": 1
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/InstrumentPayload"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Instrument updated"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      },
+      "delete": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "minimum": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Instrument deleted"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      }
+    },
+    "/reminders": {
+      "get": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reminders list"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      },
+      "post": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ReminderPayload"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Reminder created"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      }
+    },
+    "/reminders/pending": {
+      "get": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pending reminders list"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      }
+    },
+    "/reminders/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "integer",
+          "minimum": 1
+        }
+      ],
+      "put": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "minimum": 1
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ReminderPayload"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reminder updated"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      },
+      "delete": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "minimum": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reminder deleted"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      }
+    }
+  },
+  "definitions": {
+    "BootstrapPingRequest": {
+      "type": "object",
+      "required": ["awsRegion", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "awsRegion": {
+          "type": "string",
+          "enum": ["us-east-1", "us-east-2", "us-west-1", "us-west-2", "mx-central-1"]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        }
+      }
+    },
+    "BankPayload": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 100
+        },
+        "shortName": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "color": {
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}$"
+        },
+        "iconName": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "isActive": {
+          "type": "boolean"
+        }
+      }
+    },
+    "CategoryPayload": {
+      "type": "object",
+      "required": ["name", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 100
+        },
+        "iconName": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "color": {
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}$"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["expense", "income", "both"]
+        },
+        "isActive": {
+          "type": "boolean"
+        }
+      }
+    },
+    "SubcategoryPayload": {
+      "type": "object",
+      "required": ["categoryId", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "categoryId": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 100
+        },
+        "iconName": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "isActive": {
+          "type": "boolean"
+        }
+      }
+    },
+    "InstrumentPayload": {
+      "type": "object",
+      "required": ["bankId", "name", "type", "currencyId"],
+      "additionalProperties": false,
+      "properties": {
+        "bankId": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 100
+        },
+        "type": {
+          "type": "string",
+          "enum": ["credit_card", "debit_card", "account"]
+        },
+        "lastFour": {
+          "type": "string",
+          "pattern": "^\\d{4}$"
+        },
+        "currencyId": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "creditLimit": {
+          "type": "number",
+          "minimum": 0
+        },
+        "currentBalance": {
+          "type": "number",
+          "minimum": 0
+        },
+        "availableCredit": {
+          "type": "number",
+          "minimum": 0
+        },
+        "cutOffDay": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 31
+        },
+        "paymentDueDay": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 31
+        },
+        "annualRate": {
+          "type": "number",
+          "minimum": 0
+        },
+        "currentAmount": {
+          "type": "number",
+          "minimum": 0
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "isActive": {
+          "type": "boolean"
+        }
+      }
+    },
+    "ReminderPayload": {
+      "type": "object",
+      "required": ["title", "reminderDate", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 200
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "reminderDate": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["payment", "cutoff", "subscription", "loan", "custom"]
+        },
+        "referenceId": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "referenceType": {
+          "type": "string",
+          "maxLength": 30
+        },
+        "isRead": {
+          "type": "boolean"
+        },
+        "isDismissed": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}
