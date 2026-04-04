@@ -35,6 +35,20 @@ function jsonResponse(statusCode, payload) {
   };
 }
 
+function getRequestId(event) {
+  return event?.requestContext?.requestId ?? event?.requestContext?.awsRequestId ?? 'unknown';
+}
+
+function logUnhandledError(event, method, path, error) {
+  console.error('[lambda] unhandled route error', {
+    requestId: getRequestId(event),
+    method,
+    path,
+    errorCode: error?.code,
+    errorMessage: error instanceof Error ? error.message : String(error),
+  });
+}
+
 function createPool() {
   const connectionString = process.env.DATABASE_URL;
 
@@ -6231,6 +6245,8 @@ export async function handler(event) {
       }
     }
   } catch (error) {
+    logUnhandledError(event, method, path, error);
+
     if (error?.code === '23505') {
       return jsonResponse(409, {
         success: false,
@@ -6241,6 +6257,7 @@ export async function handler(event) {
     return jsonResponse(500, {
       success: false,
       error: 'Error interno al procesar la solicitud.',
+      requestId: getRequestId(event),
     });
   }
 

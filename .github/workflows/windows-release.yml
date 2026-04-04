@@ -1,4 +1,4 @@
-name: Build and Release Windows
+name: Build and Release Desktop
 
 on:
   push:
@@ -9,8 +9,19 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release-windows:
-    runs-on: windows-latest
+  build-packages:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win
+            artifact_name: windows
+          - os: macos-latest
+            platform: mac
+            artifact_name: mac
+
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout repository
@@ -25,26 +36,58 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Windows x64 package
-        run: npm run electron:build -- --win --x64 --publish never
+      - name: Build desktop package
+        run: npm run electron:build -- --${{ matrix.platform }} --x64 --publish never
+
+      - name: Upload package artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.artifact_name }}
+          path: release/*
+
+  publish-release:
+    runs-on: ubuntu-latest
+    needs: build-packages
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-windows
+          path: release/windows
+
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-mac
+          path: release/mac
+
+      - name: Merge artifacts
+        run: |
+          mkdir -p release/all
+          cp -R release/windows/. release/all/
+          cp -R release/mac/. release/all/
 
       - name: Create release tag
         id: release_tag
-        shell: pwsh
+        shell: bash
         run: |
-          $shortSha = $env:GITHUB_SHA.Substring(0, 7)
-          $tag = "win-v${{ github.run_number }}-${{ github.run_attempt }}-$shortSha"
-          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          short_sha="${GITHUB_SHA::7}"
+          tag="desktop-v${{ github.run_number }}-${{ github.run_attempt }}-${short_sha}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       - name: Build release name
         id: release_name
-        shell: pwsh
+        shell: bash
         run: |
-          $releaseDate = (Get-Date).ToString('yyyy-MM-dd')
-          $version = node -p "require('./package.json').version"
-          $actor = $env:GITHUB_ACTOR
-          $name = "$releaseDate, Version $version (Current), @$actor Latest"
-          "name=$name" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          release_date="$(date +'%Y-%m-%d')"
+          version="$(node -p "require('./package.json').version")"
+          actor="${GITHUB_ACTOR}"
+          name="${release_date}, Version ${version} (Desktop), @${actor} Latest"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
@@ -52,12 +95,14 @@ jobs:
           tag_name: ${{ steps.release_tag.outputs.tag }}
           name: ${{ steps.release_name.outputs.name }}
           body: |
-            Build automatico para Windows x64.
+            Build automatico para Windows x64 y macOS x64.
             Commit: ${{ github.sha }}
           generate_release_notes: true
           files: |
-            release/*.exe
-            release/*.yml
-            release/*.blockmap
+            release/all/*.exe
+            release/all/*.dmg
+            release/all/*.zip
+            release/all/*.yml
+            release/all/*.blockmap
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

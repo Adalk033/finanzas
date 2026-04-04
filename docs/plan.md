@@ -710,7 +710,7 @@ Lambda única de .mjs con conexión a la dB de postgreSQL
 ### Fase 10 — Pulido, Testing y Build
 
 - [ ]  Revisión completa de flujos y edge cases
-- [ ]  Manejo de errores global (frontend + backend)
+- [x]  Manejo de errores global (frontend + backend)
 - [ ]  Loading states y empty states en todas las páginas
 - [ ]  Responsive dentro de la ventana Electron
 - [ ]  Build de Electron para Windows (.exe) y Mac (.dmg)

@@ -1,75 +1,61 @@
-# React + TypeScript + Vite
+# Finanzas Lit
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Aplicacion de escritorio para gestion financiera personal con Electron + React + TypeScript + Vite.
 
-Currently, two official plugins are available:
+## Requisitos
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Node.js 24+
+- npm 10+
 
-## React Compiler
+## Desarrollo
 
-The React Compiler is enabled on this template. See [this documentation](https://react.dev/learn/react-compiler) for more information.
+1. Instalar dependencias:
 
-Note: This will impact Vite dev & build performances.
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm ci
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+2. Ejecutar la app de Electron en modo desarrollo:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run dev
 ```
+
+Este comando:
+
+- compila el proceso main/preload de Electron,
+- levanta Vite para renderer,
+- abre la ventana de Electron (no solo navegador web).
+
+Si necesitas levantar solo el frontend web:
+
+```bash
+npm run dev:web
+```
+
+## Scripts principales
+
+- `npm run dev`: desarrollo completo Electron + renderer.
+- `npm run dev:web`: solo Vite web.
+- `npm run build`: build renderer + build electron typescript.
+- `npm run electron`: compila main/preload y ejecuta la app desktop desde build local.
+- `npm run electron:build`: genera paquetes instalables con electron-builder.
+- `npm run lint`: ejecuta eslint.
+
+## Empaquetado desktop
+
+Genera instaladores en `release/`:
+
+```bash
+npm run electron:build -- --win --x64 --publish never
+npm run electron:build -- --mac --x64 --publish never
+```
+
+## CI/CD Release
+
+El workflow [Build and Release Desktop](.github/workflows/windows-release.yml) empaqueta Windows + macOS en el mismo pipeline y publica un unico release con ambos artefactos.
+
+Incluye:
+
+- `.exe` para Windows
+- `.dmg` y `.zip` para macOS

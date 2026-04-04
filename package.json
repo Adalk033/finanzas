@@ -9,16 +9,13 @@
   },
   "scripts": {
     "dev": "vite",
-    "dev:renderer": "vite",
-    "build": "tsc -b && vite build && npm run build:electron",
-    "build:electron": "tsc -p tsconfig.electron.json",
-    "electron": "electron dist-electron/main.js",
-    "dev:electron": "npm run build:electron && electron dist-electron/main.js",
+    "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "electron:build": "npm run build && electron-builder"
   },
   "dependencies": {
-    "better-sqlite3": "^11.10.0",
+    "better-sqlite3": "^12.8.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "recharts": "^3.8.1"
@@ -35,6 +32,7 @@
     "@vitejs/plugin-react": "^6.0.1",
     "babel-plugin-react-compiler": "^1.0.0",
     "electron": "^41.1.1",
+    "electron-builder": "^26.8.1",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",
