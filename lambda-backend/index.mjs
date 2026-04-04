@@ -695,8 +695,8 @@ function validateTransactionPayload(body) {
     return { ok: false, error: 'MSI solo aplica para gastos.' };
   }
 
-  if (isMsi && (!msiMonths || !ALLOWED_MSI_MONTHS.has(msiMonths))) {
-    return { ok: false, error: 'msiMonths invalido. Usa 3, 6, 9, 12, 18 o 24.' };
+  if (isMsi && (!msiMonths || msiMonths < 1 || msiMonths > 120)) {
+    return { ok: false, error: 'msiMonths debe estar entre 1 y 120 meses.' };
   }
 
   return {
@@ -1291,8 +1291,8 @@ function validateSimulationPayload(body) {
     return { ok: false, error: 'instrumentId invalido.' };
   }
 
-  if (scenarioType === 'msi' && (!msiMonths || !ALLOWED_MSI_MONTHS.has(msiMonths))) {
-    return { ok: false, error: 'msiMonths invalido para escenario MSI.' };
+  if (scenarioType === 'msi' && (!msiMonths || msiMonths < 1 || msiMonths > 120)) {
+    return { ok: false, error: 'msiMonths debe estar entre 1 y 120 meses para escenario MSI.' };
   }
 
   if (scenarioType === 'loan' && (!loanMonths || loanMonths < 1 || loanMonths > 600)) {

@@ -242,18 +242,22 @@ export function TransactionsSection({
                 {transactionForm.isMsi ? (
                   <>
                     <label className="form-grid__field" htmlFor="transactionMsiMonths">Meses MSI</label>
-                    <select
+                    <input
                       id="transactionMsiMonths"
                       className="form-grid__input"
-                      value={transactionForm.msiMonths ?? MSI_OPTIONS[0]}
+                      type="number"
+                      min={1}
+                      max={120}
+                      step={1}
+                      value={transactionForm.msiMonths ?? 3}
                       onChange={(event) => {
-                        onTransactionFormChange({ ...transactionForm, msiMonths: Number(event.target.value) })
+                        const value = Number(event.target.value)
+                        if (value >= 1 && value <= 120) {
+                          onTransactionFormChange({ ...transactionForm, msiMonths: value })
+                        }
                       }}
-                    >
-                      {MSI_OPTIONS.map((months) => (
-                        <option key={months} value={months}>{months} meses</option>
-                      ))}
-                    </select>
+                      placeholder="Ej: 4, 6, 12..."
+                    />
                   </>
                 ) : null}
               </>
