@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { LocalConfig, LocalConfigInput } from '../types/config'
+import {
+  getLocalConfigBridge,
+  MISSING_ELECTRON_BRIDGE_MESSAGE,
+} from '../app/localConfigBridge'
 
 interface UseLocalConfigResult {
   config: LocalConfigInput
+  hasElectronBridge: boolean
   isLoading: boolean
   isSaving: boolean
   error: string
@@ -31,6 +36,7 @@ function toInput(config: LocalConfig | null): LocalConfigInput {
 }
 
 export function useLocalConfig(): UseLocalConfigResult {
+  const hasElectronBridge = Boolean(getLocalConfigBridge())
   const [config, setConfig] = useState<LocalConfigInput>(EMPTY_CONFIG)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -42,12 +48,14 @@ export function useLocalConfig(): UseLocalConfigResult {
     setError('')
 
     try {
-      if (!window.localConfig) {
+      const bridge = getLocalConfigBridge()
+
+      if (!bridge) {
         setConfig(EMPTY_CONFIG)
         return
       }
 
-      const currentConfig = await window.localConfig.getConfig()
+      const currentConfig = await bridge.getConfig()
       setConfig(toInput(currentConfig))
     } catch (loadError) {
       if (!(loadError instanceof Error && loadError.message.includes('bridge'))) {
@@ -61,8 +69,10 @@ export function useLocalConfig(): UseLocalConfigResult {
   }, [])
 
   const save = useCallback(async (): Promise<void> => {
-    if (!window.localConfig) {
-      setError('No se encontro el bridge de Electron para configuracion local.')
+    const bridge = getLocalConfigBridge()
+
+    if (!bridge) {
+      setError(MISSING_ELECTRON_BRIDGE_MESSAGE)
       return
     }
 
@@ -71,7 +81,7 @@ export function useLocalConfig(): UseLocalConfigResult {
     setSuccessMessage('')
 
     try {
-      const saved = await window.localConfig.saveConfig(config)
+      const saved = await bridge.saveConfig(config)
       setConfig(toInput(saved))
       setSuccessMessage('Configuracion guardada correctamente.')
     } catch (saveError) {
@@ -88,6 +98,7 @@ export function useLocalConfig(): UseLocalConfigResult {
 
   return {
     config,
+    hasElectronBridge,
     isLoading,
     isSaving,
     error,

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { apiClient } from '../api/client'
+import { getLocalConfigBridge } from '../app/localConfigBridge'
 
 export type CloudConnectionStatus = 'unconfigured' | 'checking' | 'connected' | 'disconnected'
 
@@ -16,7 +17,8 @@ export function useSettingsPing() {
     let configExists = false
 
     try {
-      configExists = Boolean(await window.localConfig?.getConfig())
+      const bridge = getLocalConfigBridge()
+      configExists = Boolean(await bridge?.getConfig())
     } catch {
       configExists = false
     }

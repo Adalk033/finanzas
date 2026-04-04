@@ -2632,10 +2632,6 @@ async function deleteTransfer(transferId) {
   });
 }
 
-function roundMoney(value) {
-  return Number(Number(value).toFixed(2));
-}
-
 function buildInstallmentDate(startDate, paymentDay, monthOffset) {
   const movedDate = new Date(`${addMonthsToIsoDate(startDate, monthOffset)}T00:00:00.000Z`);
   const year = movedDate.getUTCFullYear();

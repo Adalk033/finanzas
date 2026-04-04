@@ -1,5 +1,9 @@
 import { ENDPOINTS } from './endpoints'
 import type { ApiResponse, LocalConfig } from '../types/config'
+import {
+  getLocalConfigBridge,
+  MISSING_ELECTRON_BRIDGE_MESSAGE,
+} from '../app/localConfigBridge'
 import type {
   Budget,
   BudgetInput,
@@ -57,11 +61,13 @@ function assertHttpsUrl(value: string): void {
 }
 
 async function getStoredConfig(): Promise<LocalConfig> {
-  if (!window.localConfig) {
-    throw new Error('No se encontro la API de configuracion local.')
+  const bridge = getLocalConfigBridge()
+
+  if (!bridge) {
+    throw new Error(MISSING_ELECTRON_BRIDGE_MESSAGE)
   }
 
-  const config = await window.localConfig.getConfig()
+  const config = await bridge.getConfig()
 
   if (!config) {
     throw new Error('Primero configura API Key, endpoint y region en Settings.')
@@ -89,21 +95,43 @@ async function request<T>(
       },
     })
 
-    const data = (await response.json()) as ApiResponse<T>
+    const rawBody = await response.text()
+    let data: ApiResponse<T> | null = null
+
+    if (rawBody) {
+      try {
+        data = JSON.parse(rawBody) as ApiResponse<T>
+      } catch {
+        data = null
+      }
+    }
 
     if (!response.ok) {
+      const apiError =
+        data && typeof data === 'object'
+          ? (data.error ?? ((data as { message?: string }).message ?? null))
+          : null
+
       return {
         success: false,
-        error: data.error ?? 'Ocurrio un error al llamar la API.',
+        error: apiError ?? `Error HTTP ${response.status} al llamar la API.`,
+      }
+    }
+
+    if (!data) {
+      return {
+        success: false,
+        error: 'La API respondio en un formato inesperado.',
       }
     }
 
     return data
   } catch (error) {
-    console.error('[apiClient] request failed', { path, error })
+    const errorMessage = error instanceof Error ? error.message : 'Error de red desconocido.'
+    console.error('[apiClient] request failed', { path, error: errorMessage })
     return {
       success: false,
-      error: 'No se pudo conectar con el API Gateway.',
+      error: `No se pudo conectar con el API Gateway. ${errorMessage}`,
     }
   }
 }
@@ -328,11 +356,17 @@ function buildTransactionQuery(filters: TransactionFilters): string {
 
 export const apiClient = {
   health: () => request<{ status: string }>(ENDPOINTS.HEALTH, { method: 'GET' }),
-  bootstrapPing: (message: string) =>
-    request<{ message: string }>(ENDPOINTS.BOOTSTRAP_PING, {
+  bootstrapPing: async (message: string) => {
+    const config = await getStoredConfig()
+
+    return request<{ message: string }>(ENDPOINTS.BOOTSTRAP_PING, {
       method: 'POST',
-      body: JSON.stringify({ message }),
-    }),
+      body: JSON.stringify({
+        awsRegion: config.awsRegion,
+        message,
+      }),
+    })
+  },
   getDashboardSummary: () => request<DashboardSummary>(ENDPOINTS.DASHBOARD_SUMMARY, { method: 'GET' }),
   getDashboardExpensesByCategory: () => request<DashboardExpenseByCategory[]>(ENDPOINTS.DASHBOARD_EXPENSES_BY_CATEGORY, { method: 'GET' }),
   getDashboardCashFlow: () => request<DashboardCashFlowPoint[]>(ENDPOINTS.DASHBOARD_CASH_FLOW, { method: 'GET' }),

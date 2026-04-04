@@ -3,6 +3,7 @@ import type { LocalConfigInput } from '../../types/config'
 
 type SettingsSectionProps = {
   config: LocalConfigInput
+  hasElectronBridge: boolean
   isSaving: boolean
   isPinging: boolean
   error: string
@@ -16,6 +17,7 @@ type SettingsSectionProps = {
 
 export function SettingsSection({
   config,
+  hasElectronBridge,
   isSaving,
   isPinging,
   error,
@@ -71,14 +73,20 @@ export function SettingsSection({
         />
 
         <div className="form-grid__actions">
-          <button className="button button--primary" type="submit" disabled={isSaving}>
+          <button className="button button--primary" type="submit" disabled={isSaving || !hasElectronBridge}>
             {isSaving ? 'Guardando...' : 'Guardar configuracion'}
           </button>
-          <button className="button button--secondary" type="button" disabled={isPinging} onClick={onPing}>
+          <button className="button button--secondary" type="button" disabled={isPinging || !hasElectronBridge} onClick={onPing}>
             {isPinging ? 'Probando...' : 'Probar conexion'}
           </button>
         </div>
       </form>
+
+      {!hasElectronBridge ? (
+        <p className="message message--warning">
+          Esta pantalla requiere la app de escritorio de Electron. Si abriste la URL en navegador, el guardado local no estara disponible.
+        </p>
+      ) : null}
 
       {error ? <p className="message message--error">{error}</p> : null}
       {successMessage ? <p className="message message--success">{successMessage}</p> : null}

@@ -84,6 +84,7 @@ export function App() {
           {activeSection === 'settings' ? (
             <SettingsSection
               config={configController.config}
+              hasElectronBridge={configController.hasElectronBridge}
               isSaving={configController.isSaving}
               isPinging={settingsPingController.isPinging}
               error={configController.error}
