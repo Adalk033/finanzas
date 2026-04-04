@@ -1,4 +1,4 @@
-import type { SyntheticEvent } from 'react'
+import { useEffect, useState, type SyntheticEvent } from 'react'
 import { formatCurrency } from '../../app/appHelpers'
 import type {
   CreditCardStatement,
@@ -102,6 +102,21 @@ export function CreditCardsSection({
   onCancelStatementUpdate,
   onDeleteTransfer,
 }: CreditCardsSectionProps) {
+  const [isStatementFormOpen, setIsStatementFormOpen] = useState(editingStatementId !== null)
+  const [isTransferFormOpen, setIsTransferFormOpen] = useState(editingTransferId !== null)
+
+  useEffect(() => {
+    if (editingStatementId !== null) {
+      setIsStatementFormOpen(true)
+    }
+  }, [editingStatementId])
+
+  useEffect(() => {
+    if (editingTransferId !== null) {
+      setIsTransferFormOpen(true)
+    }
+  }, [editingTransferId])
+
   return (
     <section className="card">
       <header className="card__header">
@@ -120,6 +135,27 @@ export function CreditCardsSection({
         </article>
       </div>
 
+      <div className="section-toolbar">
+        <button className="button button--primary" type="button" onClick={() => setIsStatementFormOpen((value) => !value)}>
+          {isStatementFormOpen ? 'Ocultar estado' : 'Nuevo estado'}
+        </button>
+        <button className="button button--secondary" type="button" onClick={() => setIsTransferFormOpen((value) => !value)}>
+          {isTransferFormOpen ? 'Ocultar transferencia' : 'Nueva transferencia'}
+        </button>
+        <div className="section-toolbar__spacer" />
+        <button className="button button--secondary" type="button" onClick={onReloadStatements}>
+          Recargar estados
+        </button>
+        <button className="button button--secondary" type="button" onClick={onReloadTransfers}>
+          Recargar transferencias
+        </button>
+      </div>
+
+      {statementError ? <p className="message message--error">{statementError}</p> : null}
+      {statementMessage ? <p className="message message--success">{statementMessage}</p> : null}
+      {transferError ? <p className="message message--error">{transferError}</p> : null}
+      {transferMessage ? <p className="message message--success">{transferMessage}</p> : null}
+
       <div className="transaction-layout">
         <section className="mini-card">
           <header className="mini-card__header">
@@ -127,52 +163,53 @@ export function CreditCardsSection({
             <p className="mini-card__subtitle">El total se calcula automaticamente con las compras del periodo.</p>
           </header>
 
-          <form className="form-grid" onSubmit={onStatementSubmit}>
-            <label className="form-grid__field" htmlFor="statementInstrument">Tarjeta</label>
-            <select
-              id="statementInstrument"
-              className="form-grid__input"
-              value={selectedStatementInstrumentId}
-              onChange={(event) => onStatementFormChange({ ...statementForm, instrumentId: Number(event.target.value) })}
-              required
-            >
-              <option value={0}>Selecciona tarjeta</option>
-              {creditCardInstruments.map((instrument) => (
-                <option key={instrument.id} value={instrument.id}>{instrument.name}</option>
-              ))}
-            </select>
+          {isStatementFormOpen ? (
+            <div className="section-panel">
+              <form className="form-grid" onSubmit={onStatementSubmit}>
+                <label className="form-grid__field" htmlFor="statementInstrument">Tarjeta</label>
+                <select
+                  id="statementInstrument"
+                  className="form-grid__input"
+                  value={selectedStatementInstrumentId}
+                  onChange={(event) => onStatementFormChange({ ...statementForm, instrumentId: Number(event.target.value) })}
+                  required
+                >
+                  <option value={0}>Selecciona tarjeta</option>
+                  {creditCardInstruments.map((instrument) => (
+                    <option key={instrument.id} value={instrument.id}>{instrument.name}</option>
+                  ))}
+                </select>
 
-            <label className="form-grid__field" htmlFor="statementCutOffDate">Fecha de corte</label>
-            <input
-              id="statementCutOffDate"
-              className="form-grid__input"
-              type="date"
-              value={statementForm.cutOffDate}
-              onChange={(event) => onStatementFormChange({ ...statementForm, cutOffDate: event.target.value })}
-              required
-            />
+                <label className="form-grid__field" htmlFor="statementCutOffDate">Fecha de corte</label>
+                <input
+                  id="statementCutOffDate"
+                  className="form-grid__input"
+                  type="date"
+                  value={statementForm.cutOffDate}
+                  onChange={(event) => onStatementFormChange({ ...statementForm, cutOffDate: event.target.value })}
+                  required
+                />
 
-            <label className="form-grid__field" htmlFor="statementPaymentDueDate">Fecha de pago (opcional)</label>
-            <input
-              id="statementPaymentDueDate"
-              className="form-grid__input"
-              type="date"
-              value={statementForm.paymentDueDate}
-              onChange={(event) => onStatementFormChange({ ...statementForm, paymentDueDate: event.target.value })}
-            />
+                <label className="form-grid__field" htmlFor="statementPaymentDueDate">Fecha de pago (opcional)</label>
+                <input
+                  id="statementPaymentDueDate"
+                  className="form-grid__input"
+                  type="date"
+                  value={statementForm.paymentDueDate}
+                  onChange={(event) => onStatementFormChange({ ...statementForm, paymentDueDate: event.target.value })}
+                />
 
-            <div className="form-grid__actions">
-              <button className="button button--primary" type="submit" disabled={!hasConfig || creditCardInstruments.length === 0}>
-                Crear estado
-              </button>
-              <button className="button button--secondary" type="button" onClick={onResetStatementForm}>
-                Limpiar
-              </button>
-              <button className="button button--secondary" type="button" onClick={onReloadStatements}>
-                Recargar
-              </button>
+                <div className="form-grid__actions">
+                  <button className="button button--primary" type="submit" disabled={!hasConfig || creditCardInstruments.length === 0}>
+                    Crear estado
+                  </button>
+                  <button className="button button--secondary" type="button" onClick={onResetStatementForm}>
+                    Limpiar
+                  </button>
+                </div>
+              </form>
             </div>
-          </form>
+          ) : null}
         </section>
 
         <section className="mini-card">
@@ -181,142 +218,136 @@ export function CreditCardsSection({
             <p className="mini-card__subtitle">Abona tarjeta o mueve dinero entre cuentas propias.</p>
           </header>
 
-          <form className="form-grid" onSubmit={onTransferSubmit}>
-            <label className="form-grid__field" htmlFor="transferType">Tipo</label>
-            <select
-              id="transferType"
-              className="form-grid__input"
-              value={transferForm.type}
-              onChange={(event) => onTransferTypeChange(event.target.value as TransferType)}
-            >
-              <option value="card_payment">Pago de tarjeta</option>
-              <option value="inter_account">Entre cuentas</option>
-              <option value="loan_payment">Pago de prestamo</option>
-              <option value="other">Otro</option>
-            </select>
-
-            <label className="form-grid__field" htmlFor="transferSource">Origen</label>
-            <select
-              id="transferSource"
-              className="form-grid__input"
-              value={selectedTransferSourceInstrumentId}
-              onChange={(event) => onTransferFormChange({ ...transferForm, sourceInstrumentId: Number(event.target.value) })}
-              required
-            >
-              <option value={0}>Selecciona origen</option>
-              {sourceTransferInstruments.map((instrument) => (
-                <option key={instrument.id} value={instrument.id}>{instrument.name}</option>
-              ))}
-            </select>
-
-            <label className="form-grid__field" htmlFor="transferDestination">Destino</label>
-            <select
-              id="transferDestination"
-              className="form-grid__input"
-              value={selectedTransferDestinationInstrumentId}
-              onChange={(event) => onTransferFormChange({ ...transferForm, destinationInstrumentId: Number(event.target.value) })}
-              required
-            >
-              <option value={0}>Selecciona destino</option>
-              {availableTransferDestinations.map((instrument) => (
-                <option key={instrument.id} value={instrument.id}>{instrument.name}</option>
-              ))}
-            </select>
-
-            {transferForm.type === 'card_payment' ? (
-              <>
-                <label className="form-grid__field" htmlFor="transferStatement">Estado de cuenta</label>
+          {isTransferFormOpen ? (
+            <div className="section-panel">
+              <form className="form-grid" onSubmit={onTransferSubmit}>
+                <label className="form-grid__field" htmlFor="transferType">Tipo</label>
                 <select
-                  id="transferStatement"
+                  id="transferType"
                   className="form-grid__input"
-                  value={selectedTransferStatementId ?? ''}
-                  onChange={(event) => {
-                    const rawValue = event.target.value
-                    onTransferFormChange({ ...transferForm, statementId: rawValue ? Number(rawValue) : null })
-                  }}
+                  value={transferForm.type}
+                  onChange={(event) => onTransferTypeChange(event.target.value as TransferType)}
+                >
+                  <option value="card_payment">Pago de tarjeta</option>
+                  <option value="inter_account">Entre cuentas</option>
+                  <option value="loan_payment">Pago de prestamo</option>
+                  <option value="other">Otro</option>
+                </select>
+
+                <label className="form-grid__field" htmlFor="transferSource">Origen</label>
+                <select
+                  id="transferSource"
+                  className="form-grid__input"
+                  value={selectedTransferSourceInstrumentId}
+                  onChange={(event) => onTransferFormChange({ ...transferForm, sourceInstrumentId: Number(event.target.value) })}
                   required
                 >
-                  <option value="">Selecciona estado</option>
-                  {statements
-                    .filter((statement) => statement.instrumentId === selectedTransferDestinationInstrumentId)
-                    .map((statement) => (
-                      <option key={statement.id} value={statement.id}>
-                        {statement.instrumentName ?? 'Tarjeta'} · Corte {statement.cutOffDate} · {formatCurrency(statement.totalAmount)}
-                      </option>
-                    ))}
+                  <option value={0}>Selecciona origen</option>
+                  {sourceTransferInstruments.map((instrument) => (
+                    <option key={instrument.id} value={instrument.id}>{instrument.name}</option>
+                  ))}
                 </select>
-              </>
-            ) : null}
 
-            <label className="form-grid__field" htmlFor="transferAmount">Monto</label>
-            <input
-              id="transferAmount"
-              className="form-grid__input"
-              type="number"
-              step="0.01"
-              min={0.01}
-              value={transferForm.amount}
-              onChange={(event) => onTransferFormChange({ ...transferForm, amount: Number(event.target.value) })}
-              required
-            />
+                <label className="form-grid__field" htmlFor="transferDestination">Destino</label>
+                <select
+                  id="transferDestination"
+                  className="form-grid__input"
+                  value={selectedTransferDestinationInstrumentId}
+                  onChange={(event) => onTransferFormChange({ ...transferForm, destinationInstrumentId: Number(event.target.value) })}
+                  required
+                >
+                  <option value={0}>Selecciona destino</option>
+                  {availableTransferDestinations.map((instrument) => (
+                    <option key={instrument.id} value={instrument.id}>{instrument.name}</option>
+                  ))}
+                </select>
 
-            <label className="form-grid__field" htmlFor="transferDate">Fecha</label>
-            <input
-              id="transferDate"
-              className="form-grid__input"
-              type="date"
-              value={transferForm.transferDate}
-              onChange={(event) => onTransferFormChange({ ...transferForm, transferDate: event.target.value })}
-              required
-            />
+                {transferForm.type === 'card_payment' ? (
+                  <>
+                    <label className="form-grid__field" htmlFor="transferStatement">Estado de cuenta</label>
+                    <select
+                      id="transferStatement"
+                      className="form-grid__input"
+                      value={selectedTransferStatementId ?? ''}
+                      onChange={(event) => {
+                        const rawValue = event.target.value
+                        onTransferFormChange({ ...transferForm, statementId: rawValue ? Number(rawValue) : null })
+                      }}
+                      required
+                    >
+                      <option value="">Selecciona estado</option>
+                      {statements
+                        .filter((statement) => statement.instrumentId === selectedTransferDestinationInstrumentId)
+                        .map((statement) => (
+                          <option key={statement.id} value={statement.id}>
+                            {statement.instrumentName ?? 'Tarjeta'} · Corte {statement.cutOffDate} · {formatCurrency(statement.totalAmount)}
+                          </option>
+                        ))}
+                    </select>
+                  </>
+                ) : null}
 
-            <label className="form-grid__field" htmlFor="transferDescription">Descripcion</label>
-            <input
-              id="transferDescription"
-              className="form-grid__input"
-              type="text"
-              value={transferForm.description}
-              onChange={(event) => onTransferFormChange({ ...transferForm, description: event.target.value })}
-              placeholder="Abono, movimiento interno, etc."
-            />
-
-            {transferForm.type === 'loan_payment' ? (
-              <>
-                <label className="form-grid__field" htmlFor="transferLoanId">ID de prestamo</label>
+                <label className="form-grid__field" htmlFor="transferAmount">Monto</label>
                 <input
-                  id="transferLoanId"
+                  id="transferAmount"
                   className="form-grid__input"
                   type="number"
-                  min={1}
-                  value={transferForm.loanId ?? ''}
-                  onChange={(event) => {
-                    const rawValue = event.target.value
-                    onTransferFormChange({ ...transferForm, loanId: rawValue ? Number(rawValue) : null })
-                  }}
+                  step="0.01"
+                  min={0.01}
+                  value={transferForm.amount}
+                  onChange={(event) => onTransferFormChange({ ...transferForm, amount: Number(event.target.value) })}
                   required
                 />
-              </>
-            ) : null}
 
-            <div className="form-grid__actions">
-              <button className="button button--primary" type="submit" disabled={!hasConfig || sourceTransferInstruments.length === 0}>
-                {editingTransferId === null ? 'Crear transferencia' : 'Guardar transferencia'}
-              </button>
-              <button className="button button--secondary" type="button" onClick={onResetTransferForm}>
-                {editingTransferId === null ? 'Limpiar' : 'Cancelar edicion'}
-              </button>
-              <button className="button button--secondary" type="button" onClick={onReloadTransfers}>
-                Recargar
-              </button>
+                <label className="form-grid__field" htmlFor="transferDate">Fecha</label>
+                <input
+                  id="transferDate"
+                  className="form-grid__input"
+                  type="date"
+                  value={transferForm.transferDate}
+                  onChange={(event) => onTransferFormChange({ ...transferForm, transferDate: event.target.value })}
+                  required
+                />
+
+                <label className="form-grid__field" htmlFor="transferDescription">Descripcion</label>
+                <input
+                  id="transferDescription"
+                  className="form-grid__input"
+                  type="text"
+                  value={transferForm.description}
+                  onChange={(event) => onTransferFormChange({ ...transferForm, description: event.target.value })}
+                />
+
+                {transferForm.type === 'loan_payment' ? (
+                  <>
+                    <label className="form-grid__field" htmlFor="transferLoanId">ID de prestamo</label>
+                    <input
+                      id="transferLoanId"
+                      className="form-grid__input"
+                      type="number"
+                      min={1}
+                      value={transferForm.loanId ?? ''}
+                      onChange={(event) => {
+                        const rawValue = event.target.value
+                        onTransferFormChange({ ...transferForm, loanId: rawValue ? Number(rawValue) : null })
+                      }}
+                    />
+                  </>
+                ) : null}
+
+                <div className="form-grid__actions">
+                  <button className="button button--primary" type="submit" disabled={!hasConfig || sourceTransferInstruments.length === 0}>
+                    {editingTransferId === null ? 'Crear transferencia' : 'Guardar cambios'}
+                  </button>
+                  <button className="button button--secondary" type="button" onClick={onResetTransferForm}>
+                    Limpiar
+                  </button>
+                </div>
+              </form>
             </div>
-          </form>
+          ) : null}
         </section>
       </div>
-
-      {statementError ? <p className="message message--error">{statementError}</p> : null}
-      {statementMessage ? <p className="message message--success">{statementMessage}</p> : null}
-      {transferError ? <p className="message message--error">{transferError}</p> : null}
-      {transferMessage ? <p className="message message--success">{transferMessage}</p> : null}
 
       <div className="category-list">
         <article className="category-card">

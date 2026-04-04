@@ -1,4 +1,4 @@
-import type { SyntheticEvent } from 'react'
+import { useEffect, useState, type SyntheticEvent } from 'react'
 import { formatCurrency, getBudgetStatusLabel } from '../../app/appHelpers'
 import type { Budget, BudgetInput, Category } from '../../types/domain'
 
@@ -43,6 +43,14 @@ export function BudgetsSection({
   onEditBudget,
   onDeleteBudget,
 }: BudgetsSectionProps) {
+  const [isFormOpen, setIsFormOpen] = useState(editingBudgetId !== null)
+
+  useEffect(() => {
+    if (editingBudgetId !== null) {
+      setIsFormOpen(true)
+    }
+  }, [editingBudgetId])
+
   return (
     <section className="card">
       <header className="card__header">
@@ -53,13 +61,21 @@ export function BudgetsSection({
       {budgetMessage ? <p className="message message--success">{budgetMessage}</p> : null}
       {budgetError ? <p className="message message--error">{budgetError}</p> : null}
 
+      <div className="section-toolbar">
+        <button className="button button--primary" type="button" onClick={() => setIsFormOpen((value) => !value)}>
+          {isFormOpen ? 'Ocultar formulario' : editingBudgetId === null ? 'Nuevo presupuesto' : 'Editar presupuesto'}
+        </button>
+      </div>
+
       <div className="phase8-layout">
         <article className="mini-card">
           <header className="mini-card__header">
             <h3 className="mini-card__title">{editingBudgetId === null ? 'Nuevo presupuesto' : 'Editar presupuesto'}</h3>
           </header>
 
-          <form className="form-grid" onSubmit={onSubmit}>
+          {isFormOpen ? (
+            <div className="section-panel">
+              <form className="form-grid" onSubmit={onSubmit}>
             <label className="form-grid__field" htmlFor="budgetCategory">Categoria</label>
             <select
               id="budgetCategory"
@@ -129,15 +145,17 @@ export function BudgetsSection({
               }}
             />
 
-            <div className="form-grid__actions">
-              <button className="button button--primary" type="submit" disabled={!hasConfig || isBudgetsLoading}>
-                {editingBudgetId === null ? 'Guardar presupuesto' : 'Actualizar presupuesto'}
-              </button>
-              <button className="button button--secondary" type="button" onClick={onReset}>
-                Limpiar
-              </button>
+                <div className="form-grid__actions">
+                  <button className="button button--primary" type="submit" disabled={!hasConfig || isBudgetsLoading}>
+                    {editingBudgetId === null ? 'Guardar presupuesto' : 'Actualizar presupuesto'}
+                  </button>
+                  <button className="button button--secondary" type="button" onClick={onReset}>
+                    Limpiar
+                  </button>
+                </div>
+              </form>
             </div>
-          </form>
+          ) : null}
         </article>
 
         <article className="mini-card">

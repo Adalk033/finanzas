@@ -3661,6 +3661,10 @@ async function listInstruments(bankId) {
 }
 
 async function createInstrument(payload) {
+  const availableCredit = payload.type === 'credit_card'
+    ? (payload.availableCredit ?? ((payload.creditLimit ?? 0) - (payload.currentBalance ?? 0)))
+    : null;
+
   const result = await query(
     `
     INSERT INTO app_gastos.financial_instruments (
@@ -3679,7 +3683,22 @@ async function createInstrument(payload) {
       notes,
       is_active
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, $6 - $7), $9, $10, $11, $12, $13, $14)
+    VALUES (
+      $1,
+      $2,
+      $3,
+      $4,
+      $5,
+      $6,
+      $7,
+      $8,
+      $9,
+      $10,
+      $11,
+      $12,
+      $13,
+      $14
+    )
     RETURNING id, bank_id, name, type, last_four, currency_id,
               credit_limit, current_balance, available_credit, cut_off_day,
               payment_due_day, annual_rate, current_amount, notes,
@@ -3693,7 +3712,7 @@ async function createInstrument(payload) {
       payload.currencyId,
       payload.type === 'credit_card' ? payload.creditLimit : null,
       payload.type === 'credit_card' ? payload.currentBalance : null,
-      payload.type === 'credit_card' ? payload.availableCredit : null,
+      availableCredit,
       payload.type === 'credit_card' ? payload.cutOffDay : null,
       payload.type === 'credit_card' ? payload.paymentDueDay : null,
       payload.type === 'credit_card' ? payload.annualRate : null,
@@ -3714,6 +3733,10 @@ async function createInstrument(payload) {
 }
 
 async function updateInstrument(instrumentId, payload) {
+  const availableCredit = payload.type === 'credit_card'
+    ? (payload.availableCredit ?? ((payload.creditLimit ?? 0) - (payload.currentBalance ?? 0)))
+    : null;
+
   const result = await query(
     `
     UPDATE app_gastos.financial_instruments
@@ -3724,7 +3747,7 @@ async function updateInstrument(instrumentId, payload) {
         currency_id = $5,
         credit_limit = $6,
         current_balance = $7,
-        available_credit = COALESCE($8, $6 - $7),
+        available_credit = $8,
         cut_off_day = $9,
         payment_due_day = $10,
         annual_rate = $11,
@@ -3746,7 +3769,7 @@ async function updateInstrument(instrumentId, payload) {
       payload.currencyId,
       payload.type === 'credit_card' ? payload.creditLimit : null,
       payload.type === 'credit_card' ? payload.currentBalance : null,
-      payload.type === 'credit_card' ? payload.availableCredit : null,
+      availableCredit,
       payload.type === 'credit_card' ? payload.cutOffDay : null,
       payload.type === 'credit_card' ? payload.paymentDueDay : null,
       payload.type === 'credit_card' ? payload.annualRate : null,

@@ -1,4 +1,4 @@
-import type { SyntheticEvent } from 'react'
+import { useState, type SyntheticEvent } from 'react'
 import type { LocalConfigInput } from '../../types/config'
 
 type SettingsSectionProps = {
@@ -28,6 +28,8 @@ export function SettingsSection({
   onSave,
   onPing,
 }: SettingsSectionProps) {
+  const [isFormOpen, setIsFormOpen] = useState(false)
+
   return (
     <section className="card">
       <header className="card__header">
@@ -35,52 +37,63 @@ export function SettingsSection({
         <p className="card__subtitle">Guarda API Key, endpoint HTTPS y region AWS en SQLite local.</p>
       </header>
 
-      <form className="form-grid" onSubmit={onSave}>
-        <label className="form-grid__field" htmlFor="apiKey">API Key</label>
-        <input
-          id="apiKey"
-          className="form-grid__input"
-          type="password"
-          value={config.apiKey}
-          onChange={(event) => onConfigChange({ ...config, apiKey: event.target.value })}
-          placeholder="Ingresa tu x-api-key"
-          autoComplete="off"
-          required
-        />
+      <div className="section-toolbar">
+        <button className="button button--primary" type="button" onClick={() => setIsFormOpen((value) => !value)}>
+          {isFormOpen ? 'Ocultar formulario' : 'Abrir configuracion'}
+        </button>
+        <div className="section-toolbar__spacer" />
+        <button className="button button--secondary" type="button" disabled={isPinging || !hasElectronBridge} onClick={onPing}>
+          {isPinging ? 'Probando...' : 'Probar conexion'}
+        </button>
+      </div>
 
-        <label className="form-grid__field" htmlFor="apiEndpoint">API Endpoint (HTTPS)</label>
-        <input
-          id="apiEndpoint"
-          className="form-grid__input"
-          type="url"
-          value={config.apiEndpoint}
-          onChange={(event) => onConfigChange({ ...config, apiEndpoint: event.target.value })}
-          placeholder="https://xxxxx.execute-api.us-east-1.amazonaws.com/prod"
-          autoComplete="off"
-          required
-        />
+      {isFormOpen ? (
+        <div className="section-panel">
+          <form className="form-grid" onSubmit={onSave}>
+            <label className="form-grid__field" htmlFor="apiKey">API Key</label>
+            <input
+              id="apiKey"
+              className="form-grid__input"
+              type="password"
+              value={config.apiKey}
+              onChange={(event) => onConfigChange({ ...config, apiKey: event.target.value })}
+              placeholder="Ingresa tu x-api-key"
+              autoComplete="off"
+              required
+            />
 
-        <label className="form-grid__field" htmlFor="awsRegion">AWS Region</label>
-        <input
-          id="awsRegion"
-          className="form-grid__input"
-          type="text"
-          value={config.awsRegion}
-          onChange={(event) => onConfigChange({ ...config, awsRegion: event.target.value })}
-          placeholder="us-east-1"
-          autoComplete="off"
-          required
-        />
+            <label className="form-grid__field" htmlFor="apiEndpoint">API Endpoint (HTTPS)</label>
+            <input
+              id="apiEndpoint"
+              className="form-grid__input"
+              type="url"
+              value={config.apiEndpoint}
+              onChange={(event) => onConfigChange({ ...config, apiEndpoint: event.target.value })}
+              placeholder="https://xxxxx.execute-api.us-east-1.amazonaws.com/prod"
+              autoComplete="off"
+              required
+            />
 
-        <div className="form-grid__actions">
-          <button className="button button--primary" type="submit" disabled={isSaving || !hasElectronBridge}>
-            {isSaving ? 'Guardando...' : 'Guardar configuracion'}
-          </button>
-          <button className="button button--secondary" type="button" disabled={isPinging || !hasElectronBridge} onClick={onPing}>
-            {isPinging ? 'Probando...' : 'Probar conexion'}
-          </button>
+            <label className="form-grid__field" htmlFor="awsRegion">AWS Region</label>
+            <input
+              id="awsRegion"
+              className="form-grid__input"
+              type="text"
+              value={config.awsRegion}
+              onChange={(event) => onConfigChange({ ...config, awsRegion: event.target.value })}
+              placeholder="us-east-1"
+              autoComplete="off"
+              required
+            />
+
+            <div className="form-grid__actions">
+              <button className="button button--primary" type="submit" disabled={isSaving || !hasElectronBridge}>
+                {isSaving ? 'Guardando...' : 'Guardar configuracion'}
+              </button>
+            </div>
+          </form>
         </div>
-      </form>
+      ) : null}
 
       {!hasElectronBridge ? (
         <p className="message message--warning">

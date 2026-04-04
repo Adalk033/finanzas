@@ -1,4 +1,4 @@
-import type { SyntheticEvent } from 'react'
+import { useEffect, useState, type SyntheticEvent } from 'react'
 import { getCategoryTypeLabel } from '../../app/appHelpers'
 import type {
   Category,
@@ -66,6 +66,21 @@ export function CategoriesSection({
   onEditSubcategory,
   onDeleteSubcategory,
 }: CategoriesSectionProps) {
+  const [isCategoryFormOpen, setIsCategoryFormOpen] = useState(editingCategoryId !== null)
+  const [isSubcategoryFormOpen, setIsSubcategoryFormOpen] = useState(editingSubcategoryId !== null)
+
+  useEffect(() => {
+    if (editingCategoryId !== null) {
+      setIsCategoryFormOpen(true)
+    }
+  }, [editingCategoryId])
+
+  useEffect(() => {
+    if (editingSubcategoryId !== null) {
+      setIsSubcategoryFormOpen(true)
+    }
+  }, [editingSubcategoryId])
+
   return (
     <section className="card">
       <header className="card__header">
@@ -80,62 +95,73 @@ export function CategoriesSection({
             <p className="mini-card__subtitle">Define el grupo principal que se usara en gastos e ingresos.</p>
           </header>
 
-          <form className="form-grid" onSubmit={onCategorySubmit}>
-            <label className="form-grid__field" htmlFor="categoryName">Nombre</label>
-            <input
-              id="categoryName"
-              className="form-grid__input"
-              type="text"
-              value={categoryForm.name}
-              onChange={(event) => onCategoryFormChange({ ...categoryForm, name: event.target.value })}
-              placeholder="Alimentacion"
-              required
-            />
+          <div className="section-toolbar">
+            <button className="button button--primary" type="button" onClick={() => setIsCategoryFormOpen((value) => !value)}>
+              {isCategoryFormOpen ? 'Ocultar formulario' : editingCategoryId === null ? 'Nueva categoria' : 'Editar categoria'}
+            </button>
+            <div className="section-toolbar__spacer" />
+            <button className="button button--secondary" type="button" disabled={!hasConfig} onClick={onReload}>
+              Recargar
+            </button>
+          </div>
 
-            <label className="form-grid__field" htmlFor="categoryType">Tipo</label>
-            <select
-              id="categoryType"
-              className="form-grid__input"
-              value={categoryForm.type}
-              onChange={(event) => onCategoryFormChange({ ...categoryForm, type: event.target.value as CategoryType })}
-            >
-              <option value="expense">Gasto</option>
-              <option value="income">Ingreso</option>
-              <option value="both">Ambos</option>
-            </select>
+          {isCategoryFormOpen ? (
+            <div className="section-panel">
+              <form className="form-grid" onSubmit={onCategorySubmit}>
+                <label className="form-grid__field" htmlFor="categoryName">Nombre</label>
+                <input
+                  id="categoryName"
+                  className="form-grid__input"
+                  type="text"
+                  value={categoryForm.name}
+                  onChange={(event) => onCategoryFormChange({ ...categoryForm, name: event.target.value })}
+                  placeholder="Alimentacion"
+                  required
+                />
 
-            <label className="form-grid__field" htmlFor="categoryIcon">Icono (Lucide)</label>
-            <input
-              id="categoryIcon"
-              className="form-grid__input"
-              type="text"
-              value={categoryForm.iconName}
-              onChange={(event) => onCategoryFormChange({ ...categoryForm, iconName: event.target.value })}
-              placeholder="UtensilsCrossed"
-            />
+                <label className="form-grid__field" htmlFor="categoryType">Tipo</label>
+                <select
+                  id="categoryType"
+                  className="form-grid__input"
+                  value={categoryForm.type}
+                  onChange={(event) => onCategoryFormChange({ ...categoryForm, type: event.target.value as CategoryType })}
+                >
+                  <option value="expense">Gasto</option>
+                  <option value="income">Ingreso</option>
+                  <option value="both">Ambos</option>
+                </select>
 
-            <label className="form-grid__field" htmlFor="categoryColor">Color</label>
-            <input
-              id="categoryColor"
-              className="form-grid__input"
-              type="text"
-              value={categoryForm.color}
-              onChange={(event) => onCategoryFormChange({ ...categoryForm, color: event.target.value })}
-              placeholder="#2d8f85"
-            />
+                <label className="form-grid__field" htmlFor="categoryIcon">Icono (Lucide)</label>
+                <input
+                  id="categoryIcon"
+                  className="form-grid__input"
+                  type="text"
+                  value={categoryForm.iconName}
+                  onChange={(event) => onCategoryFormChange({ ...categoryForm, iconName: event.target.value })}
+                  placeholder="UtensilsCrossed"
+                />
 
-            <div className="form-grid__actions">
-              <button className="button button--primary" type="submit" disabled={!hasConfig}>
-                {editingCategoryId === null ? 'Crear categoria' : 'Guardar cambios'}
-              </button>
-              <button className="button button--secondary" type="button" onClick={onCategoryReset}>
-                Limpiar
-              </button>
-              <button className="button button--secondary" type="button" disabled={!hasConfig} onClick={onReload}>
-                Recargar
-              </button>
+                <label className="form-grid__field" htmlFor="categoryColor">Color</label>
+                <input
+                  id="categoryColor"
+                  className="form-grid__input"
+                  type="text"
+                  value={categoryForm.color}
+                  onChange={(event) => onCategoryFormChange({ ...categoryForm, color: event.target.value })}
+                  placeholder="#2d8f85"
+                />
+
+                <div className="form-grid__actions">
+                  <button className="button button--primary" type="submit" disabled={!hasConfig}>
+                    {editingCategoryId === null ? 'Crear categoria' : 'Guardar cambios'}
+                  </button>
+                  <button className="button button--secondary" type="button" onClick={onCategoryReset}>
+                    Limpiar
+                  </button>
+                </div>
+              </form>
             </div>
-          </form>
+          ) : null}
 
           {categoryError ? <p className="message message--error">{categoryError}</p> : null}
           {categoryMessage ? <p className="message message--success">{categoryMessage}</p> : null}
@@ -147,54 +173,65 @@ export function CategoriesSection({
             <p className="mini-card__subtitle">Cada subcategoria vive dentro de una categoria existente.</p>
           </header>
 
-          <form className="form-grid" onSubmit={onSubcategorySubmit}>
-            <label className="form-grid__field" htmlFor="subcategoryCategory">Categoria</label>
-            <select
-              id="subcategoryCategory"
-              className="form-grid__input"
-              value={selectedSubcategoryCategoryId}
-              onChange={(event) => onSubcategoryFormChange({ ...subcategoryForm, categoryId: Number(event.target.value) })}
-              required
-            >
-              <option value={0}>Selecciona categoria</option>
-              {categoryOptions.map((category) => (
-                <option key={category.id} value={category.id}>{category.name}</option>
-              ))}
-            </select>
+          <div className="section-toolbar">
+            <button className="button button--primary" type="button" onClick={() => setIsSubcategoryFormOpen((value) => !value)}>
+              {isSubcategoryFormOpen ? 'Ocultar formulario' : editingSubcategoryId === null ? 'Nueva subcategoria' : 'Editar subcategoria'}
+            </button>
+            <div className="section-toolbar__spacer" />
+            <button className="button button--secondary" type="button" disabled={!hasConfig} onClick={onReload}>
+              Recargar
+            </button>
+          </div>
 
-            <label className="form-grid__field" htmlFor="subcategoryName">Nombre</label>
-            <input
-              id="subcategoryName"
-              className="form-grid__input"
-              type="text"
-              value={subcategoryForm.name}
-              onChange={(event) => onSubcategoryFormChange({ ...subcategoryForm, name: event.target.value })}
-              placeholder="Despensa"
-              required
-            />
+          {isSubcategoryFormOpen ? (
+            <div className="section-panel">
+              <form className="form-grid" onSubmit={onSubcategorySubmit}>
+                <label className="form-grid__field" htmlFor="subcategoryCategory">Categoria</label>
+                <select
+                  id="subcategoryCategory"
+                  className="form-grid__input"
+                  value={selectedSubcategoryCategoryId}
+                  onChange={(event) => onSubcategoryFormChange({ ...subcategoryForm, categoryId: Number(event.target.value) })}
+                  required
+                >
+                  <option value={0}>Selecciona categoria</option>
+                  {categoryOptions.map((category) => (
+                    <option key={category.id} value={category.id}>{category.name}</option>
+                  ))}
+                </select>
 
-            <label className="form-grid__field" htmlFor="subcategoryIcon">Icono (Lucide)</label>
-            <input
-              id="subcategoryIcon"
-              className="form-grid__input"
-              type="text"
-              value={subcategoryForm.iconName}
-              onChange={(event) => onSubcategoryFormChange({ ...subcategoryForm, iconName: event.target.value })}
-              placeholder="ShoppingCart"
-            />
+                <label className="form-grid__field" htmlFor="subcategoryName">Nombre</label>
+                <input
+                  id="subcategoryName"
+                  className="form-grid__input"
+                  type="text"
+                  value={subcategoryForm.name}
+                  onChange={(event) => onSubcategoryFormChange({ ...subcategoryForm, name: event.target.value })}
+                  placeholder="Despensa"
+                  required
+                />
 
-            <div className="form-grid__actions">
-              <button className="button button--primary" type="submit" disabled={!hasConfig || categories.length === 0}>
-                {editingSubcategoryId === null ? 'Crear subcategoria' : 'Guardar cambios'}
-              </button>
-              <button className="button button--secondary" type="button" onClick={onSubcategoryReset}>
-                Limpiar
-              </button>
-              <button className="button button--secondary" type="button" disabled={!hasConfig} onClick={onReload}>
-                Recargar
-              </button>
+                <label className="form-grid__field" htmlFor="subcategoryIcon">Icono (Lucide)</label>
+                <input
+                  id="subcategoryIcon"
+                  className="form-grid__input"
+                  type="text"
+                  value={subcategoryForm.iconName}
+                  onChange={(event) => onSubcategoryFormChange({ ...subcategoryForm, iconName: event.target.value })}
+                  placeholder="ShoppingCart"
+                />
+
+                <div className="form-grid__actions">
+                  <button className="button button--primary" type="submit" disabled={!hasConfig || categories.length === 0}>
+                    {editingSubcategoryId === null ? 'Crear subcategoria' : 'Guardar cambios'}
+                  </button>
+                  <button className="button button--secondary" type="button" onClick={onSubcategoryReset}>
+                    Limpiar
+                  </button>
+                </div>
+              </form>
             </div>
-          </form>
+          ) : null}
 
           {subcategoryError ? <p className="message message--error">{subcategoryError}</p> : null}
           {subcategoryMessage ? <p className="message message--success">{subcategoryMessage}</p> : null}
