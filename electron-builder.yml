@@ -1,0 +1,21 @@
+appId: com.finanzaslit.desktop
+productName: Finanzas Lit
+directories:
+  output: release
+files:
+  - dist
+  - dist-electron
+  - node_modules/better-sqlite3/**
+asar: true
+mac:
+  target:
+    - dmg
+    - zip
+  artifactName: "${productName}-${version}-${arch}.${ext}"
+win:
+  target:
+    - nsis
+  artifactName: "${productName}-${version}-setup.${ext}"
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
