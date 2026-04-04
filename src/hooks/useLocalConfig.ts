@@ -38,20 +38,23 @@ export function useLocalConfig(): UseLocalConfigResult {
   const [successMessage, setSuccessMessage] = useState('')
 
   const loadConfig = useCallback(async (): Promise<void> => {
-    if (!window.localConfig) {
-      setError('No se encontro el bridge de Electron para configuracion local.')
-      setIsLoading(false)
-      return
-    }
-
     setIsLoading(true)
     setError('')
 
     try {
+      if (!window.localConfig) {
+        setConfig(EMPTY_CONFIG)
+        return
+      }
+
       const currentConfig = await window.localConfig.getConfig()
       setConfig(toInput(currentConfig))
-    } catch {
-      setError('No se pudo leer la configuracion local.')
+    } catch (loadError) {
+      if (!(loadError instanceof Error && loadError.message.includes('bridge'))) {
+        setError('No se pudo leer la configuracion local.')
+      }
+
+      setConfig(EMPTY_CONFIG)
     } finally {
       setIsLoading(false)
     }
