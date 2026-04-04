@@ -1,4 +1,4 @@
-import type { FormEvent } from 'react'
+import type { SyntheticEvent } from 'react'
 import { formatCurrency } from '../../app/appHelpers'
 import type {
   Category,
@@ -27,8 +27,8 @@ type FixedExpensesSectionProps = {
   fixedExpenseMessage: string
   onFixedExpenseFormChange: (nextForm: FixedExpenseInput) => void
   onFixedExpensePaymentFormChange: (nextForm: FixedExpensePaymentInput) => void
-  onFixedExpenseSubmit: (event: FormEvent<HTMLFormElement>) => void
-  onFixedExpensePaymentSubmit: (event: FormEvent<HTMLFormElement>) => void
+  onFixedExpenseSubmit: (event: SyntheticEvent<HTMLFormElement>) => void
+  onFixedExpensePaymentSubmit: (event: SyntheticEvent<HTMLFormElement>) => void
   onResetFixedExpenseEditor: () => void
   onResetFixedExpensePaymentForm: () => void
   onReloadFixedExpenses: () => void

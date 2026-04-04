@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useMemo, useState, type SyntheticEvent } from 'react'
 import { apiClient } from '../api/client'
 import {
   EMPTY_FIXED_EXPENSE_FORM,
@@ -98,7 +98,7 @@ export function useFixedExpensesController({
     setFixedExpenseForm(toEditableFixedExpense(expense))
   }
 
-  const handleFixedExpenseSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleFixedExpenseSubmit = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault()
     setFixedExpenseError('')
     setFixedExpenseMessage('')
@@ -159,7 +159,7 @@ export function useFixedExpensesController({
     setFixedExpensePaymentForm(EMPTY_FIXED_EXPENSE_PAYMENT_FORM)
   }
 
-  const handleFixedExpensePaymentSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleFixedExpensePaymentSubmit = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault()
 
     if (!selectedFixedExpenseId) {

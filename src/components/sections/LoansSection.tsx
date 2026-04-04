@@ -1,4 +1,4 @@
-import type { FormEvent } from 'react'
+import type { SyntheticEvent } from 'react'
 import { formatCurrency } from '../../app/appHelpers'
 import type {
   FinancialInstrument,
@@ -25,7 +25,7 @@ type LoansSectionProps = {
   onLoanFormChange: (nextForm: LoanInput) => void
   onLoanPaymentRegisterChange: (nextRegister: LoanPaymentRegisterInput) => void
   onLoanPaymentTypeChange: (nextType: LoanPaymentType) => void
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void
+  onSubmit: (event: SyntheticEvent<HTMLFormElement>) => void
   onReset: () => void
   onReload: () => void
   onLoadLoanPayments: (loanId: number) => void

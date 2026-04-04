@@ -1,4 +1,4 @@
-import type { FormEvent } from 'react'
+import type { SyntheticEvent } from 'react'
 import { getCategoryTypeLabel } from '../../app/appHelpers'
 import type {
   Category,
@@ -29,8 +29,8 @@ type CategoriesSectionProps = {
   subcategoryMessage: string
   onCategoryFormChange: (nextForm: CategoryInput) => void
   onSubcategoryFormChange: (nextForm: SubcategoryInput) => void
-  onCategorySubmit: (event: FormEvent<HTMLFormElement>) => void
-  onSubcategorySubmit: (event: FormEvent<HTMLFormElement>) => void
+  onCategorySubmit: (event: SyntheticEvent<HTMLFormElement>) => void
+  onSubcategorySubmit: (event: SyntheticEvent<HTMLFormElement>) => void
   onCategoryReset: () => void
   onSubcategoryReset: () => void
   onReload: () => void

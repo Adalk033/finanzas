@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useMemo, useState, type SyntheticEvent } from 'react'
 import { apiClient } from '../api/client'
 import { EMPTY_LOAN_FORM, EMPTY_LOAN_PAYMENT_REGISTER } from '../app/appHelpers'
 import type {
@@ -108,7 +108,7 @@ export function useLoansController({ instruments }: UseLoansControllerParams) {
     }))
   }
 
-  const handleLoanSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleLoanSubmit = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault()
     setLoanError('')
     setLoanMessage('')

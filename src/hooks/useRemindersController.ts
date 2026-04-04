@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useState, type SyntheticEvent } from 'react'
 import { apiClient } from '../api/client'
 import { EMPTY_REMINDER_FORM } from '../app/appHelpers'
 import type { Reminder, ReminderInput } from '../types/domain'
@@ -57,7 +57,7 @@ export function useRemindersController() {
     })
   }
 
-  const handleReminderSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleReminderSubmit = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault()
     setReminderError('')
     setReminderMessage('')

@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useMemo, useState, type SyntheticEvent } from 'react'
 import { apiClient } from '../api/client'
 import {
   EMPTY_TRANSACTION_FILTERS,
@@ -125,7 +125,7 @@ export function useTransactionsController({
     }))
   }
 
-  const handleTransactionSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleTransactionSubmit = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault()
     setTransactionError('')
     setTransactionMessage('')
@@ -200,7 +200,7 @@ export function useTransactionsController({
     await loadTransactions()
   }
 
-  const handleTransactionFiltersSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleTransactionFiltersSubmit = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault()
     await loadTransactions(transactionFilters)
   }

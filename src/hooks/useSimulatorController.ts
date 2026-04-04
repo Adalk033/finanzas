@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useMemo, useState, type SyntheticEvent } from 'react'
 import { apiClient } from '../api/client'
 import { EMPTY_SIMULATION_FORM, MSI_OPTIONS } from '../app/appHelpers'
 import type {
@@ -65,7 +65,7 @@ export function useSimulatorController({ instruments }: UseSimulatorControllerPa
     }))
   }
 
-  const handleSimulationSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleSimulationSubmit = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault()
     setSimulationError('')
     setSimulationMessage('')

@@ -1,4 +1,4 @@
-import type { FormEvent } from 'react'
+import type { SyntheticEvent } from 'react'
 import { MSI_OPTIONS, formatCurrency } from '../../app/appHelpers'
 import type {
   Category,
@@ -32,13 +32,13 @@ type TransactionsSectionProps = {
   transactionMessage: string
   onTransactionFormChange: (nextForm: TransactionInput) => void
   onTransactionTypeChange: (nextType: TransactionType) => void
-  onTransactionSubmit: (event: FormEvent<HTMLFormElement>) => void
+  onTransactionSubmit: (event: SyntheticEvent<HTMLFormElement>) => void
   onTransactionEdit: (transaction: Transaction) => void
   onTransactionDelete: (transactionId: number) => void
   onResetTransactionForm: () => void
   onFiltersChange: (nextFilters: TransactionFilters) => void
   onToggleAutoAdjustmentsOnly: (nextValue: boolean) => void
-  onFiltersSubmit: (event: FormEvent<HTMLFormElement>) => void
+  onFiltersSubmit: (event: SyntheticEvent<HTMLFormElement>) => void
   onClearFilters: () => void
   onReload: () => void
 }

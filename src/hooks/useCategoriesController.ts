@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useMemo, useState, type SyntheticEvent } from 'react'
 import { apiClient } from '../api/client'
 import {
   EMPTY_CATEGORY_FORM,
@@ -63,7 +63,7 @@ export function useCategoriesController() {
     setSubcategoryForm(toEditableSubcategory(subcategory))
   }
 
-  const handleCategorySubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleCategorySubmit = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault()
     setCategoryError('')
     setCategoryMessage('')
@@ -116,7 +116,7 @@ export function useCategoriesController() {
     await loadCategories()
   }
 
-  const handleSubcategorySubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleSubcategorySubmit = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault()
     setSubcategoryError('')
     setSubcategoryMessage('')

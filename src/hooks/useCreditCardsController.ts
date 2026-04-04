@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useMemo, useState, type SyntheticEvent } from 'react'
 import { apiClient } from '../api/client'
 import {
   EMPTY_STATEMENT_FORM,
@@ -149,7 +149,7 @@ export function useCreditCardsController({
     setStatementUpdateForm(EMPTY_STATEMENT_UPDATE_FORM)
   }
 
-  const handleStatementSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleStatementSubmit = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault()
     setStatementError('')
     setStatementMessage('')
@@ -267,7 +267,7 @@ export function useCreditCardsController({
     })
   }
 
-  const handleTransferSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleTransferSubmit = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault()
     setTransferError('')
     setTransferMessage('')

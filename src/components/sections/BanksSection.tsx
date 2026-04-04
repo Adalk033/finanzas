@@ -1,4 +1,4 @@
-import type { FormEvent } from 'react'
+import type { SyntheticEvent } from 'react'
 import type { Bank, BankInput } from '../../types/domain'
 
 type BanksSectionProps = {
@@ -10,7 +10,7 @@ type BanksSectionProps = {
   bankError: string
   bankMessage: string
   onBankFormChange: (nextForm: BankInput) => void
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void
+  onSubmit: (event: SyntheticEvent<HTMLFormElement>) => void
   onReset: () => void
   onReload: () => void
   onEdit: (bank: Bank) => void

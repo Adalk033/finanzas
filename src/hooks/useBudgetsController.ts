@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useState, type SyntheticEvent } from 'react'
 import { apiClient } from '../api/client'
 import { EMPTY_BUDGET_FORM } from '../app/appHelpers'
 import type { Budget, BudgetInput } from '../types/domain'
@@ -50,7 +50,7 @@ export function useBudgetsController() {
     })
   }
 
-  const handleBudgetSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleBudgetSubmit = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault()
     setBudgetError('')
     setBudgetMessage('')

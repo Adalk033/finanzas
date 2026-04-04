@@ -1,4 +1,4 @@
-import type { FormEvent } from 'react'
+import type { SyntheticEvent } from 'react'
 import { formatCurrency, getBudgetStatusLabel } from '../../app/appHelpers'
 import type { Budget, BudgetInput, Category } from '../../types/domain'
 
@@ -16,7 +16,7 @@ type BudgetsSectionProps = {
   onBudgetFormChange: (nextForm: BudgetInput) => void
   onBudgetFilterMonthChange: (month: number) => void
   onBudgetFilterYearChange: (year: number) => void
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void
+  onSubmit: (event: SyntheticEvent<HTMLFormElement>) => void
   onReset: () => void
   onApplyFilter: () => void
   onEditBudget: (budget: Budget) => void

@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useMemo, useState, type SyntheticEvent } from 'react'
 import { apiClient } from '../api/client'
 import { EMPTY_SUBSCRIPTION_FORM, toEditableSubscription } from '../app/appHelpers'
 import type {
@@ -72,7 +72,7 @@ export function useSubscriptionsController({
     }))
   }
 
-  const handleSubscriptionSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleSubscriptionSubmit = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault()
     setSubscriptionError('')
     setSubscriptionMessage('')

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useState, type SyntheticEvent } from 'react'
 import { apiClient } from '../api/client'
 import { EMPTY_BANK_FORM, toEditableBank } from '../app/appHelpers'
 import type { Bank, BankInput } from '../types/domain'
@@ -41,7 +41,7 @@ export function useBanksController({ loadInstruments }: UseBanksControllerParams
     setBankForm(toEditableBank(bank))
   }
 
-  const handleBankSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleBankSubmit = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault()
     setBankError('')
     setBankMessage('')

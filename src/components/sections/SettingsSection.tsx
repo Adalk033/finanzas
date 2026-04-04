@@ -1,4 +1,4 @@
-import type { FormEvent } from 'react'
+import type { SyntheticEvent } from 'react'
 import type { LocalConfigInput } from '../../types/config'
 
 type SettingsSectionProps = {
@@ -10,7 +10,7 @@ type SettingsSectionProps = {
   pingError: string
   pingResponse: string
   onConfigChange: (nextConfig: LocalConfigInput) => void
-  onSave: (event: FormEvent<HTMLFormElement>) => void
+  onSave: (event: SyntheticEvent<HTMLFormElement>) => void
   onPing: () => void
 }
 

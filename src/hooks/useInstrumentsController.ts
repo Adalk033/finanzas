@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useMemo, useState, type SyntheticEvent } from 'react'
 import { apiClient } from '../api/client'
 import { EMPTY_INSTRUMENT_FORM, toEditableInstrument } from '../app/appHelpers'
 import type { Bank, FinancialInstrument, FinancialInstrumentInput, InstrumentType } from '../types/domain'
@@ -57,7 +57,7 @@ export function useInstrumentsController() {
     setInstrumentForm(toEditableInstrument(instrument))
   }
 
-  const handleInstrumentSubmit = async (event: FormEvent<HTMLFormElement>, banks: Bank[]): Promise<void> => {
+  const handleInstrumentSubmit = async (event: SyntheticEvent<HTMLFormElement>, banks: Bank[]): Promise<void> => {
     event.preventDefault()
     setInstrumentError('')
     setInstrumentMessage('')

@@ -1,4 +1,4 @@
-import type { FormEvent } from 'react'
+import type { SyntheticEvent } from 'react'
 import { formatCurrency } from '../../app/appHelpers'
 import type {
   Category,
@@ -21,7 +21,7 @@ type SubscriptionsSectionProps = {
   subscriptionMessage: string
   onSubscriptionFormChange: (nextForm: SubscriptionInput) => void
   onBillingCycleChange: (billingCycle: SubscriptionBillingCycle) => void
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void
+  onSubmit: (event: SyntheticEvent<HTMLFormElement>) => void
   onReset: () => void
   onReload: () => void
   onEdit: (subscription: Subscription) => void

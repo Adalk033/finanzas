@@ -1,4 +1,4 @@
-import type { FormEvent } from 'react'
+import type { SyntheticEvent } from 'react'
 import { getReminderTypeLabel } from '../../app/appHelpers'
 import type { Reminder, ReminderInput, ReminderType } from '../../types/domain'
 
@@ -12,7 +12,7 @@ type RemindersSectionProps = {
   isRemindersLoading: boolean
   pendingRemindersCount: number
   onReminderFormChange: (nextForm: ReminderInput) => void
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void
+  onSubmit: (event: SyntheticEvent<HTMLFormElement>) => void
   onReset: () => void
   onReload: () => void
   onEdit: (reminder: Reminder) => void

@@ -1,4 +1,4 @@
-import type { FormEvent } from 'react'
+import type { SyntheticEvent } from 'react'
 import { MSI_OPTIONS, formatCurrency, getSimulationScenarioLabel } from '../../app/appHelpers'
 import type {
   FinancialInstrument,
@@ -17,7 +17,7 @@ type SimulatorSectionProps = {
   isSimulationsLoading: boolean
   onSimulationFormChange: (nextForm: SimulationInput) => void
   onScenarioTypeChange: (scenarioType: SimulationScenarioType) => void
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void
+  onSubmit: (event: SyntheticEvent<HTMLFormElement>) => void
   onReset: () => void
   onReload: () => void
   onDelete: (simulationId: number) => void

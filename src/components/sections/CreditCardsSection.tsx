@@ -1,4 +1,4 @@
-import type { FormEvent } from 'react'
+import type { SyntheticEvent } from 'react'
 import { formatCurrency } from '../../app/appHelpers'
 import type {
   CreditCardStatement,
@@ -43,8 +43,8 @@ type CreditCardsSectionProps = {
   onStatementUpdateFormChange: (nextForm: CreditCardStatementUpdateInput) => void
   onTransferTypeChange: (nextType: TransferType) => void
   onStartTransferEdit: (transfer: Transfer) => void
-  onStatementSubmit: (event: FormEvent<HTMLFormElement>) => void
-  onTransferSubmit: (event: FormEvent<HTMLFormElement>) => void
+  onStatementSubmit: (event: SyntheticEvent<HTMLFormElement>) => void
+  onTransferSubmit: (event: SyntheticEvent<HTMLFormElement>) => void
   onResetStatementForm: () => void
   onResetTransferForm: () => void
   onReloadStatements: () => void

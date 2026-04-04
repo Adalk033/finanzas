@@ -1,4 +1,4 @@
-import type { FormEvent } from 'react'
+import type { SyntheticEvent } from 'react'
 import { formatCurrency } from '../../app/appHelpers'
 import type { Bank, FinancialInstrument, FinancialInstrumentInput, InstrumentType } from '../../types/domain'
 
@@ -19,7 +19,7 @@ type InstrumentsSectionProps = {
   instrumentMessage: string
   onInstrumentFormChange: (nextForm: FinancialInstrumentInput) => void
   onTypeChange: (nextType: InstrumentType) => void
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void
+  onSubmit: (event: SyntheticEvent<HTMLFormElement>) => void
   onReset: () => void
   onReload: () => void
   onEdit: (instrument: FinancialInstrument) => void
