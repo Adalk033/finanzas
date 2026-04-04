@@ -16,4 +16,6 @@ export const ENDPOINTS = {
   LOANS: '/loans',
   SUBSCRIPTIONS: '/subscriptions',
   FIXED_EXPENSES: '/fixed-expenses',
+  BUDGETS: '/budgets',
+  SIMULATIONS: '/simulations',
 } as const

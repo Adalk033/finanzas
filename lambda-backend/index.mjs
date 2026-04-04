@@ -16,6 +16,7 @@ const ALLOWED_MSI_MONTHS = new Set([3, 6, 9, 12, 18, 24]);
 const ALLOWED_TRANSFER_TYPES = new Set(['card_payment', 'inter_account', 'loan_payment', 'other']);
 const ALLOWED_LOAN_PAYMENT_TYPES = new Set(['fixed', 'variable']);
 const ALLOWED_SUBSCRIPTION_BILLING_CYCLES = new Set(['monthly', 'yearly', 'weekly']);
+const ALLOWED_SIMULATION_SCENARIO_TYPES = new Set(['direct_purchase', 'msi', 'loan']);
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 let pool;
@@ -274,6 +275,24 @@ function parsePathParameters(path) {
 
   if (path === '/subscriptions') {
     return { resource: 'subscriptions', id: null };
+  }
+
+  const budgetsWithId = path.match(/^\/budgets\/(\d+)$/);
+  if (budgetsWithId) {
+    return { resource: 'budgets', id: Number.parseInt(budgetsWithId[1], 10) };
+  }
+
+  if (path === '/budgets') {
+    return { resource: 'budgets', id: null };
+  }
+
+  const simulationsWithId = path.match(/^\/simulations\/(\d+)$/);
+  if (simulationsWithId) {
+    return { resource: 'simulations', id: Number.parseInt(simulationsWithId[1], 10) };
+  }
+
+  if (path === '/simulations') {
+    return { resource: 'simulations', id: null };
   }
 
   return { resource: null, id: null };
@@ -1088,6 +1107,122 @@ function validateFixedExpensePaymentPayload(body) {
   };
 }
 
+function validateBudgetPayload(body) {
+  if (!body || typeof body !== 'object') {
+    return { ok: false, error: 'Body invalido.' };
+  }
+
+  const categoryId = normalizeNullableInteger(body.categoryId);
+  const currencyId = normalizeNullableInteger(body.currencyId);
+  const amount = normalizeNullableNumber(body.amount);
+  const month = normalizeNullableInteger(body.month);
+  const year = normalizeNullableInteger(body.year);
+  const notes = normalizeNullableText(body.notes);
+
+  if (categoryId !== null && categoryId < 1) {
+    return { ok: false, error: 'categoryId invalido.' };
+  }
+
+  if (!currencyId || currencyId < 1) {
+    return { ok: false, error: 'currencyId invalido.' };
+  }
+
+  if (amount === null || amount <= 0 || amount > 9999999999.99) {
+    return { ok: false, error: 'amount invalido.' };
+  }
+
+  if (!month || month < 1 || month > 12) {
+    return { ok: false, error: 'month invalido.' };
+  }
+
+  if (!year || year < 2000 || year > 2200) {
+    return { ok: false, error: 'year invalido.' };
+  }
+
+  if (notes && notes.length > 500) {
+    return { ok: false, error: 'notes no puede exceder 500 caracteres.' };
+  }
+
+  return {
+    ok: true,
+    value: {
+      categoryId,
+      currencyId,
+      amount,
+      month,
+      year,
+      notes,
+    },
+  };
+}
+
+function validateSimulationPayload(body) {
+  if (!body || typeof body !== 'object') {
+    return { ok: false, error: 'Body invalido.' };
+  }
+
+  const name = normalizeText(body.name);
+  const description = normalizeNullableText(body.description);
+  const simulationDate = normalizeNullableDate(body.simulationDate);
+  const scenarioType = normalizeText(body.scenarioType);
+  const amount = normalizeNullableNumber(body.amount);
+  const instrumentId = normalizeNullableInteger(body.instrumentId);
+  const msiMonths = normalizeNullableInteger(body.msiMonths);
+  const loanMonths = normalizeNullableInteger(body.loanMonths);
+  const annualRate = normalizeNullableNumber(body.annualRate);
+
+  if (name.length < 2 || name.length > 150) {
+    return { ok: false, error: 'name debe tener entre 2 y 150 caracteres.' };
+  }
+
+  if (description && description.length > 500) {
+    return { ok: false, error: 'description no puede exceder 500 caracteres.' };
+  }
+
+  if (simulationDate === null && body.simulationDate !== undefined && body.simulationDate !== null && body.simulationDate !== '') {
+    return { ok: false, error: 'simulationDate invalida. Usa YYYY-MM-DD.' };
+  }
+
+  if (!ALLOWED_SIMULATION_SCENARIO_TYPES.has(scenarioType)) {
+    return { ok: false, error: 'scenarioType invalido.' };
+  }
+
+  if (amount === null || amount <= 0 || amount > 9999999999.99) {
+    return { ok: false, error: 'amount invalido.' };
+  }
+
+  if (instrumentId !== null && instrumentId < 1) {
+    return { ok: false, error: 'instrumentId invalido.' };
+  }
+
+  if (scenarioType === 'msi' && (!msiMonths || !ALLOWED_MSI_MONTHS.has(msiMonths))) {
+    return { ok: false, error: 'msiMonths invalido para escenario MSI.' };
+  }
+
+  if (scenarioType === 'loan' && (!loanMonths || loanMonths < 1 || loanMonths > 600)) {
+    return { ok: false, error: 'loanMonths invalido para escenario Loan.' };
+  }
+
+  if (annualRate !== null && (annualRate < 0 || annualRate > 100)) {
+    return { ok: false, error: 'annualRate invalido.' };
+  }
+
+  return {
+    ok: true,
+    value: {
+      name,
+      description,
+      simulationDate,
+      scenarioType,
+      amount,
+      instrumentId,
+      msiMonths: scenarioType === 'msi' ? msiMonths : null,
+      loanMonths: scenarioType === 'loan' ? loanMonths : null,
+      annualRate: scenarioType === 'loan' ? annualRate ?? 0 : null,
+    },
+  };
+}
+
 function mapBank(row) {
   return {
     id: row.id,
@@ -1316,6 +1451,41 @@ function mapFixedExpensePayment(row) {
     notes: row.notes,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+function mapBudget(row) {
+  const amount = Number(row.amount);
+  const spentAmount = Number(row.spent_amount ?? 0);
+  const progressPercent = amount > 0 ? Number(((spentAmount / amount) * 100).toFixed(2)) : 0;
+
+  return {
+    id: row.id,
+    categoryId: row.category_id,
+    categoryName: row.category_name ?? null,
+    currencyId: row.currency_id,
+    amount,
+    month: row.month,
+    year: row.year,
+    notes: row.notes,
+    spentAmount,
+    progressPercent,
+    status: progressPercent > 100 ? 'exceeded' : (progressPercent >= 80 ? 'warning' : 'under'),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapSimulation(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    simulationDate: row.simulation_date,
+    snapshotJson: row.snapshot_json,
+    resultJson: row.result_json,
+    isFavorable: row.is_favorable,
+    createdAt: row.created_at,
   };
 }
 
@@ -4006,6 +4176,429 @@ async function deleteFixedExpensePayment(fixedExpenseId, paymentId) {
   return result.rows.length > 0;
 }
 
+async function getBudgetById(client, budgetId) {
+  const result = await client.query(
+    `
+    SELECT
+      b.id,
+      b.category_id,
+      c.name AS category_name,
+      b.currency_id,
+      b.amount,
+      b.month,
+      b.year,
+      b.notes,
+      b.created_at,
+      b.updated_at,
+      COALESCE(SUM(CASE WHEN t.type = 'expense' THEN t.amount ELSE 0 END), 0) AS spent_amount
+    FROM app_gastos.budgets b
+    LEFT JOIN app_gastos.categories c ON c.id = b.category_id
+    LEFT JOIN app_gastos.transactions t
+      ON (
+        (b.category_id IS NULL)
+        OR (t.category_id = b.category_id)
+      )
+      AND EXTRACT(MONTH FROM t.transaction_date)::INT = b.month
+      AND EXTRACT(YEAR FROM t.transaction_date)::INT = b.year
+    WHERE b.id = $1
+    GROUP BY b.id, c.name
+    `,
+    [budgetId],
+  );
+
+  return result.rows[0] ?? null;
+}
+
+async function validateBudgetReferences(client, payload) {
+  const currencyResult = await client.query('SELECT id FROM app_gastos.currencies WHERE id = $1', [payload.currencyId]);
+  if (currencyResult.rows.length === 0) {
+    return { ok: false, error: 'currencyId no existe.' };
+  }
+
+  if (payload.categoryId !== null) {
+    const categoryResult = await client.query(
+      'SELECT id FROM app_gastos.categories WHERE id = $1 AND is_active = TRUE',
+      [payload.categoryId],
+    );
+
+    if (categoryResult.rows.length === 0) {
+      return { ok: false, error: 'categoryId no existe o esta inactiva.' };
+    }
+  }
+
+  return { ok: true };
+}
+
+async function ensureBudgetUniqueness(client, payload, budgetId = null) {
+  const values = [payload.month, payload.year];
+  const clauses = ['month = $1', 'year = $2'];
+
+  if (payload.categoryId === null) {
+    clauses.push('category_id IS NULL');
+  } else {
+    values.push(payload.categoryId);
+    clauses.push(`category_id = $${values.length}`);
+  }
+
+  if (budgetId !== null) {
+    values.push(budgetId);
+    clauses.push(`id <> $${values.length}`);
+  }
+
+  const result = await client.query(
+    `
+    SELECT id
+    FROM app_gastos.budgets
+    WHERE ${clauses.join(' AND ')}
+    LIMIT 1
+    `,
+    values,
+  );
+
+  if (result.rows.length > 0) {
+    return { ok: false, error: 'Ya existe un presupuesto para esa categoria/mes/anio.' };
+  }
+
+  return { ok: true };
+}
+
+async function listBudgets(month, year) {
+  const values = [];
+  const filters = [];
+
+  if (month !== null) {
+    values.push(month);
+    filters.push(`b.month = $${values.length}`);
+  }
+
+  if (year !== null) {
+    values.push(year);
+    filters.push(`b.year = $${values.length}`);
+  }
+
+  const whereClause = filters.length > 0 ? `WHERE ${filters.join(' AND ')}` : '';
+
+  const result = await query(
+    `
+    SELECT
+      b.id,
+      b.category_id,
+      c.name AS category_name,
+      b.currency_id,
+      b.amount,
+      b.month,
+      b.year,
+      b.notes,
+      b.created_at,
+      b.updated_at,
+      COALESCE(SUM(CASE WHEN t.type = 'expense' THEN t.amount ELSE 0 END), 0) AS spent_amount
+    FROM app_gastos.budgets b
+    LEFT JOIN app_gastos.categories c ON c.id = b.category_id
+    LEFT JOIN app_gastos.transactions t
+      ON (
+        (b.category_id IS NULL)
+        OR (t.category_id = b.category_id)
+      )
+      AND EXTRACT(MONTH FROM t.transaction_date)::INT = b.month
+      AND EXTRACT(YEAR FROM t.transaction_date)::INT = b.year
+    ${whereClause}
+    GROUP BY b.id, c.name
+    ORDER BY b.year DESC, b.month DESC, c.name ASC NULLS FIRST, b.id DESC
+    `,
+    values,
+  );
+
+  return result.rows.map(mapBudget);
+}
+
+async function createBudget(payload) {
+  return withDbTransaction(async (client) => {
+    const references = await validateBudgetReferences(client, payload);
+    if (!references.ok) {
+      return { error: references.error, data: null };
+    }
+
+    const uniqueCheck = await ensureBudgetUniqueness(client, payload);
+    if (!uniqueCheck.ok) {
+      return { error: uniqueCheck.error, data: null };
+    }
+
+    const insertResult = await client.query(
+      `
+      INSERT INTO app_gastos.budgets (category_id, currency_id, amount, month, year, notes)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING id
+      `,
+      [payload.categoryId, payload.currencyId, payload.amount, payload.month, payload.year, payload.notes],
+    );
+
+    const created = await getBudgetById(client, insertResult.rows[0].id);
+    return { error: null, data: mapBudget(created) };
+  });
+}
+
+async function updateBudget(budgetId, payload) {
+  return withDbTransaction(async (client) => {
+    const existing = await client.query('SELECT id FROM app_gastos.budgets WHERE id = $1', [budgetId]);
+    if (existing.rows.length === 0) {
+      return { notFound: true, error: null, data: null };
+    }
+
+    const references = await validateBudgetReferences(client, payload);
+    if (!references.ok) {
+      return { notFound: false, error: references.error, data: null };
+    }
+
+    const uniqueCheck = await ensureBudgetUniqueness(client, payload, budgetId);
+    if (!uniqueCheck.ok) {
+      return { notFound: false, error: uniqueCheck.error, data: null };
+    }
+
+    await client.query(
+      `
+      UPDATE app_gastos.budgets
+      SET category_id = $1,
+          currency_id = $2,
+          amount = $3,
+          month = $4,
+          year = $5,
+          notes = $6,
+          updated_at = NOW()
+      WHERE id = $7
+      `,
+      [payload.categoryId, payload.currencyId, payload.amount, payload.month, payload.year, payload.notes, budgetId],
+    );
+
+    const updated = await getBudgetById(client, budgetId);
+    return { notFound: false, error: null, data: mapBudget(updated) };
+  });
+}
+
+async function deleteBudget(budgetId) {
+  const result = await query(
+    `
+    DELETE FROM app_gastos.budgets
+    WHERE id = $1
+    RETURNING id
+    `,
+    [budgetId],
+  );
+
+  return result.rows.length > 0;
+}
+
+function calculateLoanMonthlyPayment(amount, annualRate, months) {
+  const principal = Number(amount);
+  const monthlyRate = (Number(annualRate) / 100) / 12;
+
+  if (monthlyRate <= 0) {
+    return Number((principal / months).toFixed(2));
+  }
+
+  const growth = (1 + monthlyRate) ** months;
+  const payment = principal * ((monthlyRate * growth) / (growth - 1));
+  return Number(payment.toFixed(2));
+}
+
+async function getCurrentMonthlyObligations() {
+  const result = await query(
+    `
+    WITH subscription_monthly AS (
+      SELECT COALESCE(SUM(
+        CASE s.billing_cycle
+          WHEN 'monthly' THEN s.amount
+          WHEN 'yearly' THEN s.amount / 12
+          WHEN 'weekly' THEN (s.amount * 52) / 12
+          ELSE 0
+        END
+      ), 0) AS total
+      FROM app_gastos.subscriptions s
+      WHERE s.is_active = TRUE
+    ),
+    fixed_monthly AS (
+      SELECT COALESCE(SUM(fe.estimated_amount), 0) AS total
+      FROM app_gastos.fixed_expenses fe
+      WHERE fe.is_active = TRUE
+    ),
+    loan_monthly AS (
+      SELECT COALESCE(SUM(lp.amount), 0) AS total
+      FROM app_gastos.loan_payments lp
+      INNER JOIN app_gastos.loans l ON l.id = lp.loan_id
+      WHERE lp.is_paid = FALSE
+        AND l.is_active = TRUE
+        AND DATE_TRUNC('month', lp.payment_date) = DATE_TRUNC('month', CURRENT_DATE)
+    )
+    SELECT
+      ROUND(COALESCE(sm.total, 0)::numeric, 2) AS subscriptions,
+      ROUND(COALESCE(fm.total, 0)::numeric, 2) AS fixed_expenses,
+      ROUND(COALESCE(lm.total, 0)::numeric, 2) AS loan_payments
+    FROM subscription_monthly sm
+    CROSS JOIN fixed_monthly fm
+    CROSS JOIN loan_monthly lm
+    `,
+  );
+
+  const row = result.rows[0] ?? { subscriptions: 0, fixed_expenses: 0, loan_payments: 0 };
+  const subscriptions = Number(row.subscriptions ?? 0);
+  const fixedExpenses = Number(row.fixed_expenses ?? 0);
+  const loanPayments = Number(row.loan_payments ?? 0);
+
+  return {
+    subscriptions,
+    fixedExpenses,
+    loanPayments,
+    total: Number((subscriptions + fixedExpenses + loanPayments).toFixed(2)),
+  };
+}
+
+async function getSimulationById(simulationId) {
+  const result = await query(
+    `
+    SELECT id, name, description, simulation_date, snapshot_json, result_json, is_favorable, created_at
+    FROM app_gastos.simulations
+    WHERE id = $1
+    `,
+    [simulationId],
+  );
+
+  return result.rows[0] ?? null;
+}
+
+async function listSimulations() {
+  const result = await query(
+    `
+    SELECT id, name, description, simulation_date, snapshot_json, result_json, is_favorable, created_at
+    FROM app_gastos.simulations
+    ORDER BY created_at DESC, id DESC
+    `,
+  );
+
+  return result.rows.map(mapSimulation);
+}
+
+async function createSimulation(payload) {
+  return withDbTransaction(async (client) => {
+    let selectedInstrument = null;
+
+    if (payload.instrumentId !== null) {
+      const instrumentResult = await client.query(
+        'SELECT id, type, name FROM app_gastos.financial_instruments WHERE id = $1 AND is_active = TRUE',
+        [payload.instrumentId],
+      );
+
+      if (instrumentResult.rows.length === 0) {
+        return { error: 'instrumentId no existe o esta inactivo.', data: null };
+      }
+
+      selectedInstrument = instrumentResult.rows[0];
+    }
+
+    const summary = await getDashboardSummary();
+    const obligations = await getCurrentMonthlyObligations();
+
+    let projectedAvailable = summary.totalAvailable;
+    let projectedCreditDebt = summary.totalCreditDebt;
+    let projectedLoanDebt = summary.totalLoanDebt;
+    let projectedAvailableCredit = summary.totalAvailableCredit;
+    let monthlyCommitmentIncrease = 0;
+
+    if (payload.scenarioType === 'direct_purchase') {
+      if (selectedInstrument?.type === 'credit_card') {
+        projectedCreditDebt = Number((projectedCreditDebt + payload.amount).toFixed(2));
+        projectedAvailableCredit = Number((projectedAvailableCredit - payload.amount).toFixed(2));
+      } else {
+        projectedAvailable = Number((projectedAvailable - payload.amount).toFixed(2));
+      }
+    }
+
+    if (payload.scenarioType === 'msi') {
+      if (selectedInstrument?.type !== 'credit_card') {
+        return { error: 'Para escenario MSI debes seleccionar una tarjeta de credito.', data: null };
+      }
+
+      projectedCreditDebt = Number((projectedCreditDebt + payload.amount).toFixed(2));
+      projectedAvailableCredit = Number((projectedAvailableCredit - payload.amount).toFixed(2));
+      monthlyCommitmentIncrease = Number((payload.amount / payload.msiMonths).toFixed(2));
+    }
+
+    if (payload.scenarioType === 'loan') {
+      projectedLoanDebt = Number((projectedLoanDebt + payload.amount).toFixed(2));
+      monthlyCommitmentIncrease = calculateLoanMonthlyPayment(payload.amount, payload.annualRate, payload.loanMonths);
+    }
+
+    const projectedNetBalance = Number((projectedAvailable - projectedCreditDebt - projectedLoanDebt).toFixed(2));
+    const projectedMonthlyObligations = Number((obligations.total + monthlyCommitmentIncrease).toFixed(2));
+    const isFavorable = projectedAvailable >= 0
+      && projectedNetBalance >= 0
+      && projectedMonthlyObligations <= projectedAvailable;
+
+    const snapshotJson = {
+      summary,
+      obligations,
+      selectedInstrument: selectedInstrument
+        ? {
+          id: selectedInstrument.id,
+          type: selectedInstrument.type,
+          name: selectedInstrument.name,
+        }
+        : null,
+    };
+
+    const resultJson = {
+      scenarioType: payload.scenarioType,
+      amount: payload.amount,
+      monthlyCommitmentIncrease,
+      projectedMonthlyObligations,
+      projectedSummary: {
+        totalAvailable: projectedAvailable,
+        totalCreditDebt: projectedCreditDebt,
+        totalLoanDebt: projectedLoanDebt,
+        totalAvailableCredit: projectedAvailableCredit,
+        netBalance: projectedNetBalance,
+      },
+    };
+
+    const insertResult = await client.query(
+      `
+      INSERT INTO app_gastos.simulations (
+        name,
+        description,
+        simulation_date,
+        snapshot_json,
+        result_json,
+        is_favorable
+      )
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING id
+      `,
+      [
+        payload.name,
+        payload.description,
+        payload.simulationDate ?? new Date().toISOString().slice(0, 10),
+        snapshotJson,
+        resultJson,
+        isFavorable,
+      ],
+    );
+
+    const created = await getSimulationById(insertResult.rows[0].id);
+    return { error: null, data: mapSimulation(created) };
+  });
+}
+
+async function deleteSimulation(simulationId) {
+  const result = await query(
+    `
+    DELETE FROM app_gastos.simulations
+    WHERE id = $1
+    RETURNING id
+    `,
+    [simulationId],
+  );
+
+  return result.rows.length > 0;
+}
+
 async function getDashboardSummary() {
   const result = await query(
     `
@@ -5068,6 +5661,127 @@ async function handleLoansRoute(method, path, event) {
   return null;
 }
 
+async function handleBudgetsRoute(method, path, event) {
+  const { id } = parsePathParameters(path);
+
+  if (method === 'GET' && id === null) {
+    const queryParams = event.queryStringParameters ?? {};
+    const month = queryParams.month === undefined ? null : normalizeNullableInteger(queryParams.month);
+    const year = queryParams.year === undefined ? null : normalizeNullableInteger(queryParams.year);
+
+    if (queryParams.month !== undefined && month === null) {
+      return jsonResponse(400, { success: false, error: 'month invalido.' });
+    }
+
+    if (queryParams.year !== undefined && year === null) {
+      return jsonResponse(400, { success: false, error: 'year invalido.' });
+    }
+
+    if (month !== null && (month < 1 || month > 12)) {
+      return jsonResponse(400, { success: false, error: 'month invalido.' });
+    }
+
+    if (year !== null && (year < 2000 || year > 2200)) {
+      return jsonResponse(400, { success: false, error: 'year invalido.' });
+    }
+
+    const data = await listBudgets(month, year);
+    return jsonResponse(200, { success: true, data });
+  }
+
+  if (method === 'POST' && id === null) {
+    const bodyResult = parseJsonBody(event);
+    if (!bodyResult.ok) {
+      return jsonResponse(400, { success: false, error: bodyResult.error });
+    }
+
+    const validated = validateBudgetPayload(bodyResult.value);
+    if (!validated.ok) {
+      return jsonResponse(400, { success: false, error: validated.error });
+    }
+
+    const created = await createBudget(validated.value);
+    if (created.error) {
+      return jsonResponse(400, { success: false, error: created.error });
+    }
+
+    return jsonResponse(201, { success: true, data: created.data });
+  }
+
+  if (method === 'PUT' && id !== null) {
+    const bodyResult = parseJsonBody(event);
+    if (!bodyResult.ok) {
+      return jsonResponse(400, { success: false, error: bodyResult.error });
+    }
+
+    const validated = validateBudgetPayload(bodyResult.value);
+    if (!validated.ok) {
+      return jsonResponse(400, { success: false, error: validated.error });
+    }
+
+    const updated = await updateBudget(id, validated.value);
+    if (updated.notFound) {
+      return jsonResponse(404, { success: false, error: 'Presupuesto no encontrado.' });
+    }
+
+    if (updated.error) {
+      return jsonResponse(400, { success: false, error: updated.error });
+    }
+
+    return jsonResponse(200, { success: true, data: updated.data });
+  }
+
+  if (method === 'DELETE' && id !== null) {
+    const deleted = await deleteBudget(id);
+    if (!deleted) {
+      return jsonResponse(404, { success: false, error: 'Presupuesto no encontrado.' });
+    }
+
+    return jsonResponse(200, { success: true, data: { id } });
+  }
+
+  return null;
+}
+
+async function handleSimulationsRoute(method, path, event) {
+  const { id } = parsePathParameters(path);
+
+  if (method === 'GET' && id === null) {
+    const data = await listSimulations();
+    return jsonResponse(200, { success: true, data });
+  }
+
+  if (method === 'POST' && id === null) {
+    const bodyResult = parseJsonBody(event);
+    if (!bodyResult.ok) {
+      return jsonResponse(400, { success: false, error: bodyResult.error });
+    }
+
+    const validated = validateSimulationPayload(bodyResult.value);
+    if (!validated.ok) {
+      return jsonResponse(400, { success: false, error: validated.error });
+    }
+
+    const created = await createSimulation(validated.value);
+    if (created.error) {
+      return jsonResponse(400, { success: false, error: created.error });
+    }
+
+    return jsonResponse(201, { success: true, data: created.data });
+  }
+
+  if (method === 'DELETE' && id !== null) {
+    const deleted = await deleteSimulation(id);
+    if (!deleted) {
+      return jsonResponse(404, { success: false, error: 'Simulacion no encontrada.' });
+    }
+
+    return jsonResponse(200, { success: true, data: { id } });
+  }
+
+  return null;
+}
+
 export async function handler(event) {
   if (event.requestContext?.http?.method === 'OPTIONS' || event.httpMethod === 'OPTIONS') {
     return jsonResponse(204, { success: true });
@@ -5207,6 +5921,20 @@ export async function handler(event) {
 
     if (resource === 'loans' || resource === 'loanPayments' || resource === 'loanPaymentAction') {
       const response = await handleLoansRoute(method, path, event);
+      if (response) {
+        return response;
+      }
+    }
+
+    if (resource === 'budgets') {
+      const response = await handleBudgetsRoute(method, path, event);
+      if (response) {
+        return response;
+      }
+    }
+
+    if (resource === 'simulations') {
+      const response = await handleSimulationsRoute(method, path, event);
       if (response) {
         return response;
       }

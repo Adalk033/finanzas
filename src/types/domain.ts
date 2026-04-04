@@ -4,6 +4,8 @@ export type TransactionType = 'expense' | 'income'
 export type TransferType = 'card_payment' | 'inter_account' | 'loan_payment' | 'other'
 export type LoanPaymentType = 'fixed' | 'variable'
 export type SubscriptionBillingCycle = 'monthly' | 'yearly' | 'weekly'
+export type BudgetStatus = 'under' | 'warning' | 'exceeded'
+export type SimulationScenarioType = 'direct_purchase' | 'msi' | 'loan'
 
 export interface Bank {
   id: number
@@ -362,6 +364,54 @@ export interface FixedExpensePaymentInput {
   paymentDate: string
   isPaid: boolean
   notes: string
+}
+
+export interface Budget {
+  id: number
+  categoryId: number | null
+  categoryName: string | null
+  currencyId: number
+  amount: number
+  month: number
+  year: number
+  notes: string | null
+  spentAmount: number
+  progressPercent: number
+  status: BudgetStatus
+  createdAt: string
+  updatedAt: string
+}
+
+export interface BudgetInput {
+  categoryId: number | null
+  currencyId: number
+  amount: number
+  month: number
+  year: number
+  notes: string
+}
+
+export interface Simulation {
+  id: number
+  name: string
+  description: string | null
+  simulationDate: string
+  snapshotJson: Record<string, unknown>
+  resultJson: Record<string, unknown>
+  isFavorable: boolean | null
+  createdAt: string
+}
+
+export interface SimulationInput {
+  name: string
+  description: string
+  simulationDate: string
+  scenarioType: SimulationScenarioType
+  amount: number
+  instrumentId: number | null
+  msiMonths: number | null
+  loanMonths: number | null
+  annualRate: number | null
 }
 
 export interface DashboardSummary {

@@ -689,8 +689,8 @@ Lambda única de .mjs con conexión a la dB de postgreSQL
 
 ### Fase 8 — Módulo Presupuestos y Simulador
 
-- [ ]  **Backend:** CRUD presupuestos mensuales por categoría
-- [ ]  **Backend:** Lógica de simulación financiera (snapshot + cálculo)
+- [x]  **Backend:** CRUD presupuestos mensuales por categoría
+- [x]  **Backend:** Lógica de simulación financiera (snapshot + cálculo)
 - [ ]  **Frontend:** Página de Presupuestos — definir topes por categoría y mes
 - [ ]  **Frontend:** Indicador de progreso vs presupuesto
 - [ ]  **Frontend:** Página de Simulador "¿Qué pasa si…?"

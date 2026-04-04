@@ -1,6 +1,8 @@
 import { ENDPOINTS } from './endpoints'
 import type { ApiResponse, LocalConfig } from '../types/config'
 import type {
+  Budget,
+  BudgetInput,
   Bank,
   BankInput,
   Category,
@@ -22,6 +24,8 @@ import type {
   FixedExpensePaymentInput,
   Subcategory,
   SubcategoryInput,
+  Simulation,
+  SimulationInput,
   DashboardBalanceEvolution,
   DashboardCashFlowPoint,
   DashboardExpenseByCategory,
@@ -255,6 +259,26 @@ function sanitizeFixedExpensePaymentPayload(payload: FixedExpensePaymentInput): 
     ...payload,
     paymentDate: payload.paymentDate.trim() || null,
     notes: payload.notes.trim() || null,
+  }
+}
+
+function sanitizeBudgetPayload(payload: BudgetInput): Omit<BudgetInput, 'notes'> & {
+  notes: string | null
+} {
+  return {
+    ...payload,
+    notes: payload.notes.trim() || null,
+  }
+}
+
+function sanitizeSimulationPayload(payload: SimulationInput): Omit<SimulationInput, 'description' | 'simulationDate'> & {
+  description: string | null
+  simulationDate: string | null
+} {
+  return {
+    ...payload,
+    description: payload.description.trim() || null,
+    simulationDate: payload.simulationDate.trim() || null,
   }
 }
 
@@ -505,6 +529,45 @@ export const apiClient = {
     }),
   deleteFixedExpensePayment: (fixedExpenseId: number, paymentId: number) =>
     request<{ id: number }>(`${ENDPOINTS.FIXED_EXPENSES}/${fixedExpenseId}/payments/${paymentId}`, {
+      method: 'DELETE',
+    }),
+  getBudgets: (month?: number, year?: number) => {
+    const params = new URLSearchParams()
+
+    if (month) {
+      params.set('month', String(month))
+    }
+
+    if (year) {
+      params.set('year', String(year))
+    }
+
+    const query = params.toString()
+    const path = query.length > 0 ? `${ENDPOINTS.BUDGETS}?${query}` : ENDPOINTS.BUDGETS
+    return request<Budget[]>(path, { method: 'GET' })
+  },
+  createBudget: (payload: BudgetInput) =>
+    request<Budget>(ENDPOINTS.BUDGETS, {
+      method: 'POST',
+      body: JSON.stringify(sanitizeBudgetPayload(payload)),
+    }),
+  updateBudget: (id: number, payload: BudgetInput) =>
+    request<Budget>(`${ENDPOINTS.BUDGETS}/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(sanitizeBudgetPayload(payload)),
+    }),
+  deleteBudget: (id: number) =>
+    request<{ id: number }>(`${ENDPOINTS.BUDGETS}/${id}`, {
+      method: 'DELETE',
+    }),
+  getSimulations: () => request<Simulation[]>(ENDPOINTS.SIMULATIONS, { method: 'GET' }),
+  createSimulation: (payload: SimulationInput) =>
+    request<Simulation>(ENDPOINTS.SIMULATIONS, {
+      method: 'POST',
+      body: JSON.stringify(sanitizeSimulationPayload(payload)),
+    }),
+  deleteSimulation: (id: number) =>
+    request<{ id: number }>(`${ENDPOINTS.SIMULATIONS}/${id}`, {
       method: 'DELETE',
     }),
 }
