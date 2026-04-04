@@ -103,6 +103,176 @@
         }
       }
     },
+    "/dashboard/summary": {
+      "get": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-client-version",
+            "in": "header",
+            "required": true,
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dashboard summary"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      }
+    },
+    "/dashboard/charts/expenses-by-category": {
+      "get": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-client-version",
+            "in": "header",
+            "required": true,
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Expenses by category"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      }
+    },
+    "/dashboard/charts/cash-flow": {
+      "get": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-client-version",
+            "in": "header",
+            "required": true,
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cash flow chart"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      }
+    },
+    "/dashboard/charts/balance-evolution": {
+      "get": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-client-version",
+            "in": "header",
+            "required": true,
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Balance evolution chart"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      }
+    },
+    "/dashboard/charts/future-expenses": {
+      "get": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-client-version",
+            "in": "header",
+            "required": true,
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Future expenses chart"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      }
+    },
     "/categories": {
       "get": {
         "security": [

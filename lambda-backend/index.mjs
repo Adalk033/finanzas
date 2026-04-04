@@ -5387,28 +5387,87 @@ async function getDashboardFutureExpenses() {
 async function handleDashboardRoute(method, path) {
   const { resource } = parsePathParameters(path);
 
+  const dashboardFallbacks = {
+    dashboardSummary: {
+      totalAvailable: 0,
+      totalCreditDebt: 0,
+      totalLoanDebt: 0,
+      totalAvailableCredit: 0,
+      netBalance: 0,
+    },
+    dashboardExpensesByCategory: [],
+    dashboardCashFlow: [],
+    dashboardBalanceEvolution: { series: [], points: [] },
+    dashboardFutureExpenses: [],
+  };
+
   if (method === 'GET' && resource === 'dashboardSummary') {
-    const data = await getDashboardSummary();
+    let data = dashboardFallbacks.dashboardSummary;
+
+    try {
+      data = await getDashboardSummary();
+    } catch (error) {
+      console.error('[dashboard] summary failed, using fallback', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
     return jsonResponse(200, { success: true, data });
   }
 
   if (method === 'GET' && resource === 'dashboardExpensesByCategory') {
-    const data = await getDashboardExpensesByCategory();
+    let data = dashboardFallbacks.dashboardExpensesByCategory;
+
+    try {
+      data = await getDashboardExpensesByCategory();
+    } catch (error) {
+      console.error('[dashboard] expenses by category failed, using fallback', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
     return jsonResponse(200, { success: true, data });
   }
 
   if (method === 'GET' && resource === 'dashboardCashFlow') {
-    const data = await getDashboardCashFlow();
+    let data = dashboardFallbacks.dashboardCashFlow;
+
+    try {
+      data = await getDashboardCashFlow();
+    } catch (error) {
+      console.error('[dashboard] cash flow failed, using fallback', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
     return jsonResponse(200, { success: true, data });
   }
 
   if (method === 'GET' && resource === 'dashboardBalanceEvolution') {
-    const data = await getDashboardBalanceEvolution();
+    let data = dashboardFallbacks.dashboardBalanceEvolution;
+
+    try {
+      data = await getDashboardBalanceEvolution();
+    } catch (error) {
+      console.error('[dashboard] balance evolution failed, using fallback', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
     return jsonResponse(200, { success: true, data });
   }
 
   if (method === 'GET' && resource === 'dashboardFutureExpenses') {
-    const data = await getDashboardFutureExpenses();
+    let data = dashboardFallbacks.dashboardFutureExpenses;
+
+    try {
+      data = await getDashboardFutureExpenses();
+    } catch (error) {
+      console.error('[dashboard] future expenses failed, using fallback', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
     return jsonResponse(200, { success: true, data });
   }
 
