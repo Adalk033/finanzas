@@ -647,22 +647,22 @@ Lambda única de .mjs con conexión a la dB de postgreSQL
 - [x]  **Backend:** Tipos de transferencia: `card_payment`, `inter_account`, `loan_payment`, `other`
 - [x]  **Backend:** Vinculación opcional de transferencia a estado de cuenta (`statement_id`) o préstamo (`loan_id`)
 - [x]  **Frontend:** Página de TDC — vista por tarjeta con período actual
-- [ ]  **Frontend:** Detalle de estado de cuenta con desglose de movimientos
+- [x]  **Frontend:** Detalle de estado de cuenta con desglose de movimientos
 - [x]  **Frontend:** Edición de fecha de pago (override del default)
-- [ ]  **Frontend:** Indicadores de crédito disponible y deuda total
+- [x]  **Frontend:** Indicadores de crédito disponible y deuda total
 - [x]  **Frontend:** Botón/formulario de "Abonar a tarjeta" desde cualquier cuenta/débito
 - [x]  **Frontend:** Sección de transferencias entre cuentas propias
 - [x]  **Frontend:** Historial de pagos/abonos por instrumento
 
 ### Fase 5 — Módulo Préstamos
 
-- [ ]  **Backend:** CRUD préstamos
-- [ ]  **Backend:** Generación de tabla de amortización (fija y variable)
-- [ ]  **Backend:** Registro de pagos realizados
-- [ ]  **Frontend:** Página de Préstamos — listado con progreso de pago
-- [ ]  **Frontend:** Detalle de préstamo con tabla de amortización completa
-- [ ]  **Frontend:** Configuración de tipo de pago (fijo vs variable con tasa)
-- [ ]  **Frontend:** Registro de pago de cuota
+- [x]  **Backend:** CRUD préstamos
+- [x]  **Backend:** Generación de tabla de amortización (fija y variable)
+- [x]  **Backend:** Registro de pagos realizados
+- [x]  **Frontend:** Página de Préstamos — listado con progreso de pago
+- [x]  **Frontend:** Detalle de préstamo con tabla de amortización completa
+- [x]  **Frontend:** Configuración de tipo de pago (fijo vs variable con tasa)
+- [x]  **Frontend:** Registro de pago de cuota
 
 ### Fase 6 — Módulo Suscripciones y Gastos Fijos
 

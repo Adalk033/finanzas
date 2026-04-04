@@ -10,6 +10,10 @@ import type {
   CreditCardStatementUpdateInput,
   FinancialInstrument,
   FinancialInstrumentInput,
+  Loan,
+  LoanInput,
+  LoanPayment,
+  LoanPaymentRegisterInput,
   Subcategory,
   SubcategoryInput,
   Transfer,
@@ -187,6 +191,31 @@ function sanitizeTransferPayload(payload: TransferInput): Omit<TransferInput, 'd
   }
 }
 
+function sanitizeLoanPayload(payload: LoanInput): Omit<LoanInput, 'lender' | 'endDate' | 'notes'> & {
+  lender: string | null
+  endDate: string | null
+  notes: string | null
+} {
+  return {
+    ...payload,
+    lender: payload.lender.trim() || null,
+    endDate: payload.endDate.trim() || null,
+    notes: payload.notes.trim() || null,
+  }
+}
+
+function sanitizeLoanPaymentRegisterPayload(payload: LoanPaymentRegisterInput): {
+  paidDate: string | null
+  amount: number | null
+  notes: string | null
+} {
+  return {
+    paidDate: payload.paidDate.trim() || null,
+    amount: payload.amount,
+    notes: payload.notes.trim() || null,
+  }
+}
+
 function buildTransactionQuery(filters: TransactionFilters): string {
   const params = new URLSearchParams()
 
@@ -330,6 +359,10 @@ export const apiClient = {
       method: 'PUT',
       body: JSON.stringify(sanitizeStatementUpdatePayload(payload)),
     }),
+  getStatementMovements: (statementId: number) =>
+    request<Transaction[]>(`${ENDPOINTS.STATEMENTS}/${statementId}/movements`, {
+      method: 'GET',
+    }),
   deleteStatement: (id: number) =>
     request<{ id: number }>(`${ENDPOINTS.STATEMENTS}/${id}`, {
       method: 'DELETE',
@@ -354,5 +387,29 @@ export const apiClient = {
   deleteTransfer: (id: number) =>
     request<{ id: number }>(`${ENDPOINTS.TRANSFERS}/${id}`, {
       method: 'DELETE',
+    }),
+  getLoans: () => request<Loan[]>(ENDPOINTS.LOANS, { method: 'GET' }),
+  createLoan: (payload: LoanInput) =>
+    request<Loan>(ENDPOINTS.LOANS, {
+      method: 'POST',
+      body: JSON.stringify(sanitizeLoanPayload(payload)),
+    }),
+  updateLoan: (id: number, payload: LoanInput) =>
+    request<Loan>(`${ENDPOINTS.LOANS}/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(sanitizeLoanPayload(payload)),
+    }),
+  deleteLoan: (id: number) =>
+    request<{ id: number }>(`${ENDPOINTS.LOANS}/${id}`, {
+      method: 'DELETE',
+    }),
+  getLoanPayments: (loanId: number) =>
+    request<LoanPayment[]>(`${ENDPOINTS.LOANS}/${loanId}/payments`, {
+      method: 'GET',
+    }),
+  payLoanInstallment: (loanId: number, installmentNum: number, payload: LoanPaymentRegisterInput) =>
+    request<{ loan: Loan; payment: LoanPayment }>(`${ENDPOINTS.LOANS}/${loanId}/payments/${installmentNum}/pay`, {
+      method: 'POST',
+      body: JSON.stringify(sanitizeLoanPaymentRegisterPayload(payload)),
     }),
 }

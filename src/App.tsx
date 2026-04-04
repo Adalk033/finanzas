@@ -14,6 +14,11 @@ import type {
   FinancialInstrument,
   FinancialInstrumentInput,
   InstrumentType,
+  Loan,
+  LoanInput,
+  LoanPayment,
+  LoanPaymentRegisterInput,
+  LoanPaymentType,
   Subcategory,
   SubcategoryInput,
   Transfer,
@@ -25,7 +30,7 @@ import type {
   TransactionType,
 } from './types/domain'
 
-type AppSection = 'settings' | 'banks' | 'instruments' | 'categories' | 'transactions' | 'creditCards'
+type AppSection = 'settings' | 'banks' | 'instruments' | 'categories' | 'transactions' | 'creditCards' | 'loans'
 
 const EMPTY_BANK_FORM: BankInput = {
   name: '',
@@ -119,6 +124,29 @@ const EMPTY_TRANSFER_FORM: TransferInput = {
   statementId: null,
   loanId: null,
   description: '',
+  notes: '',
+}
+
+const EMPTY_LOAN_FORM: LoanInput = {
+  name: '',
+  lender: '',
+  currencyId: 1,
+  originalAmount: 0,
+  annualRate: null,
+  totalInstallments: 12,
+  paymentType: 'fixed',
+  fixedPayment: 0,
+  paymentDay: 1,
+  startDate: TODAY_ISO,
+  endDate: '',
+  instrumentId: null,
+  notes: '',
+  isActive: true,
+}
+
+const EMPTY_LOAN_PAYMENT_REGISTER: LoanPaymentRegisterInput = {
+  paidDate: TODAY_ISO,
+  amount: null,
   notes: '',
 }
 
@@ -259,6 +287,21 @@ export function App() {
   const [transferError, setTransferError] = useState('')
   const [transferForm, setTransferForm] = useState<TransferInput>(EMPTY_TRANSFER_FORM)
 
+  const [selectedStatementDetail, setSelectedStatementDetail] = useState<CreditCardStatement | null>(null)
+  const [statementMovements, setStatementMovements] = useState<Transaction[]>([])
+  const [isStatementMovementsLoading, setIsStatementMovementsLoading] = useState(false)
+
+  const [loans, setLoans] = useState<Loan[]>([])
+  const [isLoansLoading, setIsLoansLoading] = useState(false)
+  const [loanMessage, setLoanMessage] = useState('')
+  const [loanError, setLoanError] = useState('')
+  const [loanForm, setLoanForm] = useState<LoanInput>(EMPTY_LOAN_FORM)
+  const [editingLoanId, setEditingLoanId] = useState<number | null>(null)
+  const [selectedLoanId, setSelectedLoanId] = useState<number | null>(null)
+  const [loanPayments, setLoanPayments] = useState<LoanPayment[]>([])
+  const [isLoanPaymentsLoading, setIsLoanPaymentsLoading] = useState(false)
+  const [loanPaymentRegister, setLoanPaymentRegister] = useState<LoanPaymentRegisterInput>(EMPTY_LOAN_PAYMENT_REGISTER)
+
   const hasConfig = Boolean(config.apiKey.trim() && config.apiEndpoint.trim() && config.awsRegion.trim())
 
   const banksById = useMemo(() => {
@@ -330,6 +373,26 @@ export function App() {
 
     return instruments.filter((instrument) => instrument.id !== sourceId)
   }, [creditCardInstruments, instruments, selectedTransferSourceInstrumentId, selectedTransferType, sourceTransferInstruments])
+
+  const totalCreditCardDebt = useMemo(() => {
+    return creditCardInstruments.reduce((accumulator, instrument) => accumulator + (instrument.currentBalance ?? 0), 0)
+  }, [creditCardInstruments])
+
+  const totalAvailableCredit = useMemo(() => {
+    return creditCardInstruments.reduce((accumulator, instrument) => accumulator + (instrument.availableCredit ?? 0), 0)
+  }, [creditCardInstruments])
+
+  const loanPaymentInstruments = useMemo(() => {
+    return instruments.filter((instrument) => instrument.type !== 'credit_card')
+  }, [instruments])
+
+  const selectedLoan = useMemo(() => {
+    if (!selectedLoanId) {
+      return null
+    }
+
+    return loans.find((loan) => loan.id === selectedLoanId) ?? null
+  }, [loans, selectedLoanId])
 
   const loadBanks = async (): Promise<void> => {
     setIsBanksLoading(true)
@@ -425,6 +488,56 @@ export function App() {
 
     setTransfers(result.data ?? [])
     setIsTransfersLoading(false)
+  }
+
+  const loadStatementMovements = async (statement: CreditCardStatement): Promise<void> => {
+    setIsStatementMovementsLoading(true)
+    setStatementError('')
+
+    const result = await apiClient.getStatementMovements(statement.id)
+
+    if (!result.success) {
+      setStatementError(result.error ?? 'No se pudo cargar el detalle de movimientos del estado de cuenta.')
+      setIsStatementMovementsLoading(false)
+      return
+    }
+
+    setSelectedStatementDetail(statement)
+    setStatementMovements(result.data ?? [])
+    setIsStatementMovementsLoading(false)
+  }
+
+  const loadLoans = async (): Promise<void> => {
+    setIsLoansLoading(true)
+    setLoanError('')
+
+    const result = await apiClient.getLoans()
+
+    if (!result.success) {
+      setLoanError(result.error ?? 'No se pudieron cargar los prestamos.')
+      setIsLoansLoading(false)
+      return
+    }
+
+    setLoans(result.data ?? [])
+    setIsLoansLoading(false)
+  }
+
+  const loadLoanPayments = async (loanId: number): Promise<void> => {
+    setIsLoanPaymentsLoading(true)
+    setLoanError('')
+
+    const result = await apiClient.getLoanPayments(loanId)
+
+    if (!result.success) {
+      setLoanError(result.error ?? 'No se pudo cargar la tabla de amortizacion.')
+      setIsLoanPaymentsLoading(false)
+      return
+    }
+
+    setSelectedLoanId(loanId)
+    setLoanPayments(result.data ?? [])
+    setIsLoanPaymentsLoading(false)
   }
 
   const selectedBankId = instrumentForm.bankId === 0 ? (banks[0]?.id ?? 0) : instrumentForm.bankId
@@ -571,6 +684,12 @@ export function App() {
       void loadInstruments()
       void loadStatements()
       void loadTransfers()
+      return
+    }
+
+    if (nextSection === 'loans') {
+      void loadInstruments()
+      void loadLoans()
     }
   }
 
@@ -1006,6 +1125,139 @@ export function App() {
     await loadTransfers()
   }
 
+  const resetLoanEditor = (): void => {
+    setLoanForm({
+      ...EMPTY_LOAN_FORM,
+      instrumentId: loanPaymentInstruments[0]?.id ?? null,
+    })
+    setEditingLoanId(null)
+  }
+
+  const startLoanEdit = (loan: Loan): void => {
+    setEditingLoanId(loan.id)
+    setLoanForm({
+      name: loan.name,
+      lender: loan.lender ?? '',
+      currencyId: loan.currencyId,
+      originalAmount: loan.originalAmount,
+      annualRate: loan.annualRate,
+      totalInstallments: loan.totalInstallments,
+      paymentType: loan.paymentType,
+      fixedPayment: loan.fixedPayment,
+      paymentDay: loan.paymentDay,
+      startDate: loan.startDate,
+      endDate: loan.endDate ?? '',
+      instrumentId: loan.instrumentId,
+      notes: loan.notes ?? '',
+      isActive: loan.isActive,
+    })
+  }
+
+  const handleLoanPaymentTypeChange = (nextType: LoanPaymentType): void => {
+    setLoanForm((previous) => ({
+      ...previous,
+      paymentType: nextType,
+      fixedPayment: nextType === 'fixed' ? (previous.fixedPayment ?? 0) : null,
+      annualRate: nextType === 'variable' ? previous.annualRate : previous.annualRate,
+    }))
+  }
+
+  const handleLoanSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault()
+    setLoanError('')
+    setLoanMessage('')
+
+    if (loanForm.originalAmount <= 0) {
+      setLoanError('Ingresa un monto original mayor a cero.')
+      return
+    }
+
+    if (loanForm.totalInstallments < 1) {
+      setLoanError('Ingresa un total de cuotas valido.')
+      return
+    }
+
+    if (loanForm.paymentType === 'fixed' && (!loanForm.fixedPayment || loanForm.fixedPayment <= 0)) {
+      setLoanError('Ingresa un pago fijo valido.')
+      return
+    }
+
+    if (loanForm.paymentType === 'variable' && (!loanForm.annualRate || loanForm.annualRate <= 0)) {
+      setLoanError('Ingresa una tasa anual valida para pago variable.')
+      return
+    }
+
+    const payload: LoanInput = {
+      ...loanForm,
+      name: loanForm.name.trim(),
+      lender: loanForm.lender.trim(),
+      endDate: loanForm.endDate.trim(),
+      notes: loanForm.notes.trim(),
+    }
+
+    if (editingLoanId === null) {
+      const created = await apiClient.createLoan(payload)
+      if (!created.success) {
+        setLoanError(created.error ?? 'No se pudo crear el prestamo.')
+        return
+      }
+
+      setLoanMessage('Prestamo creado correctamente.')
+    } else {
+      const updated = await apiClient.updateLoan(editingLoanId, payload)
+      if (!updated.success) {
+        setLoanError(updated.error ?? 'No se pudo actualizar el prestamo.')
+        return
+      }
+
+      setLoanMessage('Prestamo actualizado correctamente.')
+    }
+
+    resetLoanEditor()
+    await loadLoans()
+  }
+
+  const handleLoanDelete = async (id: number): Promise<void> => {
+    setLoanError('')
+    setLoanMessage('')
+
+    const deleted = await apiClient.deleteLoan(id)
+    if (!deleted.success) {
+      setLoanError(deleted.error ?? 'No se pudo eliminar el prestamo.')
+      return
+    }
+
+    setLoanMessage('Prestamo eliminado correctamente.')
+    if (editingLoanId === id) {
+      resetLoanEditor()
+    }
+    if (selectedLoanId === id) {
+      setSelectedLoanId(null)
+      setLoanPayments([])
+    }
+    await loadLoans()
+  }
+
+  const handlePayInstallment = async (installmentNum: number): Promise<void> => {
+    if (!selectedLoanId) {
+      return
+    }
+
+    setLoanError('')
+    setLoanMessage('')
+
+    const paid = await apiClient.payLoanInstallment(selectedLoanId, installmentNum, loanPaymentRegister)
+    if (!paid.success) {
+      setLoanError(paid.error ?? 'No se pudo registrar el pago de la cuota.')
+      return
+    }
+
+    setLoanMessage(`Cuota ${installmentNum} pagada correctamente.`)
+    setLoanPaymentRegister(EMPTY_LOAN_PAYMENT_REGISTER)
+    await loadLoans()
+    await loadLoanPayments(selectedLoanId)
+  }
+
   if (isLoading) {
     return (
       <main className="settings-screen settings-screen--centered">
@@ -1059,6 +1311,13 @@ export function App() {
           onClick={() => handleSectionChange('creditCards')}
         >
           Tarjetas y Transferencias
+        </button>
+        <button
+          className={`nav-button ${activeSection === 'loans' ? 'nav-button--active' : ''}`}
+          type="button"
+          onClick={() => handleSectionChange('loans')}
+        >
+          Prestamos
         </button>
       </aside>
 
@@ -2117,6 +2376,17 @@ export function App() {
               <p className="card__subtitle">Estados de cuenta por corte y registro de abonos/transferencias.</p>
             </header>
 
+            <div className="summary-grid">
+              <article className="summary-card">
+                <p className="summary-card__label">Deuda total en tarjetas</p>
+                <p className="summary-card__value">{formatCurrency(totalCreditCardDebt)}</p>
+              </article>
+              <article className="summary-card">
+                <p className="summary-card__label">Credito disponible total</p>
+                <p className="summary-card__value summary-card__value--positive">{formatCurrency(totalAvailableCredit)}</p>
+              </article>
+            </div>
+
             <div className="transaction-layout">
               <section className="mini-card">
                 <header className="mini-card__header">
@@ -2352,6 +2622,15 @@ export function App() {
                                   className="button button--secondary"
                                   type="button"
                                   onClick={() => {
+                                    void loadStatementMovements(statement)
+                                  }}
+                                >
+                                  Ver movimientos
+                                </button>
+                                <button
+                                  className="button button--secondary"
+                                  type="button"
+                                  onClick={() => {
                                     startStatementEdit(statement)
                                   }}
                                 >
@@ -2398,6 +2677,59 @@ export function App() {
                       <button className="button button--secondary" type="button" onClick={resetStatementUpdateForm}>
                         Cancelar
                       </button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {selectedStatementDetail !== null ? (
+                  <div className="statement-movements">
+                    <header className="mini-card__header">
+                      <h4 className="mini-card__title">
+                        Movimientos del corte {selectedStatementDetail.cutOffDate} · {selectedStatementDetail.instrumentName ?? 'Tarjeta'}
+                      </h4>
+                      <p className="mini-card__subtitle">Incluye compras e ingresos del periodo del estado de cuenta.</p>
+                    </header>
+
+                    <div className="table-wrap">
+                      <table className="table">
+                        <thead>
+                          <tr>
+                            <th>Fecha</th>
+                            <th>Descripcion</th>
+                            <th>Categoria</th>
+                            <th>Tipo</th>
+                            <th>Monto</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {isStatementMovementsLoading ? (
+                            <tr>
+                              <td colSpan={5}>Cargando movimientos...</td>
+                            </tr>
+                          ) : null}
+
+                          {!isStatementMovementsLoading && statementMovements.length === 0 ? (
+                            <tr>
+                              <td colSpan={5}>No hay movimientos para este estado de cuenta.</td>
+                            </tr>
+                          ) : null}
+
+                          {!isStatementMovementsLoading
+                            ? statementMovements.map((movement) => (
+                              <tr key={`statement-movement-${movement.id}`}>
+                                <td>{movement.transactionDate}</td>
+                                <td>{movement.description ?? 'Sin descripcion'}</td>
+                                <td>
+                                  {movement.categoryName ?? '-'}
+                                  {movement.subcategoryName ? ` / ${movement.subcategoryName}` : ''}
+                                </td>
+                                <td>{movement.type === 'expense' ? 'Gasto' : 'Ingreso'}</td>
+                                <td>{formatCurrency(movement.amount)}</td>
+                              </tr>
+                            ))
+                            : null}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 ) : null}
@@ -2464,6 +2796,388 @@ export function App() {
                   </table>
                 </div>
               </article>
+            </div>
+          </section>
+        ) : null}
+
+        {activeSection === 'loans' ? (
+          <section className="card">
+            <header className="card__header">
+              <h2 className="card__title">Prestamos</h2>
+              <p className="card__subtitle">Gestion de prestamos, tabla de amortizacion y registro de cuotas pagadas.</p>
+            </header>
+
+            <div className="transaction-layout">
+              <section className="mini-card">
+                <header className="mini-card__header">
+                  <h3 className="mini-card__title">Nuevo prestamo</h3>
+                  <p className="mini-card__subtitle">Configura tipo de pago fijo o variable y genera su calendario.</p>
+                </header>
+
+                <form className="form-grid" onSubmit={handleLoanSubmit}>
+                  <label className="form-grid__field" htmlFor="loanName">Nombre</label>
+                  <input
+                    id="loanName"
+                    className="form-grid__input"
+                    type="text"
+                    value={loanForm.name}
+                    onChange={(event) => setLoanForm({ ...loanForm, name: event.target.value })}
+                    placeholder="Prestamo auto"
+                    required
+                  />
+
+                  <label className="form-grid__field" htmlFor="loanLender">Acreedor</label>
+                  <input
+                    id="loanLender"
+                    className="form-grid__input"
+                    type="text"
+                    value={loanForm.lender}
+                    onChange={(event) => setLoanForm({ ...loanForm, lender: event.target.value })}
+                    placeholder="Banco o financiera"
+                  />
+
+                  <label className="form-grid__field" htmlFor="loanInstrument">Cuenta de pago (opcional)</label>
+                  <select
+                    id="loanInstrument"
+                    className="form-grid__input"
+                    value={loanForm.instrumentId ?? ''}
+                    onChange={(event) => {
+                      const raw = event.target.value
+                      setLoanForm({ ...loanForm, instrumentId: raw ? Number(raw) : null })
+                    }}
+                  >
+                    <option value="">Sin cuenta vinculada</option>
+                    {loanPaymentInstruments.map((instrument) => (
+                      <option key={instrument.id} value={instrument.id}>{instrument.name}</option>
+                    ))}
+                  </select>
+
+                  <label className="form-grid__field" htmlFor="loanOriginalAmount">Monto original</label>
+                  <input
+                    id="loanOriginalAmount"
+                    className="form-grid__input"
+                    type="number"
+                    min={0.01}
+                    step="0.01"
+                    value={loanForm.originalAmount}
+                    onChange={(event) => setLoanForm({ ...loanForm, originalAmount: Number(event.target.value) })}
+                    required
+                  />
+
+                  <label className="form-grid__field" htmlFor="loanTotalInstallments">Total de cuotas</label>
+                  <input
+                    id="loanTotalInstallments"
+                    className="form-grid__input"
+                    type="number"
+                    min={1}
+                    value={loanForm.totalInstallments}
+                    onChange={(event) => setLoanForm({ ...loanForm, totalInstallments: Number(event.target.value) })}
+                    required
+                  />
+
+                  <label className="form-grid__field" htmlFor="loanPaymentType">Tipo de pago</label>
+                  <select
+                    id="loanPaymentType"
+                    className="form-grid__input"
+                    value={loanForm.paymentType}
+                    onChange={(event) => handleLoanPaymentTypeChange(event.target.value as LoanPaymentType)}
+                  >
+                    <option value="fixed">Fijo</option>
+                    <option value="variable">Variable</option>
+                  </select>
+
+                  {loanForm.paymentType === 'fixed' ? (
+                    <>
+                      <label className="form-grid__field" htmlFor="loanFixedPayment">Pago fijo mensual</label>
+                      <input
+                        id="loanFixedPayment"
+                        className="form-grid__input"
+                        type="number"
+                        min={0.01}
+                        step="0.01"
+                        value={loanForm.fixedPayment ?? 0}
+                        onChange={(event) => setLoanForm({ ...loanForm, fixedPayment: Number(event.target.value) })}
+                        required
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <label className="form-grid__field" htmlFor="loanAnnualRate">Tasa anual (decimal)</label>
+                      <input
+                        id="loanAnnualRate"
+                        className="form-grid__input"
+                        type="number"
+                        min={0.0001}
+                        step="0.0001"
+                        value={loanForm.annualRate ?? ''}
+                        onChange={(event) => {
+                          const raw = event.target.value
+                          setLoanForm({ ...loanForm, annualRate: raw ? Number(raw) : null })
+                        }}
+                        required
+                      />
+                    </>
+                  )}
+
+                  <label className="form-grid__field" htmlFor="loanPaymentDay">Dia de pago</label>
+                  <input
+                    id="loanPaymentDay"
+                    className="form-grid__input"
+                    type="number"
+                    min={1}
+                    max={31}
+                    value={loanForm.paymentDay ?? 1}
+                    onChange={(event) => setLoanForm({ ...loanForm, paymentDay: Number(event.target.value) })}
+                  />
+
+                  <label className="form-grid__field" htmlFor="loanStartDate">Fecha inicial</label>
+                  <input
+                    id="loanStartDate"
+                    className="form-grid__input"
+                    type="date"
+                    value={loanForm.startDate}
+                    onChange={(event) => setLoanForm({ ...loanForm, startDate: event.target.value })}
+                    required
+                  />
+
+                  <label className="form-grid__field" htmlFor="loanEndDate">Fecha fin estimada (opcional)</label>
+                  <input
+                    id="loanEndDate"
+                    className="form-grid__input"
+                    type="date"
+                    value={loanForm.endDate}
+                    onChange={(event) => setLoanForm({ ...loanForm, endDate: event.target.value })}
+                  />
+
+                  <label className="form-grid__field" htmlFor="loanNotes">Notas</label>
+                  <input
+                    id="loanNotes"
+                    className="form-grid__input"
+                    type="text"
+                    value={loanForm.notes}
+                    onChange={(event) => setLoanForm({ ...loanForm, notes: event.target.value })}
+                    placeholder="Opcional"
+                  />
+
+                  <div className="form-grid__actions">
+                    <button className="button button--primary" type="submit" disabled={!hasConfig}>
+                      {editingLoanId === null ? 'Crear prestamo' : 'Guardar cambios'}
+                    </button>
+                    <button className="button button--secondary" type="button" onClick={resetLoanEditor}>
+                      Limpiar
+                    </button>
+                    <button
+                      className="button button--secondary"
+                      type="button"
+                      onClick={() => {
+                        void loadLoans()
+                      }}
+                    >
+                      Recargar
+                    </button>
+                  </div>
+                </form>
+              </section>
+
+              <section className="mini-card">
+                <header className="mini-card__header">
+                  <h3 className="mini-card__title">Registro de cuota</h3>
+                  <p className="mini-card__subtitle">Selecciona un prestamo y registra cuotas pendientes.</p>
+                </header>
+
+                <form className="form-grid" onSubmit={(event) => event.preventDefault()}>
+                  <label className="form-grid__field" htmlFor="loanRegisterPaidDate">Fecha de pago</label>
+                  <input
+                    id="loanRegisterPaidDate"
+                    className="form-grid__input"
+                    type="date"
+                    value={loanPaymentRegister.paidDate}
+                    onChange={(event) => setLoanPaymentRegister({ ...loanPaymentRegister, paidDate: event.target.value })}
+                  />
+
+                  <label className="form-grid__field" htmlFor="loanRegisterAmount">Monto (opcional, debe coincidir)</label>
+                  <input
+                    id="loanRegisterAmount"
+                    className="form-grid__input"
+                    type="number"
+                    min={0.01}
+                    step="0.01"
+                    value={loanPaymentRegister.amount ?? ''}
+                    onChange={(event) => {
+                      const raw = event.target.value
+                      setLoanPaymentRegister({ ...loanPaymentRegister, amount: raw ? Number(raw) : null })
+                    }}
+                  />
+
+                  <label className="form-grid__field" htmlFor="loanRegisterNotes">Notas</label>
+                  <input
+                    id="loanRegisterNotes"
+                    className="form-grid__input"
+                    type="text"
+                    value={loanPaymentRegister.notes}
+                    onChange={(event) => setLoanPaymentRegister({ ...loanPaymentRegister, notes: event.target.value })}
+                    placeholder="Comprobante o comentario"
+                  />
+
+                  <p className="card__subtitle">
+                    Usa el boton Pagar de la tabla para registrar cada cuota pendiente con esta configuracion.
+                  </p>
+                </form>
+              </section>
+            </div>
+
+            {loanError ? <p className="message message--error">{loanError}</p> : null}
+            {loanMessage ? <p className="message message--success">{loanMessage}</p> : null}
+
+            <div className="category-list">
+              <article className="category-card">
+                <header className="category-card__header">
+                  <div>
+                    <h3 className="category-card__title">Listado de prestamos</h3>
+                    <p className="category-card__meta">Progreso de pago y acciones por prestamo.</p>
+                  </div>
+                </header>
+
+                <div className="table-wrap">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Nombre</th>
+                        <th>Tipo</th>
+                        <th>Monto original</th>
+                        <th>Saldo pendiente</th>
+                        <th>Progreso</th>
+                        <th>Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {isLoansLoading ? (
+                        <tr>
+                          <td colSpan={6}>Cargando prestamos...</td>
+                        </tr>
+                      ) : null}
+
+                      {!isLoansLoading && loans.length === 0 ? (
+                        <tr>
+                          <td colSpan={6}>No hay prestamos registrados.</td>
+                        </tr>
+                      ) : null}
+
+                      {!isLoansLoading
+                        ? loans.map((loan) => (
+                          <tr key={loan.id}>
+                            <td>{loan.name}</td>
+                            <td>{loan.paymentType === 'fixed' ? 'Fijo' : 'Variable'}</td>
+                            <td>{formatCurrency(loan.originalAmount)}</td>
+                            <td>{formatCurrency(loan.remainingAmount)}</td>
+                            <td>{loan.paidInstallments}/{loan.totalInstallments}</td>
+                            <td>
+                              <div className="table__actions">
+                                <button
+                                  className="button button--secondary"
+                                  type="button"
+                                  onClick={() => {
+                                    void loadLoanPayments(loan.id)
+                                  }}
+                                >
+                                  Ver detalle
+                                </button>
+                                <button
+                                  className="button button--secondary"
+                                  type="button"
+                                  onClick={() => {
+                                    startLoanEdit(loan)
+                                  }}
+                                >
+                                  Editar
+                                </button>
+                                <button
+                                  className="button button--danger"
+                                  type="button"
+                                  onClick={() => {
+                                    void handleLoanDelete(loan.id)
+                                  }}
+                                >
+                                  Eliminar
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                        : null}
+                    </tbody>
+                  </table>
+                </div>
+              </article>
+
+              {selectedLoan !== null ? (
+                <article className="category-card">
+                  <header className="category-card__header">
+                    <div>
+                      <h3 className="category-card__title">Tabla de amortizacion · {selectedLoan.name}</h3>
+                      <p className="category-card__meta">
+                        {selectedLoan.paymentType === 'fixed' ? 'Pago fijo' : 'Pago variable'} · Saldo pendiente {formatCurrency(selectedLoan.remainingAmount)}
+                      </p>
+                    </div>
+                  </header>
+
+                  <div className="table-wrap">
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>Cuota</th>
+                          <th>Fecha programada</th>
+                          <th>Monto</th>
+                          <th>Capital</th>
+                          <th>Interes</th>
+                          <th>Estado</th>
+                          <th>Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {isLoanPaymentsLoading ? (
+                          <tr>
+                            <td colSpan={7}>Cargando tabla de amortizacion...</td>
+                          </tr>
+                        ) : null}
+
+                        {!isLoanPaymentsLoading && loanPayments.length === 0 ? (
+                          <tr>
+                            <td colSpan={7}>No hay cuotas para este prestamo.</td>
+                          </tr>
+                        ) : null}
+
+                        {!isLoanPaymentsLoading
+                          ? loanPayments.map((payment) => (
+                            <tr key={payment.id}>
+                              <td>{payment.installmentNum}</td>
+                              <td>{payment.paymentDate}</td>
+                              <td>{formatCurrency(payment.amount)}</td>
+                              <td>{formatCurrency(payment.principal)}</td>
+                              <td>{formatCurrency(payment.interest)}</td>
+                              <td>{payment.isPaid ? `Pagada ${payment.paidDate ?? ''}` : 'Pendiente'}</td>
+                              <td>
+                                <div className="table__actions">
+                                  <button
+                                    className="button button--primary"
+                                    type="button"
+                                    disabled={payment.isPaid}
+                                    onClick={() => {
+                                      void handlePayInstallment(payment.installmentNum)
+                                    }}
+                                  >
+                                    Pagar
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                          : null}
+                      </tbody>
+                    </table>
+                  </div>
+                </article>
+              ) : null}
             </div>
           </section>
         ) : null}

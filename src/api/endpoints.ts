@@ -8,4 +8,5 @@ export const ENDPOINTS = {
   TRANSACTIONS: '/transactions',
   STATEMENTS: '/statements',
   TRANSFERS: '/transfers',
+  LOANS: '/loans',
 } as const

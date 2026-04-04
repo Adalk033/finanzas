@@ -2,6 +2,7 @@ export type InstrumentType = 'credit_card' | 'debit_card' | 'account'
 export type CategoryType = 'expense' | 'income' | 'both'
 export type TransactionType = 'expense' | 'income'
 export type TransferType = 'card_payment' | 'inter_account' | 'loan_payment' | 'other'
+export type LoanPaymentType = 'fixed' | 'variable'
 
 export interface Bank {
   id: number
@@ -210,5 +211,66 @@ export interface TransferInput {
   statementId: number | null
   loanId: number | null
   description: string
+  notes: string
+}
+
+export interface Loan {
+  id: number
+  name: string
+  lender: string | null
+  currencyId: number
+  originalAmount: number
+  remainingAmount: number
+  annualRate: number | null
+  totalInstallments: number
+  paidInstallments: number
+  paymentType: LoanPaymentType
+  fixedPayment: number | null
+  paymentDay: number | null
+  startDate: string
+  endDate: string | null
+  instrumentId: number | null
+  instrumentName: string | null
+  notes: string | null
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface LoanInput {
+  name: string
+  lender: string
+  currencyId: number
+  originalAmount: number
+  annualRate: number | null
+  totalInstallments: number
+  paymentType: LoanPaymentType
+  fixedPayment: number | null
+  paymentDay: number | null
+  startDate: string
+  endDate: string
+  instrumentId: number | null
+  notes: string
+  isActive: boolean
+}
+
+export interface LoanPayment {
+  id: number
+  loanId: number
+  installmentNum: number
+  amount: number
+  principal: number | null
+  interest: number | null
+  paymentDate: string
+  isPaid: boolean
+  paidDate: string | null
+  notes: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface LoanPaymentRegisterInput {
+  paidDate: string
+  amount: number | null
   notes: string
 }

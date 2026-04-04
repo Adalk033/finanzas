@@ -14,6 +14,7 @@ const ALLOWED_CATEGORY_TYPES = new Set(['expense', 'income', 'both']);
 const ALLOWED_TRANSACTION_TYPES = new Set(['expense', 'income']);
 const ALLOWED_MSI_MONTHS = new Set([3, 6, 9, 12, 18, 24]);
 const ALLOWED_TRANSFER_TYPES = new Set(['card_payment', 'inter_account', 'loan_payment', 'other']);
+const ALLOWED_LOAN_PAYMENT_TYPES = new Set(['fixed', 'variable']);
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 let pool;
@@ -122,6 +123,14 @@ function parseInteger(value) {
 }
 
 function parsePathParameters(path) {
+  const statementMovements = path.match(/^\/statements\/(\d+)\/movements$/);
+  if (statementMovements) {
+    return {
+      resource: 'statementMovements',
+      id: Number.parseInt(statementMovements[1], 10),
+    };
+  }
+
   const categoriesWithId = path.match(/^\/categories\/(\d+)$/);
   if (categoriesWithId) {
     return { resource: 'categories', id: Number.parseInt(categoriesWithId[1], 10) };
@@ -183,6 +192,32 @@ function parsePathParameters(path) {
 
   if (path === '/transfers') {
     return { resource: 'transfers', id: null };
+  }
+
+  const loansPaymentAction = path.match(/^\/loans\/(\d+)\/payments\/(\d+)\/pay$/);
+  if (loansPaymentAction) {
+    return {
+      resource: 'loanPaymentAction',
+      id: Number.parseInt(loansPaymentAction[1], 10),
+      installmentNum: Number.parseInt(loansPaymentAction[2], 10),
+    };
+  }
+
+  const loansPayments = path.match(/^\/loans\/(\d+)\/payments$/);
+  if (loansPayments) {
+    return {
+      resource: 'loanPayments',
+      id: Number.parseInt(loansPayments[1], 10),
+    };
+  }
+
+  const loansWithId = path.match(/^\/loans\/(\d+)$/);
+  if (loansWithId) {
+    return { resource: 'loans', id: Number.parseInt(loansWithId[1], 10) };
+  }
+
+  if (path === '/loans') {
+    return { resource: 'loans', id: null };
   }
 
   return { resource: null, id: null };
@@ -688,6 +723,133 @@ function validateTransferPayload(body) {
   };
 }
 
+function validateLoanPayload(body) {
+  if (!body || typeof body !== 'object') {
+    return { ok: false, error: 'Body invalido.' };
+  }
+
+  const name = normalizeText(body.name);
+  const lender = normalizeNullableText(body.lender);
+  const currencyId = normalizeNullableInteger(body.currencyId);
+  const originalAmount = normalizeNullableNumber(body.originalAmount);
+  const annualRate = normalizeNullableNumber(body.annualRate);
+  const totalInstallments = normalizeNullableInteger(body.totalInstallments);
+  const paymentType = normalizeText(body.paymentType);
+  const fixedPayment = normalizeNullableNumber(body.fixedPayment);
+  const paymentDay = normalizeNullableInteger(body.paymentDay);
+  const startDate = normalizeNullableDate(body.startDate);
+  const endDate = normalizeNullableDate(body.endDate);
+  const instrumentId = normalizeNullableInteger(body.instrumentId);
+  const notes = normalizeNullableText(body.notes);
+
+  if (name.length < 2 || name.length > 150) {
+    return { ok: false, error: 'name debe tener entre 2 y 150 caracteres.' };
+  }
+
+  if (lender && lender.length > 100) {
+    return { ok: false, error: 'lender no puede exceder 100 caracteres.' };
+  }
+
+  if (!currencyId || currencyId < 1) {
+    return { ok: false, error: 'currencyId invalido.' };
+  }
+
+  if (originalAmount === null || originalAmount <= 0 || originalAmount > 9999999999.99) {
+    return { ok: false, error: 'originalAmount invalido.' };
+  }
+
+  if (annualRate !== null && (annualRate < 0 || annualRate > 100)) {
+    return { ok: false, error: 'annualRate invalido.' };
+  }
+
+  if (!totalInstallments || totalInstallments < 1 || totalInstallments > 600) {
+    return { ok: false, error: 'totalInstallments invalido.' };
+  }
+
+  if (!ALLOWED_LOAN_PAYMENT_TYPES.has(paymentType)) {
+    return { ok: false, error: 'paymentType invalido.' };
+  }
+
+  if (paymentType === 'fixed' && (fixedPayment === null || fixedPayment <= 0 || fixedPayment > 9999999999.99)) {
+    return { ok: false, error: 'fixedPayment invalido para paymentType fixed.' };
+  }
+
+  if (paymentType === 'variable' && (annualRate === null || annualRate <= 0)) {
+    return { ok: false, error: 'annualRate es requerido para paymentType variable.' };
+  }
+
+  if (paymentDay !== null && (paymentDay < 1 || paymentDay > 31)) {
+    return { ok: false, error: 'paymentDay invalido.' };
+  }
+
+  if (!startDate) {
+    return { ok: false, error: 'startDate invalida. Usa YYYY-MM-DD.' };
+  }
+
+  if (endDate === null && body.endDate !== undefined && body.endDate !== null && body.endDate !== '') {
+    return { ok: false, error: 'endDate invalida. Usa YYYY-MM-DD.' };
+  }
+
+  if (instrumentId !== null && instrumentId < 1) {
+    return { ok: false, error: 'instrumentId invalido.' };
+  }
+
+  if (notes && notes.length > 500) {
+    return { ok: false, error: 'notes no puede exceder 500 caracteres.' };
+  }
+
+  return {
+    ok: true,
+    value: {
+      name,
+      lender,
+      currencyId,
+      originalAmount,
+      annualRate,
+      totalInstallments,
+      paymentType,
+      fixedPayment: paymentType === 'fixed' ? fixedPayment : null,
+      paymentDay,
+      startDate,
+      endDate,
+      instrumentId,
+      notes,
+      isActive: body.isActive === undefined ? true : Boolean(body.isActive),
+    },
+  };
+}
+
+function validateLoanPaymentRegisterPayload(body) {
+  if (!body || typeof body !== 'object') {
+    return { ok: false, error: 'Body invalido.' };
+  }
+
+  const paidDate = normalizeNullableDate(body.paidDate);
+  const amount = normalizeNullableNumber(body.amount);
+  const notes = normalizeNullableText(body.notes);
+
+  if (paidDate === null && body.paidDate !== undefined && body.paidDate !== null && body.paidDate !== '') {
+    return { ok: false, error: 'paidDate invalida. Usa YYYY-MM-DD.' };
+  }
+
+  if (amount !== null && (amount <= 0 || amount > 9999999999.99)) {
+    return { ok: false, error: 'amount invalido.' };
+  }
+
+  if (notes && notes.length > 500) {
+    return { ok: false, error: 'notes no puede exceder 500 caracteres.' };
+  }
+
+  return {
+    ok: true,
+    value: {
+      paidDate,
+      amount,
+      notes,
+    },
+  };
+}
+
 function mapBank(row) {
   return {
     id: row.id,
@@ -813,6 +975,48 @@ function mapTransfer(row) {
     statementId: row.statement_id,
     loanId: row.loan_id,
     description: row.description,
+    notes: row.notes,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapLoan(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    lender: row.lender,
+    currencyId: row.currency_id,
+    originalAmount: Number(row.original_amount),
+    remainingAmount: Number(row.remaining_amount),
+    annualRate: row.annual_rate === null ? null : Number(row.annual_rate),
+    totalInstallments: row.total_installments,
+    paidInstallments: row.paid_installments,
+    paymentType: row.payment_type,
+    fixedPayment: row.fixed_payment === null ? null : Number(row.fixed_payment),
+    paymentDay: row.payment_day,
+    startDate: row.start_date,
+    endDate: row.end_date,
+    instrumentId: row.instrument_id,
+    instrumentName: row.instrument_name ?? null,
+    notes: row.notes,
+    isActive: row.is_active,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapLoanPayment(row) {
+  return {
+    id: row.id,
+    loanId: row.loan_id,
+    installmentNum: row.installment_num,
+    amount: Number(row.amount),
+    principal: row.principal === null ? null : Number(row.principal),
+    interest: row.interest === null ? null : Number(row.interest),
+    paymentDate: row.payment_date,
+    isPaid: row.is_paid,
+    paidDate: row.paid_date,
     notes: row.notes,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -971,6 +1175,77 @@ async function listStatements(instrumentId) {
   );
 
   return result.rows.map(mapCreditCardStatement);
+}
+
+async function listStatementMovements(statementId) {
+  const statementResult = await query(
+    `
+    SELECT id, instrument_id, cut_off_date
+    FROM app_gastos.credit_card_statements
+    WHERE id = $1
+    `,
+    [statementId],
+  );
+
+  if (statementResult.rows.length === 0) {
+    return { notFound: true, data: [] };
+  }
+
+  const statement = statementResult.rows[0];
+  const instrumentId = Number(statement.instrument_id);
+  const cutOffDate = String(statement.cut_off_date);
+
+  const previousCutOffResult = await query(
+    `
+    SELECT MAX(cut_off_date) AS previous_cut_off_date
+    FROM app_gastos.credit_card_statements
+    WHERE instrument_id = $1
+      AND cut_off_date < $2
+    `,
+    [instrumentId, cutOffDate],
+  );
+
+  const previousCutOffDate = previousCutOffResult.rows[0]?.previous_cut_off_date
+    ? String(previousCutOffResult.rows[0].previous_cut_off_date)
+    : addMonthsToIsoDate(cutOffDate, -1);
+
+  const movementsResult = await query(
+    `
+    SELECT
+      t.id,
+      t.instrument_id,
+      fi.name AS instrument_name,
+      fi.type AS instrument_type,
+      t.category_id,
+      c.name AS category_name,
+      t.subcategory_id,
+      sc.name AS subcategory_name,
+      t.currency_id,
+      t.type,
+      t.amount,
+      t.description,
+      t.transaction_date,
+      t.notes,
+      t.is_msi,
+      t.msi_months,
+      t.msi_monthly_amount,
+      t.msi_start_date,
+      t.msi_remaining,
+      t.created_at,
+      t.updated_at
+    FROM app_gastos.transactions t
+    INNER JOIN app_gastos.financial_instruments fi ON fi.id = t.instrument_id
+    LEFT JOIN app_gastos.categories c ON c.id = t.category_id
+    LEFT JOIN app_gastos.subcategories sc ON sc.id = t.subcategory_id
+    WHERE t.instrument_id = $1
+      AND t.transaction_date > $2
+      AND t.transaction_date <= $3
+    ORDER BY t.transaction_date DESC, t.id DESC
+    `,
+    [instrumentId, previousCutOffDate, cutOffDate],
+  );
+
+  return { notFound: false, data: movementsResult.rows.map(mapTransaction) };
 }
 
 async function createStatement(payload) {
@@ -1475,6 +1750,495 @@ async function deleteTransfer(transferId) {
     await client.query('DELETE FROM app_gastos.transfers WHERE id = $1', [transferId]);
 
     return { deleted: true };
+  });
+}
+
+function roundMoney(value) {
+  return Number(Number(value).toFixed(2));
+}
+
+function buildInstallmentDate(startDate, paymentDay, monthOffset) {
+  const movedDate = new Date(`${addMonthsToIsoDate(startDate, monthOffset)}T00:00:00.000Z`);
+  const year = movedDate.getUTCFullYear();
+  const month = movedDate.getUTCMonth() + 1;
+  const day = getBoundedDayForMonth(year, month, paymentDay);
+  return buildDateFromParts(year, month, day);
+}
+
+async function getLoanById(client, loanId) {
+  const result = await client.query(
+    `
+    SELECT
+      l.id,
+      l.name,
+      l.lender,
+      l.currency_id,
+      l.original_amount,
+      l.remaining_amount,
+      l.annual_rate,
+      l.total_installments,
+      l.paid_installments,
+      l.payment_type,
+      l.fixed_payment,
+      l.payment_day,
+      l.start_date,
+      l.end_date,
+      l.instrument_id,
+      fi.name AS instrument_name,
+      l.notes,
+      l.is_active,
+      l.created_at,
+      l.updated_at
+    FROM app_gastos.loans l
+    LEFT JOIN app_gastos.financial_instruments fi ON fi.id = l.instrument_id
+    WHERE l.id = $1
+    `,
+    [loanId],
+  );
+
+  return result.rows[0] ?? null;
+}
+
+async function validateLoanReferences(client, payload) {
+  const currencyResult = await client.query('SELECT id FROM app_gastos.currencies WHERE id = $1', [payload.currencyId]);
+  if (currencyResult.rows.length === 0) {
+    return { ok: false, error: 'currencyId no existe.' };
+  }
+
+  if (payload.instrumentId) {
+    const instrumentResult = await client.query(
+      `
+      SELECT id, type, is_active
+      FROM app_gastos.financial_instruments
+      WHERE id = $1
+      `,
+      [payload.instrumentId],
+    );
+
+    if (instrumentResult.rows.length === 0 || !instrumentResult.rows[0].is_active) {
+      return { ok: false, error: 'instrumentId no encontrado o inactivo.' };
+    }
+
+    if (instrumentResult.rows[0].type === 'credit_card') {
+      return { ok: false, error: 'instrumentId no puede ser una tarjeta de credito.' };
+    }
+  }
+
+  return { ok: true };
+}
+
+async function rebuildLoanSchedule(client, loanId, payload) {
+  await client.query('DELETE FROM app_gastos.loan_payments WHERE loan_id = $1', [loanId]);
+
+  const paymentDay = payload.paymentDay ?? Number(payload.startDate.slice(8, 10));
+  const monthlyRate = payload.annualRate === null ? 0 : payload.annualRate / 12;
+
+  let remaining = payload.originalAmount;
+  let baseVariablePayment = 0;
+
+  if (payload.paymentType === 'variable') {
+    if (monthlyRate === 0) {
+      baseVariablePayment = roundMoney(payload.originalAmount / payload.totalInstallments);
+    } else {
+      const factor = Math.pow(1 + monthlyRate, payload.totalInstallments);
+      baseVariablePayment = roundMoney(payload.originalAmount * ((monthlyRate * factor) / (factor - 1)));
+    }
+  }
+
+  for (let installment = 1; installment <= payload.totalInstallments; installment += 1) {
+    const paymentDate = buildInstallmentDate(payload.startDate, paymentDay, installment - 1);
+
+    if (payload.paymentType === 'fixed') {
+      const fixedAmount = roundMoney(payload.fixedPayment);
+      const interest = monthlyRate > 0 ? roundMoney(remaining * monthlyRate) : 0;
+      const principal = roundMoney(Math.max(0, fixedAmount - interest));
+
+      await client.query(
+        `
+        INSERT INTO app_gastos.loan_payments (
+          loan_id,
+          installment_num,
+          amount,
+          principal,
+          interest,
+          payment_date,
+          is_paid
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, FALSE)
+        `,
+        [loanId, installment, fixedAmount, principal, interest, paymentDate],
+      );
+
+      remaining = roundMoney(Math.max(0, remaining - principal));
+      continue;
+    }
+
+    const interest = roundMoney(remaining * monthlyRate);
+    const amount = installment === payload.totalInstallments ? roundMoney(remaining + interest) : baseVariablePayment;
+    const principal = roundMoney(Math.max(0, amount - interest));
+
+    await client.query(
+      `
+      INSERT INTO app_gastos.loan_payments (
+        loan_id,
+        installment_num,
+        amount,
+        principal,
+        interest,
+        payment_date,
+        is_paid
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, FALSE)
+      `,
+      [loanId, installment, amount, principal, interest, paymentDate],
+    );
+
+    remaining = roundMoney(Math.max(0, remaining - principal));
+  }
+}
+
+async function listLoans() {
+  const result = await query(
+    `
+    SELECT
+      l.id,
+      l.name,
+      l.lender,
+      l.currency_id,
+      l.original_amount,
+      l.remaining_amount,
+      l.annual_rate,
+      l.total_installments,
+      l.paid_installments,
+      l.payment_type,
+      l.fixed_payment,
+      l.payment_day,
+      l.start_date,
+      l.end_date,
+      l.instrument_id,
+      fi.name AS instrument_name,
+      l.notes,
+      l.is_active,
+      l.created_at,
+      l.updated_at
+    FROM app_gastos.loans l
+    LEFT JOIN app_gastos.financial_instruments fi ON fi.id = l.instrument_id
+    WHERE l.is_active = TRUE
+    ORDER BY l.created_at DESC, l.id DESC
+    `,
+  );
+
+  return result.rows.map(mapLoan);
+}
+
+async function createLoan(payload) {
+  return withDbTransaction(async (client) => {
+    const references = await validateLoanReferences(client, payload);
+    if (!references.ok) {
+      return { error: references.error, data: null };
+    }
+
+    const insertResult = await client.query(
+      `
+      INSERT INTO app_gastos.loans (
+        name,
+        lender,
+        currency_id,
+        original_amount,
+        remaining_amount,
+        annual_rate,
+        total_installments,
+        paid_installments,
+        payment_type,
+        fixed_payment,
+        payment_day,
+        start_date,
+        end_date,
+        instrument_id,
+        notes,
+        is_active
+      )
+      VALUES ($1, $2, $3, $4, $4, $5, $6, 0, $7, $8, $9, $10, $11, $12, $13, $14)
+      RETURNING id
+      `,
+      [
+        payload.name,
+        payload.lender,
+        payload.currencyId,
+        payload.originalAmount,
+        payload.annualRate,
+        payload.totalInstallments,
+        payload.paymentType,
+        payload.fixedPayment,
+        payload.paymentDay,
+        payload.startDate,
+        payload.endDate,
+        payload.instrumentId,
+        payload.notes,
+        payload.isActive,
+      ],
+    );
+
+    const loanId = insertResult.rows[0]?.id;
+    await rebuildLoanSchedule(client, loanId, payload);
+
+    const createdLoan = await getLoanById(client, loanId);
+    return { error: null, data: mapLoan(createdLoan) };
+  });
+}
+
+async function updateLoan(loanId, payload) {
+  return withDbTransaction(async (client) => {
+    const existingResult = await client.query(
+      `
+      SELECT id, paid_installments
+      FROM app_gastos.loans
+      WHERE id = $1
+      FOR UPDATE
+      `,
+      [loanId],
+    );
+
+    if (existingResult.rows.length === 0) {
+      return { notFound: true, error: null, data: null };
+    }
+
+    const references = await validateLoanReferences(client, payload);
+    if (!references.ok) {
+      return { notFound: false, error: references.error, data: null };
+    }
+
+    if (Number(existingResult.rows[0].paid_installments) > 0) {
+      return {
+        notFound: false,
+        error: 'No se puede modificar un prestamo que ya tiene cuotas pagadas.',
+        data: null,
+      };
+    }
+
+    await client.query(
+      `
+      UPDATE app_gastos.loans
+      SET name = $1,
+          lender = $2,
+          currency_id = $3,
+          original_amount = $4,
+          remaining_amount = $4,
+          annual_rate = $5,
+          total_installments = $6,
+          paid_installments = 0,
+          payment_type = $7,
+          fixed_payment = $8,
+          payment_day = $9,
+          start_date = $10,
+          end_date = $11,
+          instrument_id = $12,
+          notes = $13,
+          is_active = $14,
+          updated_at = NOW()
+      WHERE id = $15
+      `,
+      [
+        payload.name,
+        payload.lender,
+        payload.currencyId,
+        payload.originalAmount,
+        payload.annualRate,
+        payload.totalInstallments,
+        payload.paymentType,
+        payload.fixedPayment,
+        payload.paymentDay,
+        payload.startDate,
+        payload.endDate,
+        payload.instrumentId,
+        payload.notes,
+        payload.isActive,
+        loanId,
+      ],
+    );
+
+    await rebuildLoanSchedule(client, loanId, payload);
+
+    const updatedLoan = await getLoanById(client, loanId);
+    return { notFound: false, error: null, data: mapLoan(updatedLoan) };
+  });
+}
+
+async function softDeleteLoan(loanId) {
+  const result = await query(
+    `
+    UPDATE app_gastos.loans
+    SET is_active = FALSE,
+        updated_at = NOW()
+    WHERE id = $1
+    RETURNING id
+    `,
+    [loanId],
+  );
+
+  return result.rows.length > 0;
+}
+
+async function listLoanPayments(loanId) {
+  const loanResult = await query('SELECT id FROM app_gastos.loans WHERE id = $1', [loanId]);
+  if (loanResult.rows.length === 0) {
+    return { notFound: true, data: [] };
+  }
+
+  const paymentsResult = await query(
+    `
+    SELECT
+      id,
+      loan_id,
+      installment_num,
+      amount,
+      principal,
+      interest,
+      payment_date,
+      is_paid,
+      paid_date,
+      notes,
+      created_at,
+      updated_at
+    FROM app_gastos.loan_payments
+    WHERE loan_id = $1
+    ORDER BY installment_num ASC
+    `,
+    [loanId],
+  );
+
+  return { notFound: false, data: paymentsResult.rows.map(mapLoanPayment) };
+}
+
+async function payLoanInstallment(loanId, installmentNum, payload) {
+  return withDbTransaction(async (client) => {
+    const loanResult = await client.query(
+      `
+      SELECT
+        l.id,
+        l.name,
+        l.lender,
+        l.currency_id,
+        l.original_amount,
+        l.remaining_amount,
+        l.annual_rate,
+        l.total_installments,
+        l.paid_installments,
+        l.payment_type,
+        l.fixed_payment,
+        l.payment_day,
+        l.start_date,
+        l.end_date,
+        l.instrument_id,
+        fi.name AS instrument_name,
+        l.notes,
+        l.is_active,
+        l.created_at,
+        l.updated_at
+      FROM app_gastos.loans l
+      LEFT JOIN app_gastos.financial_instruments fi ON fi.id = l.instrument_id
+      WHERE l.id = $1
+      FOR UPDATE
+      `,
+      [loanId],
+    );
+
+    if (loanResult.rows.length === 0) {
+      return { notFound: true, error: null, data: null };
+    }
+
+    const paymentResult = await client.query(
+      `
+      SELECT
+        id,
+        loan_id,
+        installment_num,
+        amount,
+        principal,
+        interest,
+        payment_date,
+        is_paid,
+        paid_date,
+        notes,
+        created_at,
+        updated_at
+      FROM app_gastos.loan_payments
+      WHERE loan_id = $1
+        AND installment_num = $2
+      FOR UPDATE
+      `,
+      [loanId, installmentNum],
+    );
+
+    if (paymentResult.rows.length === 0) {
+      return { notFound: false, error: 'Cuota no encontrada.', data: null };
+    }
+
+    const payment = paymentResult.rows[0];
+
+    if (payment.is_paid) {
+      return { notFound: false, error: 'La cuota ya fue pagada.', data: null };
+    }
+
+    if (payload.amount !== null && Math.abs(payload.amount - Number(payment.amount)) > 0.01) {
+      return { notFound: false, error: 'El monto debe coincidir con la cuota programada.', data: null };
+    }
+
+    const paidDate = payload.paidDate ?? new Date().toISOString().slice(0, 10);
+
+    await client.query(
+      `
+      UPDATE app_gastos.loan_payments
+      SET is_paid = TRUE,
+          paid_date = $1,
+          notes = COALESCE($2, notes),
+          updated_at = NOW()
+      WHERE id = $3
+      `,
+      [paidDate, payload.notes, payment.id],
+    );
+
+    await client.query(
+      `
+      UPDATE app_gastos.loans
+      SET remaining_amount = GREATEST(0, remaining_amount - $1),
+          paid_installments = paid_installments + 1,
+          updated_at = NOW()
+      WHERE id = $2
+      `,
+      [Number(payment.amount), loanId],
+    );
+
+    const updatedLoan = await getLoanById(client, loanId);
+    const updatedPaymentResult = await client.query(
+      `
+      SELECT
+        id,
+        loan_id,
+        installment_num,
+        amount,
+        principal,
+        interest,
+        payment_date,
+        is_paid,
+        paid_date,
+        notes,
+        created_at,
+        updated_at
+      FROM app_gastos.loan_payments
+      WHERE id = $1
+      `,
+      [payment.id],
+    );
+
+    return {
+      notFound: false,
+      error: null,
+      data: {
+        loan: mapLoan(updatedLoan),
+        payment: mapLoanPayment(updatedPaymentResult.rows[0]),
+      },
+    };
   });
 }
 
@@ -2762,6 +3526,21 @@ async function handleStatementsRoute(method, path, event) {
   return null;
 }
 
+async function handleStatementMovementsRoute(method, path) {
+  const { id } = parsePathParameters(path);
+
+  if (method !== 'GET' || id === null) {
+    return null;
+  }
+
+  const movements = await listStatementMovements(id);
+  if (movements.notFound) {
+    return jsonResponse(404, { success: false, error: 'Estado de cuenta no encontrado.' });
+  }
+
+  return jsonResponse(200, { success: true, data: movements.data });
+}
+
 async function handleTransfersRoute(method, path, event) {
   const { id } = parsePathParameters(path);
 
@@ -2826,6 +3605,105 @@ async function handleTransfersRoute(method, path, event) {
     }
 
     return jsonResponse(200, { success: true, data: { id } });
+  }
+
+  return null;
+}
+
+async function handleLoansRoute(method, path, event) {
+  const parsed = parsePathParameters(path);
+
+  if (method === 'GET' && parsed.resource === 'loans' && parsed.id === null) {
+    const data = await listLoans();
+    return jsonResponse(200, { success: true, data });
+  }
+
+  if (method === 'POST' && parsed.resource === 'loans' && parsed.id === null) {
+    const bodyResult = parseJsonBody(event);
+    if (!bodyResult.ok) {
+      return jsonResponse(400, { success: false, error: bodyResult.error });
+    }
+
+    const validated = validateLoanPayload(bodyResult.value);
+    if (!validated.ok) {
+      return jsonResponse(400, { success: false, error: validated.error });
+    }
+
+    const created = await createLoan(validated.value);
+    if (created.error) {
+      return jsonResponse(400, { success: false, error: created.error });
+    }
+
+    return jsonResponse(201, { success: true, data: created.data });
+  }
+
+  if (method === 'PUT' && parsed.resource === 'loans' && parsed.id !== null) {
+    const bodyResult = parseJsonBody(event);
+    if (!bodyResult.ok) {
+      return jsonResponse(400, { success: false, error: bodyResult.error });
+    }
+
+    const validated = validateLoanPayload(bodyResult.value);
+    if (!validated.ok) {
+      return jsonResponse(400, { success: false, error: validated.error });
+    }
+
+    const updated = await updateLoan(parsed.id, validated.value);
+    if (updated.notFound) {
+      return jsonResponse(404, { success: false, error: 'Prestamo no encontrado.' });
+    }
+
+    if (updated.error) {
+      return jsonResponse(400, { success: false, error: updated.error });
+    }
+
+    return jsonResponse(200, { success: true, data: updated.data });
+  }
+
+  if (method === 'DELETE' && parsed.resource === 'loans' && parsed.id !== null) {
+    const deleted = await softDeleteLoan(parsed.id);
+    if (!deleted) {
+      return jsonResponse(404, { success: false, error: 'Prestamo no encontrado.' });
+    }
+
+    return jsonResponse(200, { success: true, data: { id: parsed.id } });
+  }
+
+  if (method === 'GET' && parsed.resource === 'loanPayments' && parsed.id !== null) {
+    const payments = await listLoanPayments(parsed.id);
+    if (payments.notFound) {
+      return jsonResponse(404, { success: false, error: 'Prestamo no encontrado.' });
+    }
+
+    return jsonResponse(200, { success: true, data: payments.data });
+  }
+
+  if (method === 'POST' && parsed.resource === 'loanPaymentAction' && parsed.id !== null) {
+    if (!parsed.installmentNum || parsed.installmentNum < 1) {
+      return jsonResponse(400, { success: false, error: 'installmentNum invalido.' });
+    }
+
+    const bodyResult = parseJsonBody(event);
+    if (!bodyResult.ok) {
+      return jsonResponse(400, { success: false, error: bodyResult.error });
+    }
+
+    const validated = validateLoanPaymentRegisterPayload(bodyResult.value);
+    if (!validated.ok) {
+      return jsonResponse(400, { success: false, error: validated.error });
+    }
+
+    const paid = await payLoanInstallment(parsed.id, parsed.installmentNum, validated.value);
+
+    if (paid.notFound) {
+      return jsonResponse(404, { success: false, error: 'Prestamo no encontrado.' });
+    }
+
+    if (paid.error) {
+      return jsonResponse(400, { success: false, error: paid.error });
+    }
+
+    return jsonResponse(200, { success: true, data: paid.data });
   }
 
   return null;
@@ -2927,8 +3805,22 @@ export async function handler(event) {
       }
     }
 
+    if (resource === 'statementMovements') {
+      const response = await handleStatementMovementsRoute(method, path);
+      if (response) {
+        return response;
+      }
+    }
+
     if (resource === 'transfers') {
       const response = await handleTransfersRoute(method, path, event);
+      if (response) {
+        return response;
+      }
+    }
+
+    if (resource === 'loans' || resource === 'loanPayments' || resource === 'loanPaymentAction') {
+      const response = await handleLoansRoute(method, path, event);
       if (response) {
         return response;
       }
