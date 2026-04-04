@@ -1864,6 +1864,257 @@
         }
       }
     },
+    "/loans": {
+      "get": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Loans list"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      },
+      "post": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/LoanPayload"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Loan created"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      }
+    },
+    "/loans/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "integer",
+          "minimum": 1
+        }
+      ],
+      "put": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "minimum": 1
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/LoanPayload"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Loan updated"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      },
+      "delete": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "minimum": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Loan deleted"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      }
+    },
+    "/loans/{id}/payments": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "integer",
+          "minimum": 1
+        }
+      ],
+      "get": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "minimum": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Loan payments list"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      }
+    },
+    "/loans/{id}/payments/{installmentNum}/pay": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "integer",
+          "minimum": 1
+        },
+        {
+          "name": "installmentNum",
+          "in": "path",
+          "required": true,
+          "type": "integer",
+          "minimum": 1
+        }
+      ],
+      "post": {
+        "security": [
+          {
+            "api_key": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "minimum": 1
+          },
+          {
+            "name": "installmentNum",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "minimum": 1
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/LoanPaymentRegisterPayload"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Loan installment paid"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "x-amazon-apigateway-request-validator": "Validate headers and body",
+        "x-amazon-apigateway-integration": {
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "type": "aws_proxy"
+        }
+      }
+    },
     "/reminders": {
       "get": {
         "security": [
@@ -2468,6 +2719,90 @@
         },
         "isPaid": {
           "type": "boolean"
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 500
+        }
+      }
+    },
+    "LoanPayload": {
+      "type": "object",
+      "required": ["name", "currencyId", "originalAmount", "totalInstallments", "paymentType", "startDate"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 150
+        },
+        "lender": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "currencyId": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "originalAmount": {
+          "type": "number",
+          "minimum": 0.01
+        },
+        "annualRate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "totalInstallments": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 600
+        },
+        "paymentType": {
+          "type": "string",
+          "enum": ["fixed", "variable"]
+        },
+        "fixedPayment": {
+          "type": "number",
+          "minimum": 0.01
+        },
+        "paymentDay": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 31
+        },
+        "startDate": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "endDate": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "instrumentId": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "isActive": {
+          "type": "boolean"
+        }
+      }
+    },
+    "LoanPaymentRegisterPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "paidDate": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "amount": {
+          "type": "number",
+          "minimum": 0.01
         },
         "notes": {
           "type": "string",
