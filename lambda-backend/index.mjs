@@ -869,10 +869,6 @@ function validateTransferPayload(body) {
     return { ok: false, error: 'loanId es requerido para loan_payment.' };
   }
 
-  if (type === 'card_payment' && !statementId) {
-    return { ok: false, error: 'statementId es requerido para card_payment.' };
-  }
-
   if (type !== 'card_payment' && statementId) {
     return { ok: false, error: 'statementId solo se permite para card_payment.' };
   }
@@ -1709,6 +1705,29 @@ function computeMsiStartDate(transactionDate, cutOffDay) {
   return `${String(nextYear).padStart(4, '0')}-${String(nextMonth).padStart(2, '0')}-${String(nextCutOffDay).padStart(2, '0')}`;
 }
 
+function computePreviousCutOffDate(referenceDate, cutOffDay) {
+  const [yearRaw, monthRaw, dayRaw] = referenceDate.split('-').map((value) => Number.parseInt(value, 10));
+  const year = yearRaw;
+  const month = monthRaw;
+  const day = dayRaw;
+
+  if (day > cutOffDay) {
+    return buildDateFromParts(year, month, cutOffDay);
+  }
+
+  let previousYear = year;
+  let previousMonth = month - 1;
+
+  if (previousMonth < 1) {
+    previousMonth = 12;
+    previousYear -= 1;
+  }
+
+  const previousMonthLastDay = new Date(Date.UTC(previousYear, previousMonth, 0)).getUTCDate();
+  const previousCutOffDay = Math.min(cutOffDay, previousMonthLastDay);
+  return buildDateFromParts(previousYear, previousMonth, previousCutOffDay);
+}
+
 function addMonthsToIsoDate(dateValue, months) {
   const date = new Date(`${dateValue}T00:00:00.000Z`);
   date.setUTCMonth(date.getUTCMonth() + months);
@@ -2005,6 +2024,107 @@ async function calculateStatementTotalAmount(client, instrumentId, cutOffDate) {
   return Number(result.rows[0]?.total ?? 0);
 }
 
+async function resolveMsiProgressReferenceDate(client, instrumentId) {
+  const result = await client.query(
+    `
+    WITH latest_statement AS (
+      SELECT MAX(cut_off_date) AS value
+      FROM app_gastos.credit_card_statements
+      WHERE instrument_id = $1
+    ),
+    latest_card_payment AS (
+      SELECT MAX(transfer_date) AS value
+      FROM app_gastos.transfers
+      WHERE destination_instrument_id = $1
+        AND type = 'card_payment'
+    )
+    SELECT GREATEST(
+      COALESCE((SELECT value FROM latest_statement), DATE '1900-01-01'),
+      COALESCE((SELECT value FROM latest_card_payment), DATE '1900-01-01')
+    ) AS reference_date
+    `,
+    [instrumentId],
+  );
+
+  const value = result.rows[0]?.reference_date;
+
+  if (!value) {
+    return null;
+  }
+
+  const isoDate = String(value);
+  return isoDate === '1900-01-01' ? null : isoDate;
+}
+
+function countElapsedMsiCycles(msiStartDate, msiMonths, cutOffDay, referenceDate) {
+  let elapsed = 0;
+
+  for (let monthOffset = 0; monthOffset < msiMonths; monthOffset += 1) {
+    const cycleDate = buildInstallmentDate(msiStartDate, cutOffDay, monthOffset);
+
+    if (cycleDate <= referenceDate) {
+      elapsed += 1;
+      continue;
+    }
+
+    break;
+  }
+
+  return elapsed;
+}
+
+async function syncMsiProgressForInstrument(client, instrumentId, explicitReferenceDate = null) {
+  const instrumentResult = await client.query(
+    `
+    SELECT id, type, cut_off_day
+    FROM app_gastos.financial_instruments
+    WHERE id = $1
+    `,
+    [instrumentId],
+  );
+
+  const instrument = instrumentResult.rows[0] ?? null;
+
+  if (!instrument || instrument.type !== 'credit_card' || !instrument.cut_off_day) {
+    return;
+  }
+
+  const referenceDate = explicitReferenceDate ?? await resolveMsiProgressReferenceDate(client, instrumentId);
+
+  if (!referenceDate) {
+    return;
+  }
+
+  const transactionsResult = await client.query(
+    `
+    SELECT id, msi_months, msi_start_date
+    FROM app_gastos.transactions
+    WHERE instrument_id = $1
+      AND is_msi = TRUE
+      AND msi_months IS NOT NULL
+      AND msi_start_date IS NOT NULL
+    `,
+    [instrumentId],
+  );
+
+  for (const transaction of transactionsResult.rows) {
+    const msiMonths = Number(transaction.msi_months);
+    const msiStartDate = String(transaction.msi_start_date);
+    const elapsedCycles = countElapsedMsiCycles(msiStartDate, msiMonths, Number(instrument.cut_off_day), referenceDate);
+    const remaining = Math.max(msiMonths - elapsedCycles, 0);
+
+    await client.query(
+      `
+      UPDATE app_gastos.transactions
+      SET msi_remaining = $1,
+          updated_at = NOW()
+      WHERE id = $2
+      `,
+      [remaining, Number(transaction.id)],
+    );
+  }
+}
+
 async function ensureAutoAdjustmentCategory(client) {
   const existing = await client.query(
     `
@@ -2106,42 +2226,62 @@ async function refreshStatementComputedAmounts(client, statementId) {
 }
 
 async function syncCardPaymentAdjustment(client, payload, transferId) {
-  if (payload.type !== 'card_payment' || !payload.statementId) {
+  if (payload.type !== 'card_payment') {
     await removeAutoAdjustmentTransaction(client, transferId);
     return;
   }
 
-  const statementResult = await client.query(
+  const destinationInstrumentResult = await client.query(
     `
-    SELECT id, instrument_id, cut_off_date
-    FROM app_gastos.credit_card_statements
+    SELECT id, cut_off_day
+    FROM app_gastos.financial_instruments
     WHERE id = $1
+      AND type = 'credit_card'
+      AND is_active = TRUE
     FOR UPDATE
     `,
-    [payload.statementId],
+    [payload.destinationInstrumentId],
   );
 
-  if (statementResult.rows.length === 0) {
+  const destinationCardInstrument = destinationInstrumentResult.rows[0] ?? null;
+
+  if (!destinationCardInstrument) {
     return;
   }
 
-  const statement = statementResult.rows[0];
-  const statementInstrumentId = Number(statement.instrument_id);
-  const cutOffDate = String(statement.cut_off_date);
+  const statementResult = payload.statementId
+    ? await client.query(
+      `
+      SELECT id, instrument_id, cut_off_date
+      FROM app_gastos.credit_card_statements
+      WHERE id = $1
+      FOR UPDATE
+      `,
+      [payload.statementId],
+    )
+    : { rows: [] };
 
-  const previousCutOffResult = await client.query(
-    `
-    SELECT MAX(cut_off_date) AS previous_cut_off_date
-    FROM app_gastos.credit_card_statements
-    WHERE instrument_id = $1
-      AND cut_off_date < $2
-    `,
-    [statementInstrumentId, cutOffDate],
-  );
+  const statement = statementResult.rows[0] ?? null;
+  const statementInstrumentId = statement ? Number(statement.instrument_id) : Number(destinationCardInstrument.id);
+  const cutOffDay = Number(destinationCardInstrument.cut_off_day ?? 1);
+  const cutOffDate = statement ? String(statement.cut_off_date) : payload.transferDate;
+  const previousCutOffDate = statement
+    ? await (async () => {
+      const previousCutOffResult = await client.query(
+        `
+        SELECT MAX(cut_off_date) AS previous_cut_off_date
+        FROM app_gastos.credit_card_statements
+        WHERE instrument_id = $1
+          AND cut_off_date < $2
+        `,
+        [statementInstrumentId, cutOffDate],
+      );
 
-  const previousCutOffDate = previousCutOffResult.rows[0]?.previous_cut_off_date
-    ? String(previousCutOffResult.rows[0].previous_cut_off_date)
-    : addMonthsToIsoDate(cutOffDate, -1);
+      return previousCutOffResult.rows[0]?.previous_cut_off_date
+        ? String(previousCutOffResult.rows[0].previous_cut_off_date)
+        : addMonthsToIsoDate(cutOffDate, -1);
+    })()
+    : computePreviousCutOffDate(payload.transferDate, cutOffDay);
 
   const marker = buildAutoAdjustmentTransferNote(transferId);
   const periodTotalResult = await client.query(
@@ -2416,6 +2556,8 @@ async function createStatement(payload) {
       ],
     );
 
+    await syncMsiProgressForInstrument(client, payload.instrumentId);
+
     const createdId = insertResult.rows[0]?.id;
     const fullResult = await client.query(
       `
@@ -2520,16 +2662,35 @@ async function updateStatement(statementId, payload) {
 }
 
 async function deleteStatement(statementId) {
-  const result = await query(
-    `
-    DELETE FROM app_gastos.credit_card_statements
-    WHERE id = $1
-    RETURNING id
-    `,
-    [statementId],
-  );
+  return withDbTransaction(async (client) => {
+    const statementResult = await client.query(
+      `
+      SELECT id, instrument_id
+      FROM app_gastos.credit_card_statements
+      WHERE id = $1
+      FOR UPDATE
+      `,
+      [statementId],
+    );
 
-  return result.rows.length > 0;
+    if (statementResult.rows.length === 0) {
+      return false;
+    }
+
+    const instrumentId = Number(statementResult.rows[0].instrument_id);
+
+    await client.query(
+      `
+      DELETE FROM app_gastos.credit_card_statements
+      WHERE id = $1
+      `,
+      [statementId],
+    );
+
+    await syncMsiProgressForInstrument(client, instrumentId);
+
+    return true;
+  });
 }
 
 async function validateTransferReferences(client, payload) {
@@ -2723,6 +2884,10 @@ async function createTransfer(payload) {
     const createdId = insertResult.rows[0]?.id;
     await syncCardPaymentAdjustment(client, payload, createdId);
 
+    if (payload.type === 'card_payment' && references.destination.type === 'credit_card') {
+      await syncMsiProgressForInstrument(client, references.destination.id);
+    }
+
     const fullResult = await client.query(
       `
       SELECT
@@ -2759,7 +2924,7 @@ async function updateTransfer(transferId, payload) {
   return withDbTransaction(async (client) => {
     const previousResult = await client.query(
       `
-      SELECT id, source_instrument_id, destination_instrument_id, amount
+      SELECT id, source_instrument_id, destination_instrument_id, amount, type
       FROM app_gastos.transfers
       WHERE id = $1
       FOR UPDATE
@@ -2822,6 +2987,14 @@ async function updateTransfer(transferId, payload) {
 
     await syncCardPaymentAdjustment(client, payload, transferId);
 
+    if (payload.type === 'card_payment' && references.destination.type === 'credit_card') {
+      await syncMsiProgressForInstrument(client, references.destination.id);
+    }
+
+    if (previous.type === 'card_payment' && previousDestination.type === 'credit_card') {
+      await syncMsiProgressForInstrument(client, previousDestination.id);
+    }
+
     const fullResult = await client.query(
       `
       SELECT
@@ -2858,7 +3031,7 @@ async function deleteTransfer(transferId) {
   return withDbTransaction(async (client) => {
     const previousResult = await client.query(
       `
-      SELECT id, source_instrument_id, destination_instrument_id, amount
+      SELECT id, source_instrument_id, destination_instrument_id, amount, type
       FROM app_gastos.transfers
       WHERE id = $1
       FOR UPDATE
@@ -2883,6 +3056,10 @@ async function deleteTransfer(transferId) {
     await removeAutoAdjustmentTransaction(client, transferId);
 
     await client.query('DELETE FROM app_gastos.transfers WHERE id = $1', [transferId]);
+
+    if (previous.type === 'card_payment' && previousDestination.type === 'credit_card') {
+      await syncMsiProgressForInstrument(client, previousDestination.id);
+    }
 
     return { deleted: true };
   });
@@ -3656,6 +3833,8 @@ async function createTransaction(payload) {
         ],
       );
 
+      await syncMsiProgressForInstrument(client, payload.instrumentId);
+
       const createdId = insertResult.rows[0]?.id;
       const fullResult = await client.query(
         `
@@ -3788,6 +3967,12 @@ async function updateTransaction(transactionId, payload) {
         ],
       );
 
+      await syncMsiProgressForInstrument(client, payload.instrumentId);
+
+      if (previous.instrument_id !== payload.instrumentId) {
+        await syncMsiProgressForInstrument(client, Number(previous.instrument_id));
+      }
+
       const fullResult = await client.query(
         `
         SELECT
@@ -3863,6 +4048,8 @@ async function deleteTransaction(transactionId) {
     }
 
     await client.query('DELETE FROM app_gastos.transactions WHERE id = $1', [transactionId]);
+
+    await syncMsiProgressForInstrument(client, Number(previous.instrument_id));
 
     return { deleted: true };
   });

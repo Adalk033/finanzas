@@ -296,11 +296,6 @@ export function useCreditCardsController({
       return
     }
 
-    if (payload.type === 'card_payment' && !payload.statementId) {
-      setTransferError('Selecciona un estado de cuenta para registrar el pago de tarjeta.')
-      return
-    }
-
     if (editingTransferId !== null) {
       const updated = await apiClient.updateTransfer(editingTransferId, payload)
 
