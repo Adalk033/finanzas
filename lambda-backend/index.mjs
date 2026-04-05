@@ -2545,7 +2545,11 @@ async function listStatementMovements(statementId) {
 
   const statement = statementResult.rows[0];
   const instrumentId = Number(statement.instrument_id);
-  const cutOffDate = String(statement.cut_off_date);
+  const cutOffDate = normalizeDbDateToIso(statement.cut_off_date);
+
+  if (!cutOffDate) {
+    throw new Error('Invalid statement cut-off date.');
+  }
 
   const previousCutOffResult = await query(
     `
@@ -2557,9 +2561,8 @@ async function listStatementMovements(statementId) {
     [instrumentId, cutOffDate],
   );
 
-  const previousCutOffDate = previousCutOffResult.rows[0]?.previous_cut_off_date
-    ? String(previousCutOffResult.rows[0].previous_cut_off_date)
-    : addMonthsToIsoDate(cutOffDate, -1);
+  const previousCutOffDate = normalizeDbDateToIso(previousCutOffResult.rows[0]?.previous_cut_off_date)
+    ?? addMonthsToIsoDate(cutOffDate, -1);
 
   const movementsResult = await query(
     `
@@ -5640,8 +5643,7 @@ async function createSimulation(payload) {
       ],
     );
 
-    const created = await getSimulationById(insertResult.rows[0].id);
-    return { error: null, data: mapSimulation(created) };
+    return { error: null, data: mapSimulation(insertResult.rows[0]) };
   });
 }
 
