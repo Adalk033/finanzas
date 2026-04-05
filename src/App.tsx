@@ -199,6 +199,7 @@ export function App() {
               selectedTransactionInstrument={transactionsController.selectedTransactionInstrument}
               transactionSubcategoryOptions={transactionsController.transactionSubcategoryOptions}
               transactionFilters={transactionsController.transactionFilters}
+              excludeFromBalance={transactionsController.excludeFromBalance}
               showAutoAdjustmentsOnly={transactionsController.showAutoAdjustmentsOnly}
               autoAdjustmentCount={transactionsController.autoAdjustmentCount}
               transactions={transactionsController.transactions}
@@ -215,6 +216,7 @@ export function App() {
               }}
               onResetTransactionForm={transactionsController.resetTransactionForm}
               onFiltersChange={transactionsController.setTransactionFilters}
+              onExcludeFromBalanceChange={transactionsController.setExcludeFromBalance}
               onToggleAutoAdjustmentsOnly={transactionsController.setShowAutoAdjustmentsOnly}
               onFiltersSubmit={transactionsController.handleTransactionFiltersSubmit}
               onClearFilters={() => {

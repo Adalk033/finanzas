@@ -45,11 +45,11 @@ export function useCreditCardsController({
   const [isStatementMovementsLoading, setIsStatementMovementsLoading] = useState(false)
 
   const creditCardInstruments = useMemo(() => {
-    return instruments.filter((instrument) => instrument.type === 'credit_card')
+    return instruments.filter((instrument) => instrument.type === 'credit_card' && instrument.isActive)
   }, [instruments])
 
   const sourceTransferInstruments = useMemo(() => {
-    return instruments.filter((instrument) => instrument.type !== 'credit_card')
+    return instruments.filter((instrument) => instrument.type !== 'credit_card' && instrument.isActive)
   }, [instruments])
 
   const selectedStatementInstrumentId = statementForm.instrumentId === 0 ? (creditCardInstruments[0]?.id ?? 0) : statementForm.instrumentId
@@ -77,7 +77,9 @@ export function useCreditCardsController({
   }, [creditCardInstruments])
 
   const totalAvailableCredit = useMemo(() => {
-    return creditCardInstruments.reduce((accumulator, instrument) => accumulator + (instrument.availableCredit ?? 0), 0)
+    return creditCardInstruments.reduce((accumulator, instrument) => {
+      return accumulator + ((instrument.creditLimit ?? 0) - (instrument.currentBalance ?? 0))
+    }, 0)
   }, [creditCardInstruments])
 
   const availableStatementsForDestination = useMemo(() => {
@@ -293,11 +295,6 @@ export function useCreditCardsController({
 
     if (payload.amount <= 0) {
       setTransferError('Ingresa un monto mayor a cero.')
-      return
-    }
-
-    if (payload.type === 'card_payment' && !payload.statementId) {
-      setTransferError('Selecciona un estado de cuenta para registrar el pago de tarjeta.')
       return
     }
 

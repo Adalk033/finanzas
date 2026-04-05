@@ -273,9 +273,8 @@ export function CreditCardsSection({
                         const rawValue = event.target.value
                         onTransferFormChange({ ...transferForm, statementId: rawValue ? Number(rawValue) : null })
                       }}
-                      required
                     >
-                      <option value="">Selecciona estado</option>
+                      <option value="">Sin estado de cuenta</option>
                       {statements
                         .filter((statement) => statement.instrumentId === selectedTransferDestinationInstrumentId)
                         .map((statement) => (
@@ -284,6 +283,7 @@ export function CreditCardsSection({
                           </option>
                         ))}
                     </select>
+                    <p className="form-grid__hint">Opcional. Si no eliges uno, el abono se aplicara por fecha de pago y corte.</p>
                   </>
                 ) : null}
 

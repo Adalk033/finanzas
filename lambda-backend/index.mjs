@@ -22,6 +22,7 @@ const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const AUTO_ADJUSTMENT_CATEGORY_NAME = 'Otros (por ajuste)';
 const AUTO_ADJUSTMENT_DESCRIPTION = 'Otros (por ajuste)';
 const AUTO_ADJUSTMENT_TRANSFER_NOTE_PREFIX = 'AUTO_ADJUSTMENT_TRANSFER:';
+const NO_BALANCE_IMPACT_NOTE_PREFIX = 'NO_BALANCE_IMPACT:';
 const AUTO_SUBSCRIPTION_CHARGE_NOTE_PREFIX = 'AUTO_SUBSCRIPTION_CHARGE:';
 const SUBSCRIPTION_CHARGE_DESCRIPTION_PREFIX = 'Cargo automatico: ';
 const MAX_SUBSCRIPTION_JOBS_PER_RUN = 100;
@@ -53,6 +54,8 @@ function logUnhandledError(event, method, path, error) {
     path,
     errorCode: error?.code,
     errorMessage: error instanceof Error ? error.message : String(error),
+    errorStack: error instanceof Error ? error.stack : undefined,
+    errorDetail: JSON.stringify(error),
   });
 }
 
@@ -135,6 +138,37 @@ async function ensureOperationalTables() {
 
   await query(
     'CREATE INDEX IF NOT EXISTS idx_subscription_jobs_next_run ON app_gastos.subscription_jobs(next_run_date)',
+  );
+
+  // Keep transaction-related columns aligned in environments with legacy schemas.
+  await query(
+    `
+    ALTER TABLE app_gastos.financial_instruments
+    ADD COLUMN IF NOT EXISTS available_credit NUMERIC(12,2)
+    `,
+  );
+
+  await query(
+    `
+    ALTER TABLE app_gastos.transactions
+    ADD COLUMN IF NOT EXISTS is_msi BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS msi_months INT,
+    ADD COLUMN IF NOT EXISTS msi_monthly_amount NUMERIC(12,2),
+    ADD COLUMN IF NOT EXISTS msi_start_date DATE,
+    ADD COLUMN IF NOT EXISTS msi_remaining INT
+    `,
+  );
+
+  await query('CREATE INDEX IF NOT EXISTS idx_transactions_msi ON app_gastos.transactions(is_msi)');
+
+  await query(
+    `
+    UPDATE app_gastos.financial_instruments
+    SET available_credit = GREATEST(COALESCE(credit_limit, 0) - COALESCE(current_balance, 0), 0),
+        updated_at = NOW()
+    WHERE type = 'credit_card'
+      AND available_credit IS NULL
+    `,
   );
 
   operationalTablesEnsured = true;
@@ -440,6 +474,34 @@ function normalizeNullableDate(value) {
   return raw;
 }
 
+function normalizeDbDateToIso(value) {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) {
+      return null;
+    }
+
+    return value.toISOString().slice(0, 10);
+  }
+
+  const raw = String(value).trim();
+
+  if (ISO_DATE_PATTERN.test(raw)) {
+    return raw;
+  }
+
+  const parsed = new Date(raw);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed.toISOString().slice(0, 10);
+}
+
 function validateBankPayload(body) {
   if (!body || typeof body !== 'object') {
     return { ok: false, error: 'Body invalido.' };
@@ -648,8 +710,10 @@ function validateTransactionPayload(body) {
   }
 
   const instrumentId = normalizeNullableInteger(body.instrumentId);
-  const categoryId = normalizeNullableInteger(body.categoryId);
-  const subcategoryId = normalizeNullableInteger(body.subcategoryId);
+  const rawCategoryId = normalizeNullableInteger(body.categoryId);
+  const rawSubcategoryId = normalizeNullableInteger(body.subcategoryId);
+  const categoryId = rawCategoryId !== null && rawCategoryId > 0 ? rawCategoryId : null;
+  const subcategoryId = rawSubcategoryId !== null && rawSubcategoryId > 0 ? rawSubcategoryId : null;
   const currencyId = normalizeNullableInteger(body.currencyId);
   const type = normalizeText(body.type);
   const amount = normalizeNullableNumber(body.amount);
@@ -671,8 +735,8 @@ function validateTransactionPayload(body) {
     return { ok: false, error: 'type invalido.' };
   }
 
-  if (amount === null || amount <= 0 || amount > 9999999999.99) {
-    return { ok: false, error: 'amount invalido.' };
+  if (amount === null || typeof amount !== 'number' || amount <= 0 || amount > 9999999999.99) {
+    return { ok: false, error: 'amount invalido. Debe ser un numero mayor a 0.' };
   }
 
   if (!transactionDate) {
@@ -695,8 +759,13 @@ function validateTransactionPayload(body) {
     return { ok: false, error: 'MSI solo aplica para gastos.' };
   }
 
-  if (isMsi && (!msiMonths || msiMonths < 1 || msiMonths > 120)) {
-    return { ok: false, error: 'msiMonths debe estar entre 1 y 120 meses.' };
+  if (isMsi) {
+    if (!msiMonths) {
+      return { ok: false, error: 'msiMonths es requerido cuando isMsi es verdadero.' };
+    }
+    if (!Number.isInteger(msiMonths) || msiMonths < 1 || msiMonths > 120) {
+      return { ok: false, error: 'msiMonths debe ser un entero entre 1 y 120 meses.' };
+    }
   }
 
   return {
@@ -859,10 +928,6 @@ function validateTransferPayload(body) {
 
   if (type === 'loan_payment' && !loanId) {
     return { ok: false, error: 'loanId es requerido para loan_payment.' };
-  }
-
-  if (type === 'card_payment' && !statementId) {
-    return { ok: false, error: 'statementId es requerido para card_payment.' };
   }
 
   if (type !== 'card_payment' && statementId) {
@@ -1291,8 +1356,13 @@ function validateSimulationPayload(body) {
     return { ok: false, error: 'instrumentId invalido.' };
   }
 
-  if (scenarioType === 'msi' && (!msiMonths || msiMonths < 1 || msiMonths > 120)) {
-    return { ok: false, error: 'msiMonths debe estar entre 1 y 120 meses para escenario MSI.' };
+  if (scenarioType === 'msi') {
+    if (!msiMonths) {
+      return { ok: false, error: 'msiMonths es requerido para escenario MSI.' };
+    }
+    if (!Number.isInteger(msiMonths) || msiMonths < 1 || msiMonths > 120) {
+      return { ok: false, error: 'msiMonths debe ser un entero entre 1 y 120 meses.' };
+    }
   }
 
   if (scenarioType === 'loan' && (!loanMonths || loanMonths < 1 || loanMonths > 600)) {
@@ -1696,14 +1766,49 @@ function computeMsiStartDate(transactionDate, cutOffDay) {
   return `${String(nextYear).padStart(4, '0')}-${String(nextMonth).padStart(2, '0')}-${String(nextCutOffDay).padStart(2, '0')}`;
 }
 
+function computePreviousCutOffDate(referenceDate, cutOffDay) {
+  const [yearRaw, monthRaw, dayRaw] = referenceDate.split('-').map((value) => Number.parseInt(value, 10));
+  const year = yearRaw;
+  const month = monthRaw;
+  const day = dayRaw;
+
+  if (day > cutOffDay) {
+    return buildDateFromParts(year, month, cutOffDay);
+  }
+
+  let previousYear = year;
+  let previousMonth = month - 1;
+
+  if (previousMonth < 1) {
+    previousMonth = 12;
+    previousYear -= 1;
+  }
+
+  const previousMonthLastDay = new Date(Date.UTC(previousYear, previousMonth, 0)).getUTCDate();
+  const previousCutOffDay = Math.min(cutOffDay, previousMonthLastDay);
+  return buildDateFromParts(previousYear, previousMonth, previousCutOffDay);
+}
+
 function addMonthsToIsoDate(dateValue, months) {
-  const date = new Date(`${dateValue}T00:00:00.000Z`);
+  const normalizedDate = normalizeDbDateToIso(dateValue);
+
+  if (!normalizedDate) {
+    throw new Error('Invalid ISO date value.');
+  }
+
+  const date = new Date(`${normalizedDate}T00:00:00.000Z`);
   date.setUTCMonth(date.getUTCMonth() + months);
   return date.toISOString().slice(0, 10);
 }
 
 function addDaysToIsoDate(dateValue, days) {
-  const date = new Date(`${dateValue}T00:00:00.000Z`);
+  const normalizedDate = normalizeDbDateToIso(dateValue);
+
+  if (!normalizedDate) {
+    throw new Error('Invalid ISO date value.');
+  }
+
+  const date = new Date(`${normalizedDate}T00:00:00.000Z`);
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
 }
@@ -1992,6 +2097,117 @@ async function calculateStatementTotalAmount(client, instrumentId, cutOffDate) {
   return Number(result.rows[0]?.total ?? 0);
 }
 
+async function resolveMsiProgressReferenceDate(client, instrumentId) {
+  const result = await client.query(
+    `
+    WITH latest_statement AS (
+      SELECT MAX(cut_off_date) AS value
+      FROM app_gastos.credit_card_statements
+      WHERE instrument_id = $1
+    ),
+    latest_card_payment AS (
+      SELECT MAX(transfer_date) AS value
+      FROM app_gastos.transfers
+      WHERE destination_instrument_id = $1
+        AND type = 'card_payment'
+    )
+    SELECT GREATEST(
+      COALESCE((SELECT value FROM latest_statement), DATE '1900-01-01'),
+      COALESCE((SELECT value FROM latest_card_payment), DATE '1900-01-01')
+    ) AS reference_date
+    `,
+    [instrumentId],
+  );
+
+  const value = result.rows[0]?.reference_date;
+
+  if (!value) {
+    return null;
+  }
+
+  const isoDate = normalizeDbDateToIso(value);
+
+  if (!isoDate) {
+    return null;
+  }
+
+  return isoDate === '1900-01-01' ? null : isoDate;
+}
+
+function countElapsedMsiCycles(msiStartDate, msiMonths, cutOffDay, referenceDate) {
+  let elapsed = 0;
+
+  for (let monthOffset = 0; monthOffset < msiMonths; monthOffset += 1) {
+    const cycleDate = buildInstallmentDate(msiStartDate, cutOffDay, monthOffset);
+
+    if (cycleDate <= referenceDate) {
+      elapsed += 1;
+      continue;
+    }
+
+    break;
+  }
+
+  return elapsed;
+}
+
+async function syncMsiProgressForInstrument(client, instrumentId, explicitReferenceDate = null) {
+  const instrumentResult = await client.query(
+    `
+    SELECT id, type, cut_off_day
+    FROM app_gastos.financial_instruments
+    WHERE id = $1
+    `,
+    [instrumentId],
+  );
+
+  const instrument = instrumentResult.rows[0] ?? null;
+
+  if (!instrument || instrument.type !== 'credit_card' || !instrument.cut_off_day) {
+    return;
+  }
+
+  const referenceDate = explicitReferenceDate ?? await resolveMsiProgressReferenceDate(client, instrumentId);
+
+  if (!referenceDate) {
+    return;
+  }
+
+  const transactionsResult = await client.query(
+    `
+    SELECT id, msi_months, msi_start_date
+    FROM app_gastos.transactions
+    WHERE instrument_id = $1
+      AND is_msi = TRUE
+      AND msi_months IS NOT NULL
+      AND msi_start_date IS NOT NULL
+    `,
+    [instrumentId],
+  );
+
+  for (const transaction of transactionsResult.rows) {
+    const msiMonths = Number(transaction.msi_months);
+    const msiStartDate = normalizeDbDateToIso(transaction.msi_start_date);
+
+    if (!msiStartDate || !Number.isInteger(msiMonths) || msiMonths < 1) {
+      continue;
+    }
+
+    const elapsedCycles = countElapsedMsiCycles(msiStartDate, msiMonths, Number(instrument.cut_off_day), referenceDate);
+    const remaining = Math.max(msiMonths - elapsedCycles, 0);
+
+    await client.query(
+      `
+      UPDATE app_gastos.transactions
+      SET msi_remaining = $1,
+          updated_at = NOW()
+      WHERE id = $2
+      `,
+      [remaining, Number(transaction.id)],
+    );
+  }
+}
+
 async function ensureAutoAdjustmentCategory(client) {
   const existing = await client.query(
     `
@@ -2093,42 +2309,62 @@ async function refreshStatementComputedAmounts(client, statementId) {
 }
 
 async function syncCardPaymentAdjustment(client, payload, transferId) {
-  if (payload.type !== 'card_payment' || !payload.statementId) {
+  if (payload.type !== 'card_payment') {
     await removeAutoAdjustmentTransaction(client, transferId);
     return;
   }
 
-  const statementResult = await client.query(
+  const destinationInstrumentResult = await client.query(
     `
-    SELECT id, instrument_id, cut_off_date
-    FROM app_gastos.credit_card_statements
+    SELECT id, cut_off_day
+    FROM app_gastos.financial_instruments
     WHERE id = $1
+      AND type = 'credit_card'
+      AND is_active = TRUE
     FOR UPDATE
     `,
-    [payload.statementId],
+    [payload.destinationInstrumentId],
   );
 
-  if (statementResult.rows.length === 0) {
+  const destinationCardInstrument = destinationInstrumentResult.rows[0] ?? null;
+
+  if (!destinationCardInstrument) {
     return;
   }
 
-  const statement = statementResult.rows[0];
-  const statementInstrumentId = Number(statement.instrument_id);
-  const cutOffDate = String(statement.cut_off_date);
+  const statementResult = payload.statementId
+    ? await client.query(
+      `
+      SELECT id, instrument_id, cut_off_date
+      FROM app_gastos.credit_card_statements
+      WHERE id = $1
+      FOR UPDATE
+      `,
+      [payload.statementId],
+    )
+    : { rows: [] };
 
-  const previousCutOffResult = await client.query(
-    `
-    SELECT MAX(cut_off_date) AS previous_cut_off_date
-    FROM app_gastos.credit_card_statements
-    WHERE instrument_id = $1
-      AND cut_off_date < $2
-    `,
-    [statementInstrumentId, cutOffDate],
-  );
+  const statement = statementResult.rows[0] ?? null;
+  const statementInstrumentId = statement ? Number(statement.instrument_id) : Number(destinationCardInstrument.id);
+  const cutOffDay = Number(destinationCardInstrument.cut_off_day ?? 1);
+  const cutOffDate = statement ? String(statement.cut_off_date) : payload.transferDate;
+  const previousCutOffDate = statement
+    ? await (async () => {
+      const previousCutOffResult = await client.query(
+        `
+        SELECT MAX(cut_off_date) AS previous_cut_off_date
+        FROM app_gastos.credit_card_statements
+        WHERE instrument_id = $1
+          AND cut_off_date < $2
+        `,
+        [statementInstrumentId, cutOffDate],
+      );
 
-  const previousCutOffDate = previousCutOffResult.rows[0]?.previous_cut_off_date
-    ? String(previousCutOffResult.rows[0].previous_cut_off_date)
-    : addMonthsToIsoDate(cutOffDate, -1);
+      return previousCutOffResult.rows[0]?.previous_cut_off_date
+        ? String(previousCutOffResult.rows[0].previous_cut_off_date)
+        : addMonthsToIsoDate(cutOffDate, -1);
+    })()
+    : computePreviousCutOffDate(payload.transferDate, cutOffDay);
 
   const marker = buildAutoAdjustmentTransferNote(transferId);
   const periodTotalResult = await client.query(
@@ -2309,7 +2545,11 @@ async function listStatementMovements(statementId) {
 
   const statement = statementResult.rows[0];
   const instrumentId = Number(statement.instrument_id);
-  const cutOffDate = String(statement.cut_off_date);
+  const cutOffDate = normalizeDbDateToIso(statement.cut_off_date);
+
+  if (!cutOffDate) {
+    throw new Error('Invalid statement cut-off date.');
+  }
 
   const previousCutOffResult = await query(
     `
@@ -2321,9 +2561,8 @@ async function listStatementMovements(statementId) {
     [instrumentId, cutOffDate],
   );
 
-  const previousCutOffDate = previousCutOffResult.rows[0]?.previous_cut_off_date
-    ? String(previousCutOffResult.rows[0].previous_cut_off_date)
-    : addMonthsToIsoDate(cutOffDate, -1);
+  const previousCutOffDate = normalizeDbDateToIso(previousCutOffResult.rows[0]?.previous_cut_off_date)
+    ?? addMonthsToIsoDate(cutOffDate, -1);
 
   const movementsResult = await query(
     `
@@ -2402,6 +2641,8 @@ async function createStatement(payload) {
         noInterestPayment,
       ],
     );
+
+    await syncMsiProgressForInstrument(client, payload.instrumentId);
 
     const createdId = insertResult.rows[0]?.id;
     const fullResult = await client.query(
@@ -2507,16 +2748,35 @@ async function updateStatement(statementId, payload) {
 }
 
 async function deleteStatement(statementId) {
-  const result = await query(
-    `
-    DELETE FROM app_gastos.credit_card_statements
-    WHERE id = $1
-    RETURNING id
-    `,
-    [statementId],
-  );
+  return withDbTransaction(async (client) => {
+    const statementResult = await client.query(
+      `
+      SELECT id, instrument_id
+      FROM app_gastos.credit_card_statements
+      WHERE id = $1
+      FOR UPDATE
+      `,
+      [statementId],
+    );
 
-  return result.rows.length > 0;
+    if (statementResult.rows.length === 0) {
+      return false;
+    }
+
+    const instrumentId = Number(statementResult.rows[0].instrument_id);
+
+    await client.query(
+      `
+      DELETE FROM app_gastos.credit_card_statements
+      WHERE id = $1
+      `,
+      [statementId],
+    );
+
+    await syncMsiProgressForInstrument(client, instrumentId);
+
+    return true;
+  });
 }
 
 async function validateTransferReferences(client, payload) {
@@ -2710,6 +2970,10 @@ async function createTransfer(payload) {
     const createdId = insertResult.rows[0]?.id;
     await syncCardPaymentAdjustment(client, payload, createdId);
 
+    if (payload.type === 'card_payment' && references.destination.type === 'credit_card') {
+      await syncMsiProgressForInstrument(client, references.destination.id);
+    }
+
     const fullResult = await client.query(
       `
       SELECT
@@ -2746,7 +3010,7 @@ async function updateTransfer(transferId, payload) {
   return withDbTransaction(async (client) => {
     const previousResult = await client.query(
       `
-      SELECT id, source_instrument_id, destination_instrument_id, amount
+      SELECT id, source_instrument_id, destination_instrument_id, amount, type
       FROM app_gastos.transfers
       WHERE id = $1
       FOR UPDATE
@@ -2809,6 +3073,14 @@ async function updateTransfer(transferId, payload) {
 
     await syncCardPaymentAdjustment(client, payload, transferId);
 
+    if (payload.type === 'card_payment' && references.destination.type === 'credit_card') {
+      await syncMsiProgressForInstrument(client, references.destination.id);
+    }
+
+    if (previous.type === 'card_payment' && previousDestination.type === 'credit_card') {
+      await syncMsiProgressForInstrument(client, previousDestination.id);
+    }
+
     const fullResult = await client.query(
       `
       SELECT
@@ -2845,7 +3117,7 @@ async function deleteTransfer(transferId) {
   return withDbTransaction(async (client) => {
     const previousResult = await client.query(
       `
-      SELECT id, source_instrument_id, destination_instrument_id, amount
+      SELECT id, source_instrument_id, destination_instrument_id, amount, type
       FROM app_gastos.transfers
       WHERE id = $1
       FOR UPDATE
@@ -2870,6 +3142,10 @@ async function deleteTransfer(transferId) {
     await removeAutoAdjustmentTransaction(client, transferId);
 
     await client.query('DELETE FROM app_gastos.transfers WHERE id = $1', [transferId]);
+
+    if (previous.type === 'card_payment' && previousDestination.type === 'credit_card') {
+      await syncMsiProgressForInstrument(client, previousDestination.id);
+    }
 
     return { deleted: true };
   });
@@ -3468,6 +3744,7 @@ function buildMsiData(payload, instrument) {
   if (!payload.isMsi) {
     return {
       msiMonths: null,
+      msiMonthlyAmount: null,
       msiStartDate: null,
       msiRemaining: null,
     };
@@ -3475,12 +3752,22 @@ function buildMsiData(payload, instrument) {
 
   const msiMonths = payload.msiMonths;
   const cutOffDay = instrument.cut_off_day ?? 1;
+  const msiMonthlyAmount = msiMonths > 0 ? roundMoney(payload.amount / msiMonths) : null;
 
   return {
     msiMonths,
+    msiMonthlyAmount,
     msiStartDate: computeMsiStartDate(payload.transactionDate, cutOffDay),
     msiRemaining: msiMonths,
   };
+}
+
+function transactionImpactsBalanceByNotes(notes) {
+  if (typeof notes !== 'string') {
+    return true;
+  }
+
+  return !notes.startsWith(NO_BALANCE_IMPACT_NOTE_PREFIX);
 }
 
 async function listTransactions(filters) {
@@ -3562,225 +3849,277 @@ async function listTransactions(filters) {
 }
 
 async function createTransaction(payload) {
-  return withDbTransaction(async (client) => {
-    const references = await validateTransactionReferences(client, payload);
+  try {
+    return await withDbTransaction(async (client) => {
+      const references = await validateTransactionReferences(client, payload);
 
-    if (!references.ok) {
-      return { error: references.error, data: null };
+      if (!references.ok) {
+        return { error: references.error, data: null };
+      }
+
+      const instrument = references.instrument;
+      const msiData = buildMsiData(payload, instrument);
+      const impactsBalance = transactionImpactsBalanceByNotes(payload.notes);
+
+      if (impactsBalance) {
+        await applyInstrumentImpact(client, instrument, payload.type, payload.amount, 'apply');
+      }
+
+      const insertResult = await client.query(
+        `
+        INSERT INTO app_gastos.transactions (
+          instrument_id,
+          category_id,
+          subcategory_id,
+          currency_id,
+          type,
+          amount,
+          description,
+          transaction_date,
+          notes,
+          is_msi,
+          msi_months,
+          msi_monthly_amount,
+          msi_start_date,
+          msi_remaining
+        )
+        VALUES (
+          $1,
+          $2,
+          $3,
+          $4,
+          $5,
+          $6,
+          $7,
+          $8,
+          $9,
+          $10,
+          $11,
+          $12,
+          $13,
+          $14
+        )
+        RETURNING id
+        `,
+        [
+          payload.instrumentId,
+          payload.categoryId,
+          payload.subcategoryId,
+          payload.currencyId,
+          payload.type,
+          payload.amount,
+          payload.description,
+          payload.transactionDate,
+          payload.notes,
+          payload.isMsi,
+          msiData.msiMonths,
+          msiData.msiMonthlyAmount,
+          msiData.msiStartDate,
+          msiData.msiRemaining,
+        ],
+      );
+
+      await syncMsiProgressForInstrument(client, payload.instrumentId);
+
+      const createdId = insertResult.rows[0]?.id;
+      const fullResult = await client.query(
+        `
+        SELECT
+          t.id,
+          t.instrument_id,
+          fi.name AS instrument_name,
+          fi.type AS instrument_type,
+          t.category_id,
+          c.name AS category_name,
+          t.subcategory_id,
+          sc.name AS subcategory_name,
+          t.currency_id,
+          t.type,
+          t.amount,
+          t.description,
+          t.transaction_date,
+          t.notes,
+          t.is_msi,
+          t.msi_months,
+          t.msi_monthly_amount,
+          t.msi_start_date,
+          t.msi_remaining,
+          t.created_at,
+          t.updated_at
+        FROM app_gastos.transactions t
+        INNER JOIN app_gastos.financial_instruments fi ON fi.id = t.instrument_id
+        LEFT JOIN app_gastos.categories c ON c.id = t.category_id
+        LEFT JOIN app_gastos.subcategories sc ON sc.id = t.subcategory_id
+        WHERE t.id = $1
+        `,
+        [createdId],
+      );
+
+      return { error: null, data: mapTransaction(fullResult.rows[0]) };
+    });
+  } catch (dbError) {
+    console.error('[createTransaction] database error:', {
+      message: dbError instanceof Error ? dbError.message : String(dbError),
+      code: dbError?.code,
+      detail: dbError?.detail,
+      payload: { ...payload, description: payload.description?.slice(0, 50) },
+    });
+
+    let errorMessage = 'No se pudo crear la transaccion. Verifica los datos e intenta nuevamente.';
+
+    if (dbError?.code === '23505') {
+      errorMessage = 'Ya existe un registro con esos datos.';
+    } else if (dbError?.code === '23503') {
+      errorMessage = 'Uno o mas IDs relacionados no existen (instrumento, categoria, subcategoria o moneda).';
+    } else if (dbError?.code === '42703' || dbError?.code === '42P01') {
+      errorMessage = 'El esquema de base de datos esta desactualizado para transacciones. Vuelve a intentar en unos segundos.';
     }
 
-    const instrument = references.instrument;
-    const msiData = buildMsiData(payload, instrument);
-
-    await applyInstrumentImpact(client, instrument, payload.type, payload.amount, 'apply');
-
-    const insertResult = await client.query(
-      `
-      INSERT INTO app_gastos.transactions (
-        instrument_id,
-        category_id,
-        subcategory_id,
-        currency_id,
-        type,
-        amount,
-        description,
-        transaction_date,
-        notes,
-        is_msi,
-        msi_months,
-        msi_monthly_amount,
-        msi_start_date,
-        msi_remaining
-      )
-      VALUES (
-        $1,
-        $2,
-        $3,
-        $4,
-        $5,
-        $6,
-        $7,
-        $8,
-        $9,
-        $10,
-        $11,
-        CASE WHEN $10 THEN ROUND(($6::numeric / $11::numeric), 2) ELSE NULL END,
-        $12,
-        $13
-      )
-      RETURNING id
-      `,
-      [
-        payload.instrumentId,
-        payload.categoryId,
-        payload.subcategoryId,
-        payload.currencyId,
-        payload.type,
-        payload.amount,
-        payload.description,
-        payload.transactionDate,
-        payload.notes,
-        payload.isMsi,
-        msiData.msiMonths,
-        msiData.msiStartDate,
-        msiData.msiRemaining,
-      ],
-    );
-
-    const createdId = insertResult.rows[0]?.id;
-    const fullResult = await client.query(
-      `
-      SELECT
-        t.id,
-        t.instrument_id,
-        fi.name AS instrument_name,
-        fi.type AS instrument_type,
-        t.category_id,
-        c.name AS category_name,
-        t.subcategory_id,
-        sc.name AS subcategory_name,
-        t.currency_id,
-        t.type,
-        t.amount,
-        t.description,
-        t.transaction_date,
-        t.notes,
-        t.is_msi,
-        t.msi_months,
-        t.msi_monthly_amount,
-        t.msi_start_date,
-        t.msi_remaining,
-        t.created_at,
-        t.updated_at
-      FROM app_gastos.transactions t
-      INNER JOIN app_gastos.financial_instruments fi ON fi.id = t.instrument_id
-      LEFT JOIN app_gastos.categories c ON c.id = t.category_id
-      LEFT JOIN app_gastos.subcategories sc ON sc.id = t.subcategory_id
-      WHERE t.id = $1
-      `,
-      [createdId],
-    );
-
-    return { error: null, data: mapTransaction(fullResult.rows[0]) };
-  });
+    return { error: errorMessage, data: null };
+  }
 }
 
 async function updateTransaction(transactionId, payload) {
-  return withDbTransaction(async (client) => {
-    const previousResult = await client.query(
-      `
-      SELECT id, instrument_id, type, amount
-      FROM app_gastos.transactions
-      WHERE id = $1
-      FOR UPDATE
-      `,
-      [transactionId],
-    );
+  try {
+    return await withDbTransaction(async (client) => {
+      const previousResult = await client.query(
+        `
+        SELECT id, instrument_id, type, amount, notes
+        FROM app_gastos.transactions
+        WHERE id = $1
+        FOR UPDATE
+        `,
+        [transactionId],
+      );
 
-    if (previousResult.rows.length === 0) {
-      return { notFound: true, error: null, data: null };
-    }
+      if (previousResult.rows.length === 0) {
+        return { notFound: true, error: null, data: null };
+      }
 
-    const previous = previousResult.rows[0];
-    const previousInstrument = await getInstrumentForUpdate(client, previous.instrument_id);
+      const previous = previousResult.rows[0];
+      const previousInstrument = await getInstrumentForUpdate(client, previous.instrument_id);
 
-    if (!previousInstrument || !previousInstrument.is_active) {
-      return { notFound: true, error: null, data: null };
-    }
+      if (!previousInstrument || !previousInstrument.is_active) {
+        return { notFound: true, error: null, data: null };
+      }
 
-    const references = await validateTransactionReferences(client, payload);
+      const references = await validateTransactionReferences(client, payload);
 
-    if (!references.ok) {
-      return { notFound: false, error: references.error, data: null };
-    }
+      if (!references.ok) {
+        return { notFound: false, error: references.error, data: null };
+      }
 
-    const nextInstrument = references.instrument;
+      const nextInstrument = references.instrument;
+      const previousImpactsBalance = transactionImpactsBalanceByNotes(previous.notes);
+      const nextImpactsBalance = transactionImpactsBalanceByNotes(payload.notes);
 
-    await applyInstrumentImpact(client, previousInstrument, previous.type, Number(previous.amount), 'revert');
-    await applyInstrumentImpact(client, nextInstrument, payload.type, payload.amount, 'apply');
+      if (previousImpactsBalance) {
+        await applyInstrumentImpact(client, previousInstrument, previous.type, Number(previous.amount), 'revert');
+      }
 
-    const msiData = buildMsiData(payload, nextInstrument);
+      if (nextImpactsBalance) {
+        await applyInstrumentImpact(client, nextInstrument, payload.type, payload.amount, 'apply');
+      }
 
-    await client.query(
-      `
-      UPDATE app_gastos.transactions
-      SET instrument_id = $1,
-          category_id = $2,
-          subcategory_id = $3,
-          currency_id = $4,
-          type = $5,
-          amount = $6,
-          description = $7,
-          transaction_date = $8,
-          notes = $9,
-          is_msi = $10,
-          msi_months = $11,
-            msi_monthly_amount = CASE WHEN $10 THEN ROUND(($6::numeric / $11::numeric), 2) ELSE NULL END,
-            msi_start_date = $12,
-            msi_remaining = $13,
-          updated_at = NOW()
-          WHERE id = $14
-      `,
-      [
-        payload.instrumentId,
-        payload.categoryId,
-        payload.subcategoryId,
-        payload.currencyId,
-        payload.type,
-        payload.amount,
-        payload.description,
-        payload.transactionDate,
-        payload.notes,
-        payload.isMsi,
-        msiData.msiMonths,
-        msiData.msiStartDate,
-        msiData.msiRemaining,
-        transactionId,
-      ],
-    );
+      const msiData = buildMsiData(payload, nextInstrument);
 
-    const fullResult = await client.query(
-      `
-      SELECT
-        t.id,
-        t.instrument_id,
-        fi.name AS instrument_name,
-        fi.type AS instrument_type,
-        t.category_id,
-        c.name AS category_name,
-        t.subcategory_id,
-        sc.name AS subcategory_name,
-        t.currency_id,
-        t.type,
-        t.amount,
-        t.description,
-        t.transaction_date,
-        t.notes,
-        t.is_msi,
-        t.msi_months,
-        t.msi_monthly_amount,
-        t.msi_start_date,
-        t.msi_remaining,
-        t.created_at,
-        t.updated_at
-      FROM app_gastos.transactions t
-      INNER JOIN app_gastos.financial_instruments fi ON fi.id = t.instrument_id
-      LEFT JOIN app_gastos.categories c ON c.id = t.category_id
-      LEFT JOIN app_gastos.subcategories sc ON sc.id = t.subcategory_id
-      WHERE t.id = $1
-      `,
-      [transactionId],
-    );
+      await client.query(
+        `
+        UPDATE app_gastos.transactions
+        SET instrument_id = $1,
+            category_id = $2,
+            subcategory_id = $3,
+            currency_id = $4,
+            type = $5,
+            amount = $6,
+            description = $7,
+            transaction_date = $8,
+            notes = $9,
+            is_msi = $10,
+            msi_months = $11,
+            msi_monthly_amount = $12,
+            msi_start_date = $13,
+            msi_remaining = $14,
+            updated_at = NOW()
+            WHERE id = $15
+        `,
+        [
+          payload.instrumentId,
+          payload.categoryId,
+          payload.subcategoryId,
+          payload.currencyId,
+          payload.type,
+          payload.amount,
+          payload.description,
+          payload.transactionDate,
+          payload.notes,
+          payload.isMsi,
+          msiData.msiMonths,
+          msiData.msiMonthlyAmount,
+          msiData.msiStartDate,
+          msiData.msiRemaining,
+          transactionId,
+        ],
+      );
 
-    return { notFound: false, error: null, data: mapTransaction(fullResult.rows[0]) };
-  });
+      await syncMsiProgressForInstrument(client, payload.instrumentId);
+
+      if (previous.instrument_id !== payload.instrumentId) {
+        await syncMsiProgressForInstrument(client, Number(previous.instrument_id));
+      }
+
+      const fullResult = await client.query(
+        `
+        SELECT
+          t.id,
+          t.instrument_id,
+          fi.name AS instrument_name,
+          fi.type AS instrument_type,
+          t.category_id,
+          c.name AS category_name,
+          t.subcategory_id,
+          sc.name AS subcategory_name,
+          t.currency_id,
+          t.type,
+          t.amount,
+          t.description,
+          t.transaction_date,
+          t.notes,
+          t.is_msi,
+          t.msi_months,
+          t.msi_monthly_amount,
+          t.msi_start_date,
+          t.msi_remaining,
+          t.created_at,
+          t.updated_at
+        FROM app_gastos.transactions t
+        INNER JOIN app_gastos.financial_instruments fi ON fi.id = t.instrument_id
+        LEFT JOIN app_gastos.categories c ON c.id = t.category_id
+        LEFT JOIN app_gastos.subcategories sc ON sc.id = t.subcategory_id
+        WHERE t.id = $1
+        `,
+        [transactionId],
+      );
+
+      return { notFound: false, error: null, data: mapTransaction(fullResult.rows[0]) };
+    });
+  } catch (dbError) {
+    console.error('[updateTransaction] database error:', {
+      message: dbError instanceof Error ? dbError.message : String(dbError),
+      code: dbError?.code,
+      detail: dbError?.detail,
+      transactionId,
+    });
+    const errorMessage = dbError?.code === '23505' ? 'Ya existe un registro con esos datos.' : 'No se pudo actualizar la transaccion. Verifica los datos e intenta nuevamente.';
+    return { notFound: false, error: errorMessage, data: null };
+  }
 }
 
 async function deleteTransaction(transactionId) {
   return withDbTransaction(async (client) => {
     const previousResult = await client.query(
       `
-      SELECT id, instrument_id, type, amount
+      SELECT id, instrument_id, type, amount, notes
       FROM app_gastos.transactions
       WHERE id = $1
       FOR UPDATE
@@ -3799,9 +4138,13 @@ async function deleteTransaction(transactionId) {
       return { deleted: false };
     }
 
-    await applyInstrumentImpact(client, previousInstrument, previous.type, Number(previous.amount), 'revert');
+    if (transactionImpactsBalanceByNotes(previous.notes)) {
+      await applyInstrumentImpact(client, previousInstrument, previous.type, Number(previous.amount), 'revert');
+    }
 
     await client.query('DELETE FROM app_gastos.transactions WHERE id = $1', [transactionId]);
+
+    await syncMsiProgressForInstrument(client, Number(previous.instrument_id));
 
     return { deleted: true };
   });
@@ -5300,8 +5643,7 @@ async function createSimulation(payload) {
       ],
     );
 
-    const created = await getSimulationById(insertResult.rows[0].id);
-    return { error: null, data: mapSimulation(created) };
+    return { error: null, data: mapSimulation(insertResult.rows[0]) };
   });
 }
 
@@ -5456,12 +5798,20 @@ async function getDashboardSummary() {
   const result = await query(
     `
     SELECT
-      total_available,
-      total_credit_debt,
-      total_loan_debt,
-      total_available_credit
-    FROM app_gastos.v_financial_summary
-    LIMIT 1
+      COALESCE(SUM(CASE WHEN fi.type IN ('account', 'debit_card') THEN fi.current_amount ELSE 0 END), 0) AS total_available,
+      COALESCE(SUM(CASE WHEN fi.type = 'credit_card' THEN fi.current_balance ELSE 0 END), 0) AS total_credit_debt,
+      COALESCE((SELECT SUM(remaining_amount) FROM app_gastos.loans WHERE is_active = TRUE), 0) AS total_loan_debt,
+      COALESCE(
+        SUM(
+          CASE
+            WHEN fi.type = 'credit_card' THEN COALESCE(fi.credit_limit, 0) - COALESCE(fi.current_balance, 0)
+            ELSE 0
+          END
+        ),
+        0
+      ) AS total_available_credit
+    FROM app_gastos.financial_instruments fi
+    WHERE fi.is_active = TRUE
     `,
   );
 
@@ -6077,23 +6427,34 @@ async function handleTransactionsRoute(method, path, event) {
   }
 
   if (method === 'POST' && id === null) {
-    const bodyResult = parseJsonBody(event);
-    if (!bodyResult.ok) {
-      return jsonResponse(400, { success: false, error: bodyResult.error });
+    try {
+      const bodyResult = parseJsonBody(event);
+      if (!bodyResult.ok) {
+        return jsonResponse(400, { success: false, error: bodyResult.error });
+      }
+
+      const validated = validateTransactionPayload(bodyResult.value);
+      if (!validated.ok) {
+        return jsonResponse(400, { success: false, error: validated.error });
+      }
+
+      const created = await createTransaction(validated.value);
+
+      if (created.error) {
+        return jsonResponse(400, { success: false, error: created.error });
+      }
+
+      return jsonResponse(201, { success: true, data: created.data });
+    } catch (error) {
+      console.error('[handleTransactionsRoute POST] unexpected error:', {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      return jsonResponse(500, {
+        success: false,
+        error: 'Error inesperado al crear transaccion.',
+      });
     }
-
-    const validated = validateTransactionPayload(bodyResult.value);
-    if (!validated.ok) {
-      return jsonResponse(400, { success: false, error: validated.error });
-    }
-
-    const created = await createTransaction(validated.value);
-
-    if (created.error) {
-      return jsonResponse(400, { success: false, error: created.error });
-    }
-
-    return jsonResponse(201, { success: true, data: created.data });
   }
 
   if (method === 'PUT' && id !== null) {
