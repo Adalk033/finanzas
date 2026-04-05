@@ -313,8 +313,14 @@ function sanitizeTransactionPayload(payload: TransactionInput): Record<string, u
     isMsi: payload.isMsi,
   }
 
-  setIfNotNull(sanitized, 'categoryId', payload.categoryId)
-  setIfNotNull(sanitized, 'subcategoryId', payload.subcategoryId)
+  if (payload.categoryId !== null && payload.categoryId > 0) {
+    sanitized.categoryId = payload.categoryId
+  }
+
+  if (payload.subcategoryId !== null && payload.subcategoryId > 0) {
+    sanitized.subcategoryId = payload.subcategoryId
+  }
+
   setIfNotNull(sanitized, 'msiMonths', payload.msiMonths)
   setTrimmedIfPresent(sanitized, 'description', payload.description)
   setTrimmedIfPresent(sanitized, 'notes', payload.notes)

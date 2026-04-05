@@ -140,6 +140,37 @@ async function ensureOperationalTables() {
     'CREATE INDEX IF NOT EXISTS idx_subscription_jobs_next_run ON app_gastos.subscription_jobs(next_run_date)',
   );
 
+  // Keep transaction-related columns aligned in environments with legacy schemas.
+  await query(
+    `
+    ALTER TABLE app_gastos.financial_instruments
+    ADD COLUMN IF NOT EXISTS available_credit NUMERIC(12,2)
+    `,
+  );
+
+  await query(
+    `
+    ALTER TABLE app_gastos.transactions
+    ADD COLUMN IF NOT EXISTS is_msi BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS msi_months INT,
+    ADD COLUMN IF NOT EXISTS msi_monthly_amount NUMERIC(12,2),
+    ADD COLUMN IF NOT EXISTS msi_start_date DATE,
+    ADD COLUMN IF NOT EXISTS msi_remaining INT
+    `,
+  );
+
+  await query('CREATE INDEX IF NOT EXISTS idx_transactions_msi ON app_gastos.transactions(is_msi)');
+
+  await query(
+    `
+    UPDATE app_gastos.financial_instruments
+    SET available_credit = GREATEST(COALESCE(credit_limit, 0) - COALESCE(current_balance, 0), 0),
+        updated_at = NOW()
+    WHERE type = 'credit_card'
+      AND available_credit IS NULL
+    `,
+  );
+
   operationalTablesEnsured = true;
 }
 
@@ -443,6 +474,34 @@ function normalizeNullableDate(value) {
   return raw;
 }
 
+function normalizeDbDateToIso(value) {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) {
+      return null;
+    }
+
+    return value.toISOString().slice(0, 10);
+  }
+
+  const raw = String(value).trim();
+
+  if (ISO_DATE_PATTERN.test(raw)) {
+    return raw;
+  }
+
+  const parsed = new Date(raw);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed.toISOString().slice(0, 10);
+}
+
 function validateBankPayload(body) {
   if (!body || typeof body !== 'object') {
     return { ok: false, error: 'Body invalido.' };
@@ -651,8 +710,10 @@ function validateTransactionPayload(body) {
   }
 
   const instrumentId = normalizeNullableInteger(body.instrumentId);
-  const categoryId = normalizeNullableInteger(body.categoryId);
-  const subcategoryId = normalizeNullableInteger(body.subcategoryId);
+  const rawCategoryId = normalizeNullableInteger(body.categoryId);
+  const rawSubcategoryId = normalizeNullableInteger(body.subcategoryId);
+  const categoryId = rawCategoryId !== null && rawCategoryId > 0 ? rawCategoryId : null;
+  const subcategoryId = rawSubcategoryId !== null && rawSubcategoryId > 0 ? rawSubcategoryId : null;
   const currencyId = normalizeNullableInteger(body.currencyId);
   const type = normalizeText(body.type);
   const amount = normalizeNullableNumber(body.amount);
@@ -1729,13 +1790,25 @@ function computePreviousCutOffDate(referenceDate, cutOffDay) {
 }
 
 function addMonthsToIsoDate(dateValue, months) {
-  const date = new Date(`${dateValue}T00:00:00.000Z`);
+  const normalizedDate = normalizeDbDateToIso(dateValue);
+
+  if (!normalizedDate) {
+    throw new Error('Invalid ISO date value.');
+  }
+
+  const date = new Date(`${normalizedDate}T00:00:00.000Z`);
   date.setUTCMonth(date.getUTCMonth() + months);
   return date.toISOString().slice(0, 10);
 }
 
 function addDaysToIsoDate(dateValue, days) {
-  const date = new Date(`${dateValue}T00:00:00.000Z`);
+  const normalizedDate = normalizeDbDateToIso(dateValue);
+
+  if (!normalizedDate) {
+    throw new Error('Invalid ISO date value.');
+  }
+
+  const date = new Date(`${normalizedDate}T00:00:00.000Z`);
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
 }
@@ -2052,7 +2125,12 @@ async function resolveMsiProgressReferenceDate(client, instrumentId) {
     return null;
   }
 
-  const isoDate = String(value);
+  const isoDate = normalizeDbDateToIso(value);
+
+  if (!isoDate) {
+    return null;
+  }
+
   return isoDate === '1900-01-01' ? null : isoDate;
 }
 
@@ -2109,7 +2187,12 @@ async function syncMsiProgressForInstrument(client, instrumentId, explicitRefere
 
   for (const transaction of transactionsResult.rows) {
     const msiMonths = Number(transaction.msi_months);
-    const msiStartDate = String(transaction.msi_start_date);
+    const msiStartDate = normalizeDbDateToIso(transaction.msi_start_date);
+
+    if (!msiStartDate || !Number.isInteger(msiMonths) || msiMonths < 1) {
+      continue;
+    }
+
     const elapsedCycles = countElapsedMsiCycles(msiStartDate, msiMonths, Number(instrument.cut_off_day), referenceDate);
     const remaining = Math.max(msiMonths - elapsedCycles, 0);
 
@@ -3878,8 +3961,17 @@ async function createTransaction(payload) {
       detail: dbError?.detail,
       payload: { ...payload, description: payload.description?.slice(0, 50) },
     });
-    
-    const errorMessage = dbError?.code === '23505' ? 'Ya existe un registro con esos datos.' : 'No se pudo crear la transaccion. Verifica los datos e intenta nuevamente.';
+
+    let errorMessage = 'No se pudo crear la transaccion. Verifica los datos e intenta nuevamente.';
+
+    if (dbError?.code === '23505') {
+      errorMessage = 'Ya existe un registro con esos datos.';
+    } else if (dbError?.code === '23503') {
+      errorMessage = 'Uno o mas IDs relacionados no existen (instrumento, categoria, subcategoria o moneda).';
+    } else if (dbError?.code === '42703' || dbError?.code === '42P01') {
+      errorMessage = 'El esquema de base de datos esta desactualizado para transacciones. Vuelve a intentar en unos segundos.';
+    }
+
     return { error: errorMessage, data: null };
   }
 }

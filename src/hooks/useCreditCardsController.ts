@@ -78,8 +78,7 @@ export function useCreditCardsController({
 
   const totalAvailableCredit = useMemo(() => {
     return creditCardInstruments.reduce((accumulator, instrument) => {
-      const derivedAvailableCredit = (instrument.creditLimit ?? 0) - (instrument.currentBalance ?? 0)
-      return accumulator + (instrument.availableCredit ?? derivedAvailableCredit)
+      return accumulator + ((instrument.creditLimit ?? 0) - (instrument.currentBalance ?? 0))
     }, 0)
   }, [creditCardInstruments])
 
