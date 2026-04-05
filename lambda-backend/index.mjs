@@ -5704,12 +5704,20 @@ async function getDashboardSummary() {
   const result = await query(
     `
     SELECT
-      total_available,
-      total_credit_debt,
-      total_loan_debt,
-      total_available_credit
-    FROM app_gastos.v_financial_summary
-    LIMIT 1
+      COALESCE(SUM(CASE WHEN fi.type IN ('account', 'debit_card') THEN fi.current_amount ELSE 0 END), 0) AS total_available,
+      COALESCE(SUM(CASE WHEN fi.type = 'credit_card' THEN fi.current_balance ELSE 0 END), 0) AS total_credit_debt,
+      COALESCE((SELECT SUM(remaining_amount) FROM app_gastos.loans WHERE is_active = TRUE), 0) AS total_loan_debt,
+      COALESCE(
+        SUM(
+          CASE
+            WHEN fi.type = 'credit_card' THEN COALESCE(fi.credit_limit, 0) - COALESCE(fi.current_balance, 0)
+            ELSE 0
+          END
+        ),
+        0
+      ) AS total_available_credit
+    FROM app_gastos.financial_instruments fi
+    WHERE fi.is_active = TRUE
     `,
   );
 
