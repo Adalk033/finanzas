@@ -31,13 +31,16 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
         with:
           node-version: 24.14.1
-          cache: npm
+          cache: pnpm
+
+      - name: Enable pnpm
+        run: corepack enable
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build desktop package
-        run: npm run electron:build -- --${{ matrix.platform }} --x64 --publish never
+        run: pnpm run electron:build -- --${{ matrix.platform }} --x64 --publish never
 
       - name: Upload package artifacts
         uses: actions/upload-artifact@v4

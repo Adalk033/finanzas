@@ -1,4 +1,4 @@
-import { useEffect, useState, type SyntheticEvent } from 'react'
+import { useState, type SyntheticEvent } from 'react'
 import { formatCurrency } from '../../app/appHelpers'
 import type {
   Category,
@@ -48,12 +48,7 @@ export function SubscriptionsSection({
   onDelete,
 }: SubscriptionsSectionProps) {
   const [isFormOpen, setIsFormOpen] = useState(editingSubscriptionId !== null)
-
-  useEffect(() => {
-    if (editingSubscriptionId !== null) {
-      setIsFormOpen(true)
-    }
-  }, [editingSubscriptionId])
+  const isFormVisible = isFormOpen || editingSubscriptionId !== null
 
   return (
     <section className="card">
@@ -70,8 +65,15 @@ export function SubscriptionsSection({
           </header>
 
           <div className="section-toolbar">
-            <button className="button button--primary" type="button" onClick={() => setIsFormOpen((value) => !value)}>
-              {isFormOpen ? 'Ocultar formulario' : editingSubscriptionId === null ? 'Nueva suscripcion' : 'Editar suscripcion'}
+            <button className="button button--primary" type="button" onClick={() => {
+              if (editingSubscriptionId !== null) {
+                onReset()
+                setIsFormOpen(false)
+                return
+              }
+              setIsFormOpen((value) => !value)
+            }}>
+              {isFormVisible ? 'Ocultar formulario' : 'Nueva suscripcion'}
             </button>
             <div className="section-toolbar__spacer" />
             <button className="button button--secondary" type="button" onClick={onReload}>
@@ -79,7 +81,7 @@ export function SubscriptionsSection({
             </button>
           </div>
 
-          {isFormOpen ? (
+          {isFormVisible ? (
             <div className="section-panel">
               <form className="form-grid" onSubmit={onSubmit}>
                 <label className="form-grid__field" htmlFor="subscriptionName">Nombre</label>

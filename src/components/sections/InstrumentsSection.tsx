@@ -1,4 +1,4 @@
-import { useEffect, useState, type SyntheticEvent } from 'react'
+import { useState, type SyntheticEvent } from 'react'
 import { formatCurrency } from '../../app/appHelpers'
 import type { Bank, FinancialInstrument, FinancialInstrumentInput, InstrumentType } from '../../types/domain'
 
@@ -45,12 +45,7 @@ export function InstrumentsSection({
   onDelete,
 }: InstrumentsSectionProps) {
   const [isFormOpen, setIsFormOpen] = useState(editingInstrumentId !== null)
-
-  useEffect(() => {
-    if (editingInstrumentId !== null) {
-      setIsFormOpen(true)
-    }
-  }, [editingInstrumentId])
+  const isFormVisible = isFormOpen || editingInstrumentId !== null
 
   return (
     <section className="card">
@@ -60,8 +55,15 @@ export function InstrumentsSection({
       </header>
 
       <div className="section-toolbar">
-        <button className="button button--primary" type="button" onClick={() => setIsFormOpen((value) => !value)}>
-          {isFormOpen ? 'Ocultar formulario' : editingInstrumentId === null ? 'Nuevo instrumento' : 'Editar instrumento'}
+        <button className="button button--primary" type="button" onClick={() => {
+          if (editingInstrumentId !== null) {
+            onReset()
+            setIsFormOpen(false)
+            return
+          }
+          setIsFormOpen((value) => !value)
+        }}>
+          {isFormVisible ? 'Ocultar formulario' : 'Nuevo instrumento'}
         </button>
         <div className="section-toolbar__spacer" />
         <button className="button button--secondary" type="button" disabled={!hasConfig} onClick={onReload}>
@@ -69,7 +71,7 @@ export function InstrumentsSection({
         </button>
       </div>
 
-      {isFormOpen ? (
+      {isFormVisible ? (
         <div className="section-panel">
           <form className="form-grid" onSubmit={onSubmit}>
             <label className="form-grid__field" htmlFor="instrumentBank">Banco</label>

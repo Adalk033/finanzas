@@ -1,6 +1,5 @@
-import { useLocalConfig } from './useLocalConfig'
+import { useLocalDatabase } from './useLocalDatabase'
 import { useTransactionsController } from './useTransactionsController'
-import { useSettingsPing } from './useSettingsPing'
 import { useDashboardController } from './useDashboardController'
 import { useInstrumentsController } from './useInstrumentsController'
 import { useBanksController } from './useBanksController'
@@ -16,14 +15,8 @@ import { useSectionDataLoader } from './useSectionDataLoader'
 import { useFinanceSelectors } from './useFinanceSelectors'
 
 export function useAppControllers() {
-  const configController = useLocalConfig()
-  const hasConfig = Boolean(
-    configController.config.apiKey.trim()
-      && configController.config.apiEndpoint.trim()
-      && configController.config.awsRegion.trim(),
-  )
-
-  const settingsPingController = useSettingsPing(hasConfig)
+  const databaseController = useLocalDatabase()
+  const hasConfig = databaseController.isReady
   const dashboardController = useDashboardController()
   const instrumentsController = useInstrumentsController()
   const banksController = useBanksController({ loadInstruments: instrumentsController.loadInstruments })
@@ -31,6 +24,7 @@ export function useAppControllers() {
 
   const creditCardsController = useCreditCardsController({
     instruments: instrumentsController.instruments,
+    categories: categoriesController.categories,
     loadInstruments: instrumentsController.loadInstruments,
   })
 
@@ -78,19 +72,12 @@ export function useAppControllers() {
     loadSimulations: simulatorController.loadSimulations,
   })
 
-  const handleSave = async (): Promise<void> => {
-    await configController.saveConfig()
-    await settingsPingController.refreshCloudConnection()
-  }
-
   return {
     hasConfig,
     activeSection,
     handleSectionChange,
     isSectionLoading,
-    handleSave,
-    configController,
-    settingsPingController,
+    databaseController,
     dashboardController,
     instrumentsController,
     banksController,

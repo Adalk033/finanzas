@@ -1,16 +1,17 @@
-import { useMemo, useState, type SyntheticEvent } from 'react'
+import { useEffect, useMemo, useState, type SyntheticEvent } from 'react'
 import { apiClient } from '../api/client'
 import {
-  EMPTY_STATEMENT_FORM,
   EMPTY_STATEMENT_UPDATE_FORM,
+  EMPTY_TRANSACTION_FORM,
   EMPTY_TRANSFER_FORM,
 } from '../app/appHelpers'
 import type {
+  Category,
   CreditCardStatement,
-  CreditCardStatementInput,
   CreditCardStatementUpdateInput,
   FinancialInstrument,
   Transaction,
+  TransactionInput,
   Transfer,
   TransferInput,
   TransferType,
@@ -18,170 +19,276 @@ import type {
 
 type UseCreditCardsControllerParams = {
   instruments: FinancialInstrument[]
+  categories: Category[]
   loadInstruments: () => Promise<void>
 }
 
 export function useCreditCardsController({
   instruments,
+  categories,
   loadInstruments,
 }: UseCreditCardsControllerParams) {
+  const [selectedCardId, setSelectedCardId] = useState(0)
   const [statements, setStatements] = useState<CreditCardStatement[]>([])
+  const [transfers, setTransfers] = useState<Transfer[]>([])
+  const [cardMovements, setCardMovements] = useState<Transaction[]>([])
   const [isStatementsLoading, setIsStatementsLoading] = useState(false)
+  const [isTransfersLoading, setIsTransfersLoading] = useState(false)
+  const [isCardMovementsLoading, setIsCardMovementsLoading] = useState(false)
   const [statementMessage, setStatementMessage] = useState('')
   const [statementError, setStatementError] = useState('')
-  const [statementForm, setStatementForm] = useState<CreditCardStatementInput>(EMPTY_STATEMENT_FORM)
+  const [actionMessage, setActionMessage] = useState('')
+  const [actionError, setActionError] = useState('')
+
+  const [purchaseForm, setPurchaseForm] = useState<TransactionInput>(EMPTY_TRANSACTION_FORM)
+  const [cardPaymentForm, setCardPaymentForm] = useState<TransferInput>(EMPTY_TRANSFER_FORM)
   const [editingStatementId, setEditingStatementId] = useState<number | null>(null)
-  const [statementUpdateForm, setStatementUpdateForm] = useState<CreditCardStatementUpdateInput>(EMPTY_STATEMENT_UPDATE_FORM)
-
-  const [transfers, setTransfers] = useState<Transfer[]>([])
-  const [isTransfersLoading, setIsTransfersLoading] = useState(false)
-  const [transferMessage, setTransferMessage] = useState('')
-  const [transferError, setTransferError] = useState('')
-  const [transferForm, setTransferForm] = useState<TransferInput>(EMPTY_TRANSFER_FORM)
-  const [editingTransferId, setEditingTransferId] = useState<number | null>(null)
-
+  const [statementUpdateForm, setStatementUpdateForm] = useState<CreditCardStatementUpdateInput>(
+    EMPTY_STATEMENT_UPDATE_FORM,
+  )
   const [selectedStatementDetail, setSelectedStatementDetail] = useState<CreditCardStatement | null>(null)
   const [statementMovements, setStatementMovements] = useState<Transaction[]>([])
   const [isStatementMovementsLoading, setIsStatementMovementsLoading] = useState(false)
 
-  const creditCardInstruments = useMemo(() => {
-    return instruments.filter((instrument) => instrument.type === 'credit_card' && instrument.isActive)
-  }, [instruments])
+  const [transferForm, setTransferForm] = useState<TransferInput>({
+    ...EMPTY_TRANSFER_FORM,
+    type: 'inter_account',
+  })
+  const [editingTransferId, setEditingTransferId] = useState<number | null>(null)
+  const [transferMessage, setTransferMessage] = useState('')
+  const [transferError, setTransferError] = useState('')
 
-  const sourceTransferInstruments = useMemo(() => {
-    return instruments.filter((instrument) => instrument.type !== 'credit_card' && instrument.isActive)
-  }, [instruments])
+  const creditCardInstruments = useMemo(
+    () => instruments.filter((instrument) => instrument.type === 'credit_card' && instrument.isActive),
+    [instruments],
+  )
+  const sourceTransferInstruments = useMemo(
+    () => instruments.filter((instrument) => instrument.type !== 'credit_card' && instrument.isActive),
+    [instruments],
+  )
+  const resolvedSelectedCardId = selectedCardId || creditCardInstruments[0]?.id || 0
+  const selectedCard = creditCardInstruments.find((card) => card.id === resolvedSelectedCardId) ?? null
+  const selectedPaymentSourceId = cardPaymentForm.sourceInstrumentId || sourceTransferInstruments[0]?.id || 0
+  const selectedTransferSourceInstrumentId = transferForm.sourceInstrumentId || sourceTransferInstruments[0]?.id || 0
+  const selectedTransferDestinationInstrumentId = transferForm.destinationInstrumentId
+    || sourceTransferInstruments.find((instrument) => instrument.id !== selectedTransferSourceInstrumentId)?.id
+    || 0
 
-  const selectedStatementInstrumentId = statementForm.instrumentId === 0 ? (creditCardInstruments[0]?.id ?? 0) : statementForm.instrumentId
-  const selectedTransferSourceInstrumentId = transferForm.sourceInstrumentId === 0 ? (sourceTransferInstruments[0]?.id ?? 0) : transferForm.sourceInstrumentId
-  const selectedTransferDestinationInstrumentId = transferForm.destinationInstrumentId === 0 ? (creditCardInstruments[0]?.id ?? 0) : transferForm.destinationInstrumentId
-  const selectedTransferType = transferForm.type
-  const selectedTransferStatementId = transferForm.statementId
+  const purchaseCategoryOptions = useMemo(
+    () => categories.filter(
+      (category) => category.isActive && (category.type === 'expense' || category.type === 'both'),
+    ),
+    [categories],
+  )
+  const purchaseSubcategoryOptions = useMemo(() => {
+    return purchaseCategoryOptions.find((category) => category.id === purchaseForm.categoryId)?.subcategories
+      .filter((subcategory) => subcategory.isActive) ?? []
+  }, [purchaseCategoryOptions, purchaseForm.categoryId])
+
+  const selectedCardStatements = useMemo(
+    () => statements
+      .filter((statement) => statement.instrumentId === resolvedSelectedCardId)
+      .sort((a, b) => b.cutOffDate.localeCompare(a.cutOffDate)),
+    [resolvedSelectedCardId, statements],
+  )
+  const currentStatement = useMemo(() => {
+    const pending = selectedCardStatements
+      .filter((statement) => !statement.isPaid && statement.outstandingAmount > 0)
+      .sort((a, b) => a.paymentDueDate.localeCompare(b.paymentDueDate))
+    return pending[0] ?? selectedCardStatements[0] ?? null
+  }, [selectedCardStatements])
+  const selectedCardPayments = useMemo(
+    () => transfers
+      .filter(
+        (transfer) => transfer.type === 'card_payment'
+          && transfer.destinationInstrumentId === resolvedSelectedCardId,
+      )
+      .sort((a, b) => b.transferDate.localeCompare(a.transferDate)),
+    [resolvedSelectedCardId, transfers],
+  )
+  const activeMsiPurchases = useMemo(
+    () => cardMovements.filter(
+      (movement) => movement.isMsi && (movement.msiRemaining ?? movement.msiMonths ?? 0) > 0,
+    ),
+    [cardMovements],
+  )
 
   const availableTransferDestinations = useMemo(() => {
-    const sourceId = selectedTransferSourceInstrumentId
-
-    if (selectedTransferType === 'card_payment') {
-      return creditCardInstruments.filter((instrument) => instrument.id !== sourceId)
-    }
-
-    if (selectedTransferType === 'inter_account') {
-      return sourceTransferInstruments.filter((instrument) => instrument.id !== sourceId)
-    }
-
-    return instruments.filter((instrument) => instrument.id !== sourceId)
-  }, [creditCardInstruments, instruments, selectedTransferSourceInstrumentId, selectedTransferType, sourceTransferInstruments])
-
-  const totalCreditCardDebt = useMemo(() => {
-    return creditCardInstruments.reduce((accumulator, instrument) => accumulator + (instrument.currentBalance ?? 0), 0)
-  }, [creditCardInstruments])
-
-  const totalAvailableCredit = useMemo(() => {
-    return creditCardInstruments.reduce((accumulator, instrument) => {
-      return accumulator + ((instrument.creditLimit ?? 0) - (instrument.currentBalance ?? 0))
-    }, 0)
-  }, [creditCardInstruments])
-
-  const availableStatementsForDestination = useMemo(() => {
-    if (selectedTransferType !== 'card_payment') {
-      return []
-    }
-
-    return statements.filter((statement) => statement.instrumentId === selectedTransferDestinationInstrumentId)
-  }, [selectedTransferDestinationInstrumentId, selectedTransferType, statements])
+    return sourceTransferInstruments.filter(
+      (instrument) => instrument.id !== selectedTransferSourceInstrumentId,
+    )
+  }, [selectedTransferSourceInstrumentId, sourceTransferInstruments])
 
   const loadStatements = async (): Promise<void> => {
     setIsStatementsLoading(true)
     setStatementError('')
-
     const result = await apiClient.getStatements()
-
     if (!result.success) {
       setStatementError(result.error ?? 'No se pudieron cargar los estados de cuenta.')
-      setIsStatementsLoading(false)
-      return
+    } else {
+      setStatements(result.data ?? [])
     }
-
-    setStatements(result.data ?? [])
     setIsStatementsLoading(false)
   }
 
   const loadTransfers = async (): Promise<void> => {
     setIsTransfersLoading(true)
     setTransferError('')
-
     const result = await apiClient.getTransfers()
-
     if (!result.success) {
       setTransferError(result.error ?? 'No se pudieron cargar las transferencias.')
-      setIsTransfersLoading(false)
+    } else {
+      setTransfers(result.data ?? [])
+    }
+    setIsTransfersLoading(false)
+  }
+
+  const loadCardMovements = async (cardId = resolvedSelectedCardId): Promise<void> => {
+    if (cardId < 1) {
+      setCardMovements([])
       return
     }
+    setIsCardMovementsLoading(true)
+    const result = await apiClient.getTransactions({ instrumentId: cardId })
+    if (!result.success) {
+      setActionError(result.error ?? 'No se pudieron cargar los movimientos de la tarjeta.')
+    } else {
+      setCardMovements(result.data ?? [])
+    }
+    setIsCardMovementsLoading(false)
+  }
 
-    setTransfers(result.data ?? [])
-    setIsTransfersLoading(false)
+  useEffect(() => {
+    if (resolvedSelectedCardId < 1) {
+      return
+    }
+    let active = true
+    void apiClient.getTransactions({ instrumentId: resolvedSelectedCardId }).then((result) => {
+      if (!active) return
+      if (result.success) {
+        setCardMovements(result.data ?? [])
+      } else {
+        setActionError(result.error ?? 'No se pudieron cargar los movimientos de la tarjeta.')
+      }
+    })
+    return () => {
+      active = false
+    }
+  }, [resolvedSelectedCardId])
+
+  const selectCard = (cardId: number): void => {
+    setSelectedCardId(cardId)
+    setActionError('')
+    setActionMessage('')
+    setPurchaseForm({ ...EMPTY_TRANSACTION_FORM, instrumentId: cardId })
+    setCardPaymentForm({
+      ...EMPTY_TRANSFER_FORM,
+      sourceInstrumentId: sourceTransferInstruments[0]?.id ?? 0,
+      destinationInstrumentId: cardId,
+      type: 'card_payment',
+    })
+    setSelectedStatementDetail(null)
+    setStatementMovements([])
+  }
+
+  const resetPurchaseForm = (): void => {
+    setPurchaseForm({
+      ...EMPTY_TRANSACTION_FORM,
+      instrumentId: resolvedSelectedCardId,
+    })
+  }
+
+  const handlePurchaseSubmit = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault()
+    setActionError('')
+    setActionMessage('')
+    const payload: TransactionInput = {
+      ...purchaseForm,
+      instrumentId: resolvedSelectedCardId,
+      type: 'expense',
+      description: purchaseForm.description.trim(),
+      notes: purchaseForm.notes.trim(),
+      msiMonths: purchaseForm.isMsi ? purchaseForm.msiMonths : null,
+    }
+    if (payload.instrumentId < 1) {
+      setActionError('Selecciona una tarjeta.')
+      return
+    }
+    if (payload.amount <= 0 || !payload.transactionDate) {
+      setActionError('Captura un monto y una fecha válidos.')
+      return
+    }
+    if (payload.isMsi && !payload.msiMonths) {
+      setActionError('Selecciona el plazo de la compra a MSI.')
+      return
+    }
+    const result = await apiClient.createTransaction(payload)
+    if (!result.success) {
+      setActionError(result.error ?? 'No se pudo registrar la compra.')
+      return
+    }
+    setActionMessage('Compra registrada correctamente.')
+    resetPurchaseForm()
+    await Promise.all([loadInstruments(), loadStatements(), loadCardMovements(payload.instrumentId)])
+  }
+
+  const setPaymentAmount = (amount: number | null): void => {
+    if (amount === null || amount <= 0) return
+    setCardPaymentForm((previous) => ({ ...previous, amount }))
+  }
+
+  const resetCardPaymentForm = (): void => {
+    setCardPaymentForm({
+      ...EMPTY_TRANSFER_FORM,
+      sourceInstrumentId: sourceTransferInstruments[0]?.id ?? 0,
+      destinationInstrumentId: resolvedSelectedCardId,
+      type: 'card_payment',
+    })
+  }
+
+  const handleCardPaymentSubmit = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault()
+    setActionError('')
+    setActionMessage('')
+    const payload: TransferInput = {
+      ...cardPaymentForm,
+      sourceInstrumentId: selectedPaymentSourceId,
+      destinationInstrumentId: resolvedSelectedCardId,
+      type: 'card_payment',
+      statementId: null,
+      loanId: null,
+      description: cardPaymentForm.description.trim() || `Pago de ${selectedCard?.name ?? 'tarjeta'}`,
+      notes: cardPaymentForm.notes.trim(),
+    }
+    if (payload.sourceInstrumentId < 1 || payload.destinationInstrumentId < 1) {
+      setActionError('Selecciona la cuenta desde la que realizarás el pago.')
+      return
+    }
+    if (payload.amount <= 0 || !payload.transferDate) {
+      setActionError('Captura un monto y una fecha válidos.')
+      return
+    }
+    const result = await apiClient.createTransfer(payload)
+    if (!result.success) {
+      setActionError(result.error ?? 'No se pudo registrar el pago.')
+      return
+    }
+    setActionMessage('Pago registrado y aplicado a la tarjeta.')
+    resetCardPaymentForm()
+    await Promise.all([loadInstruments(), loadStatements(), loadTransfers()])
   }
 
   const loadStatementMovements = async (statement: CreditCardStatement): Promise<void> => {
     setIsStatementMovementsLoading(true)
     setStatementError('')
-
     const result = await apiClient.getStatementMovements(statement.id)
-
     if (!result.success) {
-      setStatementError(result.error ?? 'No se pudo cargar el detalle de movimientos del estado de cuenta.')
-      setIsStatementMovementsLoading(false)
-      return
+      setStatementError(result.error ?? 'No se pudo cargar el detalle del estado.')
+    } else {
+      setSelectedStatementDetail(statement)
+      setStatementMovements(result.data ?? [])
     }
-
-    setSelectedStatementDetail(statement)
-    setStatementMovements(result.data ?? [])
     setIsStatementMovementsLoading(false)
-  }
-
-  const resetStatementForm = (): void => {
-    setStatementForm({
-      ...EMPTY_STATEMENT_FORM,
-      instrumentId: creditCardInstruments[0]?.id ?? 0,
-    })
-  }
-
-  const resetStatementUpdateForm = (): void => {
-    setEditingStatementId(null)
-    setStatementUpdateForm(EMPTY_STATEMENT_UPDATE_FORM)
-  }
-
-  const handleStatementSubmit = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
-    event.preventDefault()
-    setStatementError('')
-    setStatementMessage('')
-
-    const payload: CreditCardStatementInput = {
-      ...statementForm,
-      instrumentId: selectedStatementInstrumentId,
-      paymentDueDate: statementForm.paymentDueDate.trim(),
-    }
-
-    if (payload.instrumentId < 1) {
-      setStatementError('Selecciona una tarjeta de credito valida.')
-      return
-    }
-
-    if (!payload.cutOffDate) {
-      setStatementError('Selecciona una fecha de corte valida.')
-      return
-    }
-
-    const created = await apiClient.createStatement(payload)
-
-    if (!created.success) {
-      setStatementError(created.error ?? 'No se pudo crear el estado de cuenta.')
-      return
-    }
-
-    setStatementMessage('Estado de cuenta creado correctamente.')
-    resetStatementForm()
-    await loadStatements()
   }
 
   const startStatementEdit = (statement: CreditCardStatement): void => {
@@ -196,59 +303,43 @@ export function useCreditCardsController({
     })
   }
 
-  const handleStatementUpdate = async (): Promise<void> => {
-    if (editingStatementId === null) {
-      return
-    }
+  const resetStatementUpdateForm = (): void => {
+    setEditingStatementId(null)
+    setStatementUpdateForm(EMPTY_STATEMENT_UPDATE_FORM)
+  }
 
+  const handleStatementUpdate = async (): Promise<void> => {
+    if (editingStatementId === null) return
     setStatementError('')
     setStatementMessage('')
-
-    const updated = await apiClient.updateStatement(editingStatementId, statementUpdateForm)
-
-    if (!updated.success) {
-      setStatementError(updated.error ?? 'No se pudo actualizar el estado de cuenta.')
+    const result = await apiClient.updateStatement(editingStatementId, statementUpdateForm)
+    if (!result.success) {
+      setStatementError(result.error ?? 'No se pudo actualizar el estado de cuenta.')
       return
     }
-
-    setStatementMessage('Estado de cuenta actualizado correctamente.')
+    setStatementMessage('Datos del estado actualizados.')
     resetStatementUpdateForm()
     await loadStatements()
   }
 
-  const handleStatementDelete = async (id: number): Promise<void> => {
-    setStatementError('')
-    setStatementMessage('')
-
-    const deleted = await apiClient.deleteStatement(id)
-
-    if (!deleted.success) {
-      setStatementError(deleted.error ?? 'No se pudo eliminar el estado de cuenta.')
-      return
-    }
-
-    setStatementMessage('Estado de cuenta eliminado correctamente.')
-    if (editingStatementId === id) {
-      resetStatementUpdateForm()
-    }
-    await loadStatements()
-  }
-
   const resetTransferForm = (): void => {
+    const sourceId = sourceTransferInstruments[0]?.id ?? 0
     setEditingTransferId(null)
     setTransferForm({
       ...EMPTY_TRANSFER_FORM,
-      sourceInstrumentId: sourceTransferInstruments[0]?.id ?? 0,
-      destinationInstrumentId: creditCardInstruments[0]?.id ?? 0,
-      statementId: null,
+      sourceInstrumentId: sourceId,
+      destinationInstrumentId: sourceTransferInstruments.find(
+        (instrument) => instrument.id !== sourceId,
+      )?.id ?? 0,
+      type: 'inter_account',
     })
   }
 
   const handleTransferTypeChange = (nextType: TransferType): void => {
     setTransferForm((previous) => ({
       ...previous,
-      type: nextType,
-      statementId: nextType === 'card_payment' ? previous.statementId : null,
+      type: nextType === 'card_payment' ? 'inter_account' : nextType,
+      statementId: null,
       loanId: nextType === 'loan_payment' ? previous.loanId : null,
     }))
   }
@@ -261,8 +352,8 @@ export function useCreditCardsController({
       amount: transfer.amount,
       currencyId: transfer.currencyId,
       transferDate: transfer.transferDate,
-      type: transfer.type,
-      statementId: transfer.statementId,
+      type: transfer.type === 'card_payment' ? 'other' : transfer.type,
+      statementId: null,
       loanId: transfer.loanId,
       description: transfer.description ?? '',
       notes: transfer.notes ?? '',
@@ -273,120 +364,102 @@ export function useCreditCardsController({
     event.preventDefault()
     setTransferError('')
     setTransferMessage('')
-
     const payload: TransferInput = {
       ...transferForm,
       sourceInstrumentId: selectedTransferSourceInstrumentId,
       destinationInstrumentId: selectedTransferDestinationInstrumentId,
-      statementId: selectedTransferType === 'card_payment' ? (selectedTransferStatementId ?? null) : null,
+      statementId: null,
       description: transferForm.description.trim(),
       notes: transferForm.notes.trim(),
     }
-
     if (payload.sourceInstrumentId < 1 || payload.destinationInstrumentId < 1) {
-      setTransferError('Selecciona instrumentos validos para la transferencia.')
+      setTransferError('Selecciona una cuenta de origen y una de destino.')
       return
     }
-
-    if (payload.sourceInstrumentId === payload.destinationInstrumentId) {
-      setTransferError('El origen y destino deben ser distintos.')
+    if (payload.sourceInstrumentId === payload.destinationInstrumentId || payload.amount <= 0) {
+      setTransferError('Elige cuentas diferentes y un monto mayor a cero.')
       return
     }
-
-    if (payload.amount <= 0) {
-      setTransferError('Ingresa un monto mayor a cero.')
+    const result = editingTransferId === null
+      ? await apiClient.createTransfer(payload)
+      : await apiClient.updateTransfer(editingTransferId, payload)
+    if (!result.success) {
+      setTransferError(result.error ?? 'No se pudo guardar la transferencia.')
       return
     }
-
-    if (editingTransferId !== null) {
-      const updated = await apiClient.updateTransfer(editingTransferId, payload)
-
-      if (!updated.success) {
-        setTransferError(updated.error ?? 'No se pudo actualizar la transferencia.')
-        return
-      }
-
-      setTransferMessage('Transferencia actualizada correctamente.')
-      resetTransferForm()
-      await loadInstruments()
-      await loadStatements()
-      await loadTransfers()
-      return
-    }
-
-    const created = await apiClient.createTransfer(payload)
-
-    if (!created.success) {
-      setTransferError(created.error ?? 'No se pudo crear la transferencia.')
-      return
-    }
-
-    setTransferMessage('Transferencia registrada correctamente.')
+    setTransferMessage(
+      editingTransferId === null ? 'Transferencia registrada.' : 'Transferencia actualizada.',
+    )
     resetTransferForm()
-    await loadInstruments()
-    await loadStatements()
-    await loadTransfers()
+    await Promise.all([loadInstruments(), loadTransfers()])
   }
 
   const handleTransferDelete = async (id: number): Promise<void> => {
     setTransferError('')
     setTransferMessage('')
-
-    const deleted = await apiClient.deleteTransfer(id)
-
-    if (!deleted.success) {
-      setTransferError(deleted.error ?? 'No se pudo eliminar la transferencia.')
+    const result = await apiClient.deleteTransfer(id)
+    if (!result.success) {
+      setTransferError(result.error ?? 'No se pudo eliminar la transferencia.')
       return
     }
-
-    setTransferMessage('Transferencia eliminada correctamente.')
-    if (editingTransferId === id) {
-      resetTransferForm()
-    }
-    await loadInstruments()
-    await loadStatements()
-    await loadTransfers()
+    setTransferMessage('Transferencia eliminada y saldos revertidos.')
+    if (editingTransferId === id) resetTransferForm()
+    await Promise.all([loadInstruments(), loadTransfers()])
   }
 
   return {
+    selectedCardId: resolvedSelectedCardId,
+    selectedCard,
+    creditCardInstruments,
+    sourceTransferInstruments,
     statements,
+    selectedCardStatements,
+    currentStatement,
+    transfers,
+    selectedCardPayments,
+    cardMovements,
+    activeMsiPurchases,
     isStatementsLoading,
+    isTransfersLoading,
+    isCardMovementsLoading,
+    actionMessage,
+    actionError,
     statementMessage,
     statementError,
-    statementForm,
+    purchaseForm,
+    purchaseCategoryOptions,
+    purchaseSubcategoryOptions,
+    cardPaymentForm,
+    selectedPaymentSourceId,
     editingStatementId,
     statementUpdateForm,
-    transfers,
-    isTransfersLoading,
-    transferMessage,
-    transferError,
-    transferForm,
-    editingTransferId,
-    selectedTransferStatementId,
-    availableStatementsForDestination,
     selectedStatementDetail,
     statementMovements,
     isStatementMovementsLoading,
-    creditCardInstruments,
-    sourceTransferInstruments,
-    availableTransferDestinations,
-    totalCreditCardDebt,
-    totalAvailableCredit,
-    selectedStatementInstrumentId,
+    transferForm,
+    editingTransferId,
+    transferMessage,
+    transferError,
     selectedTransferSourceInstrumentId,
     selectedTransferDestinationInstrumentId,
-    setStatementForm,
+    availableTransferDestinations,
+    selectCard,
+    setPurchaseForm,
+    resetPurchaseForm,
+    handlePurchaseSubmit,
+    setCardPaymentForm,
+    setPaymentAmount,
+    resetCardPaymentForm,
+    handleCardPaymentSubmit,
     setStatementUpdateForm,
-    setTransferForm,
     loadStatements,
     loadTransfers,
+    loadCardMovements,
     loadStatementMovements,
-    resetStatementForm,
-    resetStatementUpdateForm,
-    handleStatementSubmit,
     startStatementEdit,
+    resetStatementUpdateForm,
     handleStatementUpdate,
-    handleStatementDelete,
+    setTransferForm,
     resetTransferForm,
     handleTransferTypeChange,
     startTransferEdit,

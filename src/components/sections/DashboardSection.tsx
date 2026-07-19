@@ -60,7 +60,7 @@ export function DashboardSection({
         </button>
       </div>
 
-      {!hasConfig ? <p className="message message--info">Configura API Key, endpoint y region en Settings para cargar datos.</p> : null}
+      {!hasConfig ? <p className="message message--info">Abre la aplicacion de escritorio para acceder a tus datos locales.</p> : null}
       {isDashboardLoading ? <p className="message message--info">Cargando resumen y graficas del dashboard...</p> : null}
       {dashboardError ? <p className="message message--error">{dashboardError}</p> : null}
 
@@ -183,7 +183,7 @@ export function DashboardSection({
                   <Tooltip />
                   <Legend />
                   <Area type="monotone" dataKey="subscriptions" stackId="1" stroke="#57A6D8" fill="#57A6D8" name="Suscripciones" />
-                  <Area type="monotone" dataKey="fixedExpenses" stackId="1" stroke="#2D8F85" fill="#2D8F85" name="Gastos fijos" />
+                  <Area type="monotone" dataKey="fixedExpenses" stackId="1" stroke="#6F86E8" fill="#6F86E8" name="Gastos fijos" />
                   <Area type="monotone" dataKey="loanPayments" stackId="1" stroke="#E6A23C" fill="#E6A23C" name="Pagos prestamos" />
                 </AreaChart>
               </ResponsiveContainer>

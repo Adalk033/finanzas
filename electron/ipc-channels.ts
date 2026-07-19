@@ -1,5 +1,4 @@
 export const IPC_CHANNELS = {
-  GET_LOCAL_CONFIG: 'local-config:get',
-  SAVE_LOCAL_CONFIG: 'local-config:save',
-  API_PROXY_REQUEST: 'api:proxy-request',
+  DATABASE_REQUEST: 'database:request',
+  DATABASE_INFO: 'database:info',
 } as const

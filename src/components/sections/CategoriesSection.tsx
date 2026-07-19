@@ -1,4 +1,4 @@
-import { useEffect, useState, type SyntheticEvent } from 'react'
+import { useState, type SyntheticEvent } from 'react'
 import { getCategoryTypeLabel } from '../../app/appHelpers'
 import type {
   Category,
@@ -68,18 +68,8 @@ export function CategoriesSection({
 }: CategoriesSectionProps) {
   const [isCategoryFormOpen, setIsCategoryFormOpen] = useState(editingCategoryId !== null)
   const [isSubcategoryFormOpen, setIsSubcategoryFormOpen] = useState(editingSubcategoryId !== null)
-
-  useEffect(() => {
-    if (editingCategoryId !== null) {
-      setIsCategoryFormOpen(true)
-    }
-  }, [editingCategoryId])
-
-  useEffect(() => {
-    if (editingSubcategoryId !== null) {
-      setIsSubcategoryFormOpen(true)
-    }
-  }, [editingSubcategoryId])
+  const isCategoryFormVisible = isCategoryFormOpen || editingCategoryId !== null
+  const isSubcategoryFormVisible = isSubcategoryFormOpen || editingSubcategoryId !== null
 
   return (
     <section className="card">
@@ -96,8 +86,15 @@ export function CategoriesSection({
           </header>
 
           <div className="section-toolbar">
-            <button className="button button--primary" type="button" onClick={() => setIsCategoryFormOpen((value) => !value)}>
-              {isCategoryFormOpen ? 'Ocultar formulario' : editingCategoryId === null ? 'Nueva categoria' : 'Editar categoria'}
+            <button className="button button--primary" type="button" onClick={() => {
+              if (editingCategoryId !== null) {
+                onCategoryReset()
+                setIsCategoryFormOpen(false)
+                return
+              }
+              setIsCategoryFormOpen((value) => !value)
+            }}>
+              {isCategoryFormVisible ? 'Ocultar formulario' : 'Nueva categoria'}
             </button>
             <div className="section-toolbar__spacer" />
             <button className="button button--secondary" type="button" disabled={!hasConfig} onClick={onReload}>
@@ -105,7 +102,7 @@ export function CategoriesSection({
             </button>
           </div>
 
-          {isCategoryFormOpen ? (
+          {isCategoryFormVisible ? (
             <div className="section-panel">
               <form className="form-grid" onSubmit={onCategorySubmit}>
                 <label className="form-grid__field" htmlFor="categoryName">Nombre</label>
@@ -148,7 +145,7 @@ export function CategoriesSection({
                   type="text"
                   value={categoryForm.color}
                   onChange={(event) => onCategoryFormChange({ ...categoryForm, color: event.target.value })}
-                  placeholder="#2d8f85"
+                  placeholder="#6f86e8"
                 />
 
                 <div className="form-grid__actions">
@@ -174,8 +171,15 @@ export function CategoriesSection({
           </header>
 
           <div className="section-toolbar">
-            <button className="button button--primary" type="button" onClick={() => setIsSubcategoryFormOpen((value) => !value)}>
-              {isSubcategoryFormOpen ? 'Ocultar formulario' : editingSubcategoryId === null ? 'Nueva subcategoria' : 'Editar subcategoria'}
+            <button className="button button--primary" type="button" onClick={() => {
+              if (editingSubcategoryId !== null) {
+                onSubcategoryReset()
+                setIsSubcategoryFormOpen(false)
+                return
+              }
+              setIsSubcategoryFormOpen((value) => !value)
+            }}>
+              {isSubcategoryFormVisible ? 'Ocultar formulario' : 'Nueva subcategoria'}
             </button>
             <div className="section-toolbar__spacer" />
             <button className="button button--secondary" type="button" disabled={!hasConfig} onClick={onReload}>
@@ -183,7 +187,7 @@ export function CategoriesSection({
             </button>
           </div>
 
-          {isSubcategoryFormOpen ? (
+          {isSubcategoryFormVisible ? (
             <div className="section-panel">
               <form className="form-grid" onSubmit={onSubcategorySubmit}>
                 <label className="form-grid__field" htmlFor="subcategoryCategory">Categoria</label>

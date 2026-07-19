@@ -1,4 +1,4 @@
-import { useEffect, useState, type SyntheticEvent } from 'react'
+import { useState, type SyntheticEvent } from 'react'
 import { formatCurrency } from '../../app/appHelpers'
 import type {
   Category,
@@ -80,12 +80,7 @@ export function TransactionsSection({
 }: TransactionsSectionProps) {
   const [isTransactionFormOpen, setIsTransactionFormOpen] = useState(editingTransactionId !== null)
   const [isFiltersFormOpen, setIsFiltersFormOpen] = useState(false)
-
-  useEffect(() => {
-    if (editingTransactionId !== null) {
-      setIsTransactionFormOpen(true)
-    }
-  }, [editingTransactionId])
+  const isTransactionFormVisible = isTransactionFormOpen || editingTransactionId !== null
 
   const isAutoAdjustmentTransaction = (transaction: Transaction): boolean => {
     const notes = transaction.notes ?? ''
@@ -106,8 +101,15 @@ export function TransactionsSection({
       </header>
 
       <div className="section-toolbar">
-        <button className="button button--primary" type="button" onClick={() => setIsTransactionFormOpen((value) => !value)}>
-          {isTransactionFormOpen ? 'Ocultar formulario' : editingTransactionId === null ? 'Nueva transaccion' : 'Editar transaccion'}
+        <button className="button button--primary" type="button" onClick={() => {
+          if (editingTransactionId !== null) {
+            onResetTransactionForm()
+            setIsTransactionFormOpen(false)
+            return
+          }
+          setIsTransactionFormOpen((value) => !value)
+        }}>
+          {isTransactionFormVisible ? 'Ocultar formulario' : 'Nueva transaccion'}
         </button>
         <button className="button button--secondary" type="button" onClick={() => setIsFiltersFormOpen((value) => !value)}>
           {isFiltersFormOpen ? 'Ocultar filtros' : 'Filtros'}
@@ -123,7 +125,7 @@ export function TransactionsSection({
             <p className="mini-card__subtitle">Crea gastos o ingresos asociados a instrumento y categoria.</p>
           </header>
 
-          {isTransactionFormOpen ? (
+          {isTransactionFormVisible ? (
             <div className="section-panel">
               <form className="form-grid" onSubmit={onTransactionSubmit}>
             <label className="form-grid__field" htmlFor="transactionInstrument">Instrumento</label>

@@ -1,10 +1,9 @@
 import { ENDPOINTS } from './endpoints'
-import type { ApiResponse, LocalConfig } from '../types/config'
+import type { ApiResponse } from '../types/config'
 import {
-  getApiProxyBridge,
-  getLocalConfigBridge,
-  MISSING_ELECTRON_BRIDGE_MESSAGE,
-} from '../app/localConfigBridge'
+  getLocalDatabaseBridge,
+  MISSING_DATABASE_BRIDGE_MESSAGE,
+} from '../app/localDatabaseBridge'
 import type {
   Budget,
   BudgetInput,
@@ -45,152 +44,29 @@ import type {
   TransactionInput,
 } from '../types/domain'
 
-const CLIENT_VERSION = 'phase0'
-
-function assertHttpsUrl(value: string): void {
-  let parsedUrl: URL
-
-  try {
-    parsedUrl = new URL(value)
-  } catch {
-    throw new Error('El endpoint no es una URL valida.')
-  }
-
-  if (parsedUrl.protocol !== 'https:') {
-    throw new Error('El endpoint debe usar HTTPS.')
-  }
-}
-
-async function getStoredConfig(): Promise<LocalConfig> {
-  const bridge = getLocalConfigBridge()
-
-  if (!bridge) {
-    throw new Error(MISSING_ELECTRON_BRIDGE_MESSAGE)
-  }
-
-  const config = await bridge.getConfig()
-
-  if (!config) {
-    throw new Error('Primero configura API Key, endpoint y region en Settings.')
-  }
-
-  assertHttpsUrl(config.apiEndpoint)
-  return config
-}
-
 async function request<T>(
   path: string,
   init: RequestInit = {},
 ): Promise<ApiResponse<T>> {
-  const bridge = getApiProxyBridge()
-
-  if (bridge) {
-    try {
-      const method = (init.method ?? 'GET').toUpperCase()
-      const headers =
-        init.headers && typeof init.headers === 'object' && !Array.isArray(init.headers)
-          ? (init.headers as Record<string, string>)
-          : {}
-      const body = typeof init.body === 'string' ? init.body : undefined
-
-      const response = await bridge.request({
-        path,
-        method,
-        headers,
-        body,
-      })
-
-      let data: ApiResponse<T> | null = null
-
-      if (response.bodyText) {
-        try {
-          data = JSON.parse(response.bodyText) as ApiResponse<T>
-        } catch {
-          data = null
-        }
-      }
-
-      if (!response.ok) {
-        const apiError =
-          data && typeof data === 'object'
-            ? (data.error ?? ((data as { message?: string }).message ?? null))
-            : null
-
-        return {
-          success: false,
-          error: apiError ?? `Error HTTP ${response.status} al llamar la API.`,
-        }
-      }
-
-      if (!data) {
-        return {
-          success: false,
-          error: 'La API respondio en un formato inesperado.',
-        }
-      }
-
-      return data
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Error de red desconocido.'
-      console.error('[apiClient] proxy request failed', { path, error: errorMessage })
-      return {
-        success: false,
-        error: `No se pudo conectar con el API Gateway. ${errorMessage}`,
-      }
-    }
+  const bridge = getLocalDatabaseBridge()
+  if (!bridge) {
+    return { success: false, error: MISSING_DATABASE_BRIDGE_MESSAGE }
   }
-
-  const config = await getStoredConfig()
-  const baseUrl = config.apiEndpoint.replace(/\/$/, '')
-
   try {
-    const response = await fetch(`${baseUrl}${path}`, {
-      ...init,
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': config.apiKey,
-        'x-client-version': CLIENT_VERSION,
-        ...init.headers,
-      },
+    const response = await bridge.request({
+      path,
+      method: (init.method ?? 'GET').toUpperCase(),
+      body: typeof init.body === 'string' ? init.body : undefined,
     })
-
-    const rawBody = await response.text()
-    let data: ApiResponse<T> | null = null
-
-    if (rawBody) {
-      try {
-        data = JSON.parse(rawBody) as ApiResponse<T>
-      } catch {
-        data = null
-      }
-    }
-
-    if (!response.ok) {
-      const apiError =
-        data && typeof data === 'object'
-          ? (data.error ?? ((data as { message?: string }).message ?? null))
-          : null
-
-      return {
-        success: false,
-        error: apiError ?? `Error HTTP ${response.status} al llamar la API.`,
-      }
-    }
-
-    if (!data) {
-      return {
-        success: false,
-        error: 'La API respondio en un formato inesperado.',
-      }
-    }
-
-    return data
+    return response as ApiResponse<T>
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Error de red desconocido.'
-    console.error('[apiClient] request failed', { path, error: errorMessage })
+    console.error('[localClient] database request failed', {
+      path,
+      error: error instanceof Error ? error.message : 'unknown',
+    })
     return {
       success: false,
-      error: `No se pudo conectar con el API Gateway. ${errorMessage}`,
+      error: 'No se pudo completar la operacion en la base de datos local.',
     }
   }
 }
@@ -249,33 +125,6 @@ function sanitizeInstrumentPayload(payload: FinancialInstrumentInput): Record<st
   }
 
   return sanitized
-}
-
-function sanitizeInstrumentLegacyPayload(payload: FinancialInstrumentInput): Record<string, unknown> {
-  const sanitized: Record<string, unknown> = {
-    bankId: payload.bankId,
-    name: payload.name.trim(),
-    type: payload.type,
-    currencyId: payload.currencyId,
-  }
-
-  setTrimmedIfPresent(sanitized, 'lastFour', payload.lastFour)
-  setTrimmedIfPresent(sanitized, 'notes', payload.notes)
-
-  if (payload.type === 'credit_card') {
-    setIfNotNull(sanitized, 'creditLimit', payload.creditLimit)
-    setIfNotNull(sanitized, 'currentBalance', payload.currentBalance)
-    setIfNotNull(sanitized, 'cutOffDay', payload.cutOffDay)
-    setIfNotNull(sanitized, 'paymentDueDay', payload.paymentDueDay)
-  } else {
-    setIfNotNull(sanitized, 'currentAmount', payload.currentAmount)
-  }
-
-  return sanitized
-}
-
-function isInvalidRequestBodyError(error: string | undefined): boolean {
-  return typeof error === 'string' && error.toLowerCase().includes('invalid request body')
 }
 
 function sanitizeCategoryPayload(payload: CategoryInput): Record<string, unknown> {
@@ -535,37 +384,6 @@ function buildTransactionQuery(filters: TransactionFilters): string {
 
 export const apiClient = {
   health: () => request<{ status: string }>(ENDPOINTS.HEALTH, { method: 'GET' }),
-  bootstrapPing: async (message: string) => {
-    const config = await getStoredConfig()
-
-    const primaryResponse = await request<{ message: string }>(ENDPOINTS.BOOTSTRAP_PING, {
-      method: 'POST',
-      body: JSON.stringify({
-        awsRegion: config.awsRegion,
-        message,
-      }),
-    })
-
-    if (primaryResponse.success) {
-      return primaryResponse
-    }
-
-    const shouldRetryWithLegacyRegion =
-      typeof primaryResponse.error === 'string'
-      && primaryResponse.error.toLowerCase().includes('invalid request body')
-
-    if (!shouldRetryWithLegacyRegion) {
-      return primaryResponse
-    }
-
-    return request<{ message: string }>(ENDPOINTS.BOOTSTRAP_PING, {
-      method: 'POST',
-      body: JSON.stringify({
-        awsRegion: 'us-east-1',
-        message,
-      }),
-    })
-  },
   getDashboardSummary: () => request<DashboardSummary>(ENDPOINTS.DASHBOARD_SUMMARY, { method: 'GET' }),
   getDashboardExpensesByCategory: () => request<DashboardExpenseByCategory[]>(ENDPOINTS.DASHBOARD_EXPENSES_BY_CATEGORY, { method: 'GET' }),
   getDashboardCashFlow: () => request<DashboardCashFlowPoint[]>(ENDPOINTS.DASHBOARD_CASH_FLOW, { method: 'GET' }),
@@ -633,29 +451,11 @@ export const apiClient = {
     request<FinancialInstrument>(ENDPOINTS.INSTRUMENTS, {
       method: 'POST',
       body: JSON.stringify(sanitizeInstrumentPayload(payload)),
-    }).then((primaryResponse) => {
-      if (primaryResponse.success || !isInvalidRequestBodyError(primaryResponse.error)) {
-        return primaryResponse
-      }
-
-      return request<FinancialInstrument>(ENDPOINTS.INSTRUMENTS, {
-        method: 'POST',
-        body: JSON.stringify(sanitizeInstrumentLegacyPayload(payload)),
-      })
     }),
   updateInstrument: (id: number, payload: FinancialInstrumentInput) =>
     request<FinancialInstrument>(`${ENDPOINTS.INSTRUMENTS}/${id}`, {
       method: 'PUT',
       body: JSON.stringify(sanitizeInstrumentPayload(payload)),
-    }).then((primaryResponse) => {
-      if (primaryResponse.success || !isInvalidRequestBodyError(primaryResponse.error)) {
-        return primaryResponse
-      }
-
-      return request<FinancialInstrument>(`${ENDPOINTS.INSTRUMENTS}/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(sanitizeInstrumentLegacyPayload(payload)),
-      })
     }),
   deleteInstrument: (id: number) =>
     request<{ id: number }>(`${ENDPOINTS.INSTRUMENTS}/${id}`, {

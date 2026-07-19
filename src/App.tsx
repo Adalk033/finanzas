@@ -11,6 +11,7 @@ const InstrumentsSection = lazy(() => import('./components/sections/InstrumentsS
 const CategoriesSection = lazy(() => import('./components/sections/CategoriesSection').then((module) => ({ default: module.CategoriesSection })))
 const TransactionsSection = lazy(() => import('./components/sections/TransactionsSection').then((module) => ({ default: module.TransactionsSection })))
 const CreditCardsSection = lazy(() => import('./components/sections/CreditCardsSection').then((module) => ({ default: module.CreditCardsSection })))
+const TransfersSection = lazy(() => import('./components/sections/TransfersSection').then((module) => ({ default: module.TransfersSection })))
 const SubscriptionsSection = lazy(() => import('./components/sections/SubscriptionsSection').then((module) => ({ default: module.SubscriptionsSection })))
 const FixedExpensesSection = lazy(() => import('./components/sections/FixedExpensesSection').then((module) => ({ default: module.FixedExpensesSection })))
 const LoansSection = lazy(() => import('./components/sections/LoansSection').then((module) => ({ default: module.LoansSection })))
@@ -24,9 +25,7 @@ export function App() {
     activeSection,
     handleSectionChange,
     isSectionLoading,
-    handleSave,
-    configController,
-    settingsPingController,
+    databaseController,
     dashboardController,
     instrumentsController,
     banksController,
@@ -42,10 +41,10 @@ export function App() {
     transactionsController,
   } = useAppControllers()
 
-  if (configController.isLoading) {
+  if (databaseController.isLoading) {
     return (
       <main className="settings-screen settings-screen--centered">
-        <p className="settings-screen__status">Cargando configuracion local...</p>
+        <p className="settings-screen__status">Abriendo base de datos local...</p>
       </main>
     )
   }
@@ -55,7 +54,7 @@ export function App() {
       <AppSidebar
         activeSection={activeSection}
         pendingRemindersCount={remindersController.pendingRemindersCount}
-        cloudConnectionStatus={settingsPingController.cloudConnectionStatus}
+        databaseStatus={databaseController.status}
         onSectionChange={handleSectionChange}
       />
 
@@ -82,21 +81,11 @@ export function App() {
 
           {activeSection === 'settings' ? (
             <SettingsSection
-              config={configController.config}
-              hasElectronBridge={configController.hasElectronBridge}
-              isSaving={configController.isSaving}
-              isPinging={settingsPingController.isPinging}
-              error={configController.error}
-              successMessage={configController.successMessage}
-              pingError={settingsPingController.pingError}
-              pingResponse={settingsPingController.pingResponse}
-              onConfigChange={configController.setConfig}
-              onSave={(event) => {
-                event.preventDefault()
-                void handleSave()
-              }}
-              onPing={() => {
-                void settingsPingController.handlePing()
+              info={databaseController.info}
+              isLoading={databaseController.isLoading}
+              error={databaseController.error}
+              onRefresh={() => {
+                void databaseController.refreshInfo()
               }}
             />
           ) : null}
@@ -231,58 +220,80 @@ export function App() {
           {activeSection === 'creditCards' ? (
             <CreditCardsSection
               hasConfig={hasConfig}
-              totalCreditCardDebt={creditCardsController.totalCreditCardDebt}
-              totalAvailableCredit={creditCardsController.totalAvailableCredit}
               creditCardInstruments={creditCardsController.creditCardInstruments}
               sourceTransferInstruments={creditCardsController.sourceTransferInstruments}
-              availableTransferDestinations={creditCardsController.availableTransferDestinations}
-              selectedStatementInstrumentId={creditCardsController.selectedStatementInstrumentId}
-              selectedTransferSourceInstrumentId={creditCardsController.selectedTransferSourceInstrumentId}
-              selectedTransferDestinationInstrumentId={creditCardsController.selectedTransferDestinationInstrumentId}
-              selectedTransferStatementId={creditCardsController.selectedTransferStatementId}
-              statementForm={creditCardsController.statementForm}
-              transferForm={creditCardsController.transferForm}
-              statements={creditCardsController.statements}
-              transfers={creditCardsController.transfers}
+              selectedCardId={creditCardsController.selectedCardId}
+              selectedCard={creditCardsController.selectedCard}
+              currentStatement={creditCardsController.currentStatement}
+              selectedCardStatements={creditCardsController.selectedCardStatements}
+              selectedCardPayments={creditCardsController.selectedCardPayments}
+              cardMovements={creditCardsController.cardMovements}
+              activeMsiPurchases={creditCardsController.activeMsiPurchases}
+              purchaseForm={creditCardsController.purchaseForm}
+              purchaseCategoryOptions={creditCardsController.purchaseCategoryOptions}
+              purchaseSubcategoryOptions={creditCardsController.purchaseSubcategoryOptions}
+              cardPaymentForm={creditCardsController.cardPaymentForm}
+              selectedPaymentSourceId={creditCardsController.selectedPaymentSourceId}
               statementUpdateForm={creditCardsController.statementUpdateForm}
               editingStatementId={creditCardsController.editingStatementId}
-              editingTransferId={creditCardsController.editingTransferId}
               selectedStatementDetail={creditCardsController.selectedStatementDetail}
               statementMovements={creditCardsController.statementMovements}
               isStatementsLoading={creditCardsController.isStatementsLoading}
-              isTransfersLoading={creditCardsController.isTransfersLoading}
+              isCardMovementsLoading={creditCardsController.isCardMovementsLoading}
               isStatementMovementsLoading={creditCardsController.isStatementMovementsLoading}
+              actionError={creditCardsController.actionError}
+              actionMessage={creditCardsController.actionMessage}
               statementError={creditCardsController.statementError}
               statementMessage={creditCardsController.statementMessage}
-              transferError={creditCardsController.transferError}
-              transferMessage={creditCardsController.transferMessage}
-              onStatementFormChange={creditCardsController.setStatementForm}
-              onTransferFormChange={creditCardsController.setTransferForm}
+              onSelectCard={creditCardsController.selectCard}
+              onPurchaseFormChange={creditCardsController.setPurchaseForm}
+              onPurchaseSubmit={creditCardsController.handlePurchaseSubmit}
+              onResetPurchase={creditCardsController.resetPurchaseForm}
+              onPaymentFormChange={creditCardsController.setCardPaymentForm}
+              onSetPaymentAmount={creditCardsController.setPaymentAmount}
+              onPaymentSubmit={creditCardsController.handleCardPaymentSubmit}
+              onResetPayment={creditCardsController.resetCardPaymentForm}
               onStatementUpdateFormChange={creditCardsController.setStatementUpdateForm}
-              onTransferTypeChange={creditCardsController.handleTransferTypeChange}
-              onStartTransferEdit={creditCardsController.startTransferEdit}
-              onStatementSubmit={creditCardsController.handleStatementSubmit}
-              onTransferSubmit={creditCardsController.handleTransferSubmit}
-              onResetStatementForm={creditCardsController.resetStatementForm}
-              onResetTransferForm={creditCardsController.resetTransferForm}
-              onReloadStatements={() => {
-                void creditCardsController.loadStatements()
-              }}
-              onReloadTransfers={() => {
-                void creditCardsController.loadTransfers()
-              }}
               onLoadStatementMovements={(statement) => {
                 void creditCardsController.loadStatementMovements(statement)
               }}
               onStartStatementEdit={creditCardsController.startStatementEdit}
-              onDeleteStatement={(statementId) => {
-                void creditCardsController.handleStatementDelete(statementId)
-              }}
               onSaveStatementUpdate={() => {
                 void creditCardsController.handleStatementUpdate()
               }}
               onCancelStatementUpdate={creditCardsController.resetStatementUpdateForm}
-              onDeleteTransfer={(transferId) => {
+              onReload={() => {
+                void Promise.all([
+                  creditCardsController.loadStatements(),
+                  creditCardsController.loadTransfers(),
+                  creditCardsController.loadCardMovements(),
+                ])
+              }}
+            />
+          ) : null}
+
+          {activeSection === 'transfers' ? (
+            <TransfersSection
+              hasConfig={hasConfig}
+              sourceInstruments={creditCardsController.sourceTransferInstruments}
+              destinationInstruments={creditCardsController.availableTransferDestinations}
+              transfers={creditCardsController.transfers}
+              transferForm={creditCardsController.transferForm}
+              selectedSourceInstrumentId={creditCardsController.selectedTransferSourceInstrumentId}
+              selectedDestinationInstrumentId={creditCardsController.selectedTransferDestinationInstrumentId}
+              editingTransferId={creditCardsController.editingTransferId}
+              isLoading={creditCardsController.isTransfersLoading}
+              message={creditCardsController.transferMessage}
+              error={creditCardsController.transferError}
+              onFormChange={creditCardsController.setTransferForm}
+              onTypeChange={creditCardsController.handleTransferTypeChange}
+              onSubmit={creditCardsController.handleTransferSubmit}
+              onReset={creditCardsController.resetTransferForm}
+              onReload={() => {
+                void creditCardsController.loadTransfers()
+              }}
+              onEdit={creditCardsController.startTransferEdit}
+              onDelete={(transferId) => {
                 void creditCardsController.handleTransferDelete(transferId)
               }}
             />

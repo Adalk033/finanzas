@@ -1,4 +1,4 @@
-import { useEffect, useState, type SyntheticEvent } from 'react'
+import { useState, type SyntheticEvent } from 'react'
 import { getReminderTypeLabel } from '../../app/appHelpers'
 import type { Reminder, ReminderInput, ReminderType } from '../../types/domain'
 
@@ -40,12 +40,7 @@ export function RemindersSection({
   onDelete,
 }: RemindersSectionProps) {
   const [isFormOpen, setIsFormOpen] = useState(editingReminderId !== null)
-
-  useEffect(() => {
-    if (editingReminderId !== null) {
-      setIsFormOpen(true)
-    }
-  }, [editingReminderId])
+  const isFormVisible = isFormOpen || editingReminderId !== null
 
   return (
     <section className="card">
@@ -58,8 +53,15 @@ export function RemindersSection({
       {reminderError ? <p className="message message--error">{reminderError}</p> : null}
 
       <div className="section-toolbar">
-        <button className="button button--primary" type="button" onClick={() => setIsFormOpen((value) => !value)}>
-          {isFormOpen ? 'Ocultar formulario' : editingReminderId === null ? 'Nuevo recordatorio' : 'Editar recordatorio'}
+        <button className="button button--primary" type="button" onClick={() => {
+          if (editingReminderId !== null) {
+            onReset()
+            setIsFormOpen(false)
+            return
+          }
+          setIsFormOpen((value) => !value)
+        }}>
+          {isFormVisible ? 'Ocultar formulario' : 'Nuevo recordatorio'}
         </button>
       </div>
 
@@ -69,7 +71,7 @@ export function RemindersSection({
             <h3 className="mini-card__title">{editingReminderId === null ? 'Nuevo recordatorio' : 'Editar recordatorio'}</h3>
           </header>
 
-          {isFormOpen ? (
+          {isFormVisible ? (
             <div className="section-panel">
               <form className="form-grid" onSubmit={onSubmit}>
             <label className="form-grid__field" htmlFor="reminderTitle">Titulo</label>

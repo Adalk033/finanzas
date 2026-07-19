@@ -24,15 +24,13 @@
   height: 100svh;
   display: grid;
   grid-template-columns: 260px 1fr;
-  background:
-    radial-gradient(circle at 10% 10%, rgba(87, 166, 216, 0.12), transparent 35%),
-    radial-gradient(circle at 85% 85%, rgba(45, 143, 133, 0.12), transparent 30%),
-    var(--color-bg);
+  background: var(--color-bg);
   overflow: hidden;
 }
 
 .app-shell__sidebar {
   border-right: 1px solid var(--color-border);
+  background: var(--color-sidebar);
   padding: var(--space-4) var(--space-3);
   display: flex;
   flex-direction: column;
@@ -46,7 +44,7 @@
   margin-bottom: var(--space-2);
 }
 
-.app-shell__cloud-pill {
+.app-shell__database-pill {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -55,13 +53,13 @@
   padding: 8px 12px;
   margin-bottom: var(--space-2);
   border: 1px solid var(--color-border);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--color-card);
   color: var(--color-text-secondary);
   font-size: 12px;
   font-weight: 500;
 }
 
-.app-shell__cloud-pill-dot {
+.app-shell__database-pill-dot {
   width: 8px;
   height: 8px;
   border-radius: 999px;
@@ -69,45 +67,72 @@
   box-shadow: 0 0 0 4px rgba(169, 179, 191, 0.12);
 }
 
-.app-shell__cloud-pill--connected {
+.app-shell__database-pill--ready {
   color: var(--color-success);
   border-color: rgba(60, 177, 121, 0.35);
   background: rgba(60, 177, 121, 0.12);
 }
 
-.app-shell__cloud-pill--connected .app-shell__cloud-pill-dot {
+.app-shell__database-pill--ready .app-shell__database-pill-dot {
   background: var(--color-success);
   box-shadow: 0 0 0 4px rgba(60, 177, 121, 0.16);
 }
 
-.app-shell__cloud-pill--disconnected {
+.app-shell__database-pill--error {
   color: var(--color-error);
   border-color: rgba(217, 95, 95, 0.35);
   background: rgba(217, 95, 95, 0.12);
 }
 
-.app-shell__cloud-pill--disconnected .app-shell__cloud-pill-dot {
+.app-shell__database-pill--error .app-shell__database-pill-dot {
   background: var(--color-error);
   box-shadow: 0 0 0 4px rgba(217, 95, 95, 0.16);
 }
 
-.app-shell__cloud-pill--checking {
+.app-shell__database-pill--checking {
   color: var(--color-warning);
   border-color: rgba(230, 162, 60, 0.35);
   background: rgba(230, 162, 60, 0.12);
 }
 
-.app-shell__cloud-pill--checking .app-shell__cloud-pill-dot {
+.app-shell__database-pill--checking .app-shell__database-pill-dot {
   background: var(--color-warning);
   box-shadow: 0 0 0 4px rgba(230, 162, 60, 0.16);
 }
 
-.app-shell__cloud-pill--unconfigured {
+.app-shell__database-pill--unavailable {
   color: var(--color-text-secondary);
 }
 
-.app-shell__cloud-pill--unconfigured .app-shell__cloud-pill-dot {
+.app-shell__database-pill--unavailable .app-shell__database-pill-dot {
   background: var(--color-text-secondary);
+}
+
+.settings-database {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+}
+
+.settings-database__row {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.35fr) minmax(0, 1fr);
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+}
+
+.settings-database__row dt {
+  color: var(--color-text-secondary);
+}
+
+.settings-database__row dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
 }
 
 .nav-button {
@@ -115,7 +140,7 @@
   border-radius: 12px;
   padding: 12px;
   color: var(--color-text);
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--color-card);
   text-align: left;
   font: 500 14px/1 var(--font-base);
   cursor: pointer;
@@ -132,7 +157,7 @@
 
 .nav-button--active {
   border-color: var(--color-primary);
-  background: rgba(45, 143, 133, 0.14);
+  background: var(--color-primary-soft);
 }
 
 .nav-button__label {
@@ -162,7 +187,7 @@
 .card {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
-  background: linear-gradient(165deg, rgba(255, 255, 255, 0.03), transparent 40%), var(--color-card);
+  background: var(--color-card);
   box-shadow: var(--shadow-card);
   padding: var(--space-4);
 }
@@ -211,7 +236,7 @@
   width: 100%;
   border: 1px solid var(--color-border);
   border-radius: 12px;
-  background: #0f1824;
+  background: var(--color-input);
   color: var(--color-text);
   font: 400 16px/1.25 var(--font-base);
   padding: 12px 14px;
@@ -221,7 +246,7 @@
 .form-grid__input:focus-visible {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px rgba(45, 143, 133, 0.2);
+  box-shadow: 0 0 0 2px rgba(111, 134, 232, 0.24);
 }
 
 .form-grid__actions {
@@ -243,9 +268,9 @@
 }
 
 .button--primary {
-  border: 1px solid var(--color-primary);
+  border: 1px solid var(--color-primary-strong);
   color: #ffffff;
-  background: var(--color-primary);
+  background: var(--color-primary-strong);
 }
 
 .button--secondary {
@@ -315,7 +340,7 @@
 .group-card {
   border: 1px solid var(--color-border);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.015);
+  background: var(--color-surface);
   padding: var(--space-2);
 }
 
@@ -339,7 +364,7 @@
 .mini-card {
   border: 1px solid var(--color-border);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--color-surface);
   padding: var(--space-3);
 }
 
@@ -367,7 +392,7 @@
 .category-card {
   border: 1px solid var(--color-border);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.015);
+  background: var(--color-surface);
   padding: var(--space-3);
 }
 
@@ -420,7 +445,7 @@
 .summary-card {
   border: 1px solid var(--color-border);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--color-surface);
   padding: var(--space-2);
 }
 
@@ -438,6 +463,365 @@
 
 .summary-card__value--positive {
   color: var(--color-success);
+}
+
+.credit-cards__header,
+.transfers__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.credit-cards__positive,
+.table__amount--positive {
+  color: var(--color-success);
+}
+
+.credit-cards__empty {
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-card);
+  padding: var(--space-5) var(--space-3);
+  text-align: center;
+}
+
+.credit-cards__empty h3 {
+  margin-bottom: var(--space-1);
+  font-size: 18px;
+}
+
+.credit-cards__empty p {
+  color: var(--color-text-secondary);
+}
+
+.credit-card-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.credit-card-picker__item {
+  display: grid;
+  gap: 6px;
+  min-height: 112px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: var(--space-2);
+  background: color-mix(in srgb, var(--color-card) 90%, var(--color-bg));
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 140ms ease, background-color 140ms ease, transform 140ms ease;
+}
+
+.credit-card-picker__item:hover {
+  border-color: var(--color-primary);
+  transform: translateY(-1px);
+}
+
+.credit-card-picker__item--active {
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 14%, var(--color-card));
+  box-shadow: inset 0 0 0 1px var(--color-primary);
+}
+
+.credit-card-picker__item strong {
+  align-self: end;
+  font-size: 16px;
+}
+
+.credit-card-picker__item > span:last-child,
+.credit-card-picker__bank {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.credit-card-overview {
+  display: grid;
+  grid-template-columns: minmax(200px, 0.85fr) minmax(360px, 1.5fr) minmax(200px, 0.8fr);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-card));
+}
+
+.credit-card-overview__identity,
+.credit-card-overview__metrics,
+.credit-card-overview__statement {
+  padding: var(--space-3);
+}
+
+.credit-card-overview__identity {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 184px;
+  background: var(--color-primary-strong);
+  color: var(--color-text);
+}
+
+.credit-card-overview__identity span,
+.credit-card-overview__identity p {
+  font-size: 12px;
+  opacity: 0.82;
+}
+
+.credit-card-overview__identity h3 {
+  margin: 6px 0;
+  font-size: 22px;
+}
+
+.credit-card-overview__metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: center;
+  gap: var(--space-3);
+}
+
+.credit-card-overview__metrics div,
+.credit-card-overview__statement div {
+  display: grid;
+  gap: 4px;
+}
+
+.credit-card-overview__metrics span,
+.credit-card-overview__statement div span {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.credit-card-overview__metrics strong,
+.credit-card-overview__statement strong {
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+}
+
+.credit-card-overview__metrics small {
+  color: var(--color-text-secondary);
+}
+
+.credit-card-overview__statement {
+  display: grid;
+  align-content: center;
+  gap: var(--space-2);
+  border-left: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-bg) 44%, transparent);
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-pill--neutral {
+  color: var(--color-text-secondary);
+}
+
+.status-pill--success {
+  border-color: var(--color-success);
+  color: var(--color-success);
+  background: color-mix(in srgb, var(--color-success) 12%, transparent);
+}
+
+.status-pill--warning {
+  border-color: var(--color-warning);
+  color: var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 12%, transparent);
+}
+
+.status-pill--error {
+  border-color: var(--color-error);
+  color: var(--color-error);
+  background: color-mix(in srgb, var(--color-error) 12%, transparent);
+}
+
+.credit-card-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin: var(--space-3) 0;
+}
+
+.credit-card-form-panel {
+  margin-bottom: var(--space-3);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-card);
+  padding: var(--space-3);
+  background: color-mix(in srgb, var(--color-primary) 7%, var(--color-card));
+}
+
+.credit-card-form-panel > header {
+  margin-bottom: var(--space-3);
+}
+
+.credit-card-form-panel > header h3 {
+  margin-bottom: 4px;
+  font-size: 18px;
+}
+
+.credit-card-form-panel > header p {
+  color: var(--color-text-secondary);
+  font-size: 14px;
+}
+
+.credit-card-form-panel__form,
+.credit-card-statement-edit .form-grid {
+  grid-template-columns: minmax(160px, 0.35fr) minmax(0, 1fr);
+  align-items: center;
+}
+
+.credit-card-form-panel__form .form-grid__checkbox,
+.credit-card-form-panel__form .form-grid__actions,
+.credit-card-statement-edit .form-grid__actions {
+  grid-column: 1 / -1;
+}
+
+.form-grid__checkbox {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-text);
+  font-size: 14px;
+}
+
+.form-grid__checkbox input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-primary);
+}
+
+.payment-presets {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-1);
+  margin-bottom: var(--space-3);
+}
+
+.payment-presets button {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: 12px;
+  background: color-mix(in srgb, var(--color-bg) 42%, transparent);
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.payment-presets button:hover {
+  border-color: var(--color-primary);
+}
+
+.payment-presets span {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.payment-presets strong {
+  overflow: hidden;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+}
+
+.credit-card-tabs {
+  display: flex;
+  gap: var(--space-1);
+  overflow-x: auto;
+  border-bottom: 1px solid var(--color-border);
+  margin-top: var(--space-3);
+}
+
+.credit-card-tabs button {
+  flex: 0 0 auto;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 12px 16px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: 500 14px/1 var(--font-base);
+  cursor: pointer;
+}
+
+.credit-card-tabs button:hover,
+.credit-card-tabs .credit-card-tabs__item--active {
+  border-bottom-color: var(--color-primary);
+  color: var(--color-text);
+}
+
+.credit-card-tab-content {
+  display: grid;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+}
+
+.credit-card-summary-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.7fr) minmax(0, 1.3fr);
+  gap: var(--space-3);
+}
+
+.credit-card-detail-list {
+  display: grid;
+  gap: 12px;
+  margin: var(--space-2) 0 0;
+}
+
+.credit-card-detail-list div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 8px;
+}
+
+.credit-card-detail-list dt {
+  color: var(--color-text-secondary);
+}
+
+.credit-card-detail-list dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.credit-card-statement-edit {
+  margin-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-3);
+}
+
+.credit-card-statement-edit h4,
+.statement-movements h4 {
+  margin-bottom: var(--space-2);
+}
+
+.table__amount {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.transfers__layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.7fr) minmax(520px, 1.3fr);
+  gap: var(--space-3);
+}
+
+.transfers__route,
+.transfers__type {
+  display: block;
+  margin-top: 4px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
 }
 
 .dashboard-grid {
@@ -536,6 +920,22 @@
     grid-template-columns: 220px 1fr;
   }
 
+  .credit-card-overview {
+    grid-template-columns: minmax(190px, 0.7fr) minmax(320px, 1.3fr);
+  }
+
+  .credit-card-overview__statement {
+    grid-column: 1 / -1;
+    grid-template-columns: auto repeat(2, minmax(0, 1fr));
+    align-items: center;
+    border-top: 1px solid var(--color-border);
+    border-left: 0;
+  }
+
+  .transfers__layout {
+    grid-template-columns: 1fr;
+  }
+
   .dashboard-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -595,6 +995,50 @@
     grid-template-columns: 1fr;
   }
 
+  .credit-cards__header,
+  .transfers__header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .credit-cards__header .button,
+  .transfers__header .button {
+    align-self: flex-start;
+  }
+
+  .credit-card-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .credit-card-overview__identity {
+    min-height: 152px;
+  }
+
+  .credit-card-overview__statement {
+    grid-column: auto;
+    grid-template-columns: 1fr;
+    border-left: 0;
+  }
+
+  .credit-card-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .payment-presets {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .credit-card-form-panel__form,
+  .credit-card-statement-edit .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .credit-card-form-panel__form .form-grid__checkbox,
+  .credit-card-form-panel__form .form-grid__actions,
+  .credit-card-statement-edit .form-grid__actions {
+    grid-column: auto;
+  }
+
   .transaction-layout {
     grid-template-columns: 1fr;
   }
@@ -625,7 +1069,8 @@
 
   .form-grid__actions,
   .table__actions,
-  .category-card__actions {
+  .category-card__actions,
+  .credit-card-actions {
     flex-direction: column;
   }
 

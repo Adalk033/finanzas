@@ -1,4 +1,4 @@
-import { useEffect, useState, type SyntheticEvent } from 'react'
+import { useState, type SyntheticEvent } from 'react'
 import { formatCurrency } from '../../app/appHelpers'
 import type {
   Category,
@@ -70,18 +70,8 @@ export function FixedExpensesSection({
 }: FixedExpensesSectionProps) {
   const [isExpenseFormOpen, setIsExpenseFormOpen] = useState(editingFixedExpenseId !== null)
   const [isPaymentFormOpen, setIsPaymentFormOpen] = useState(selectedFixedExpenseId !== null)
-
-  useEffect(() => {
-    if (editingFixedExpenseId !== null) {
-      setIsExpenseFormOpen(true)
-    }
-  }, [editingFixedExpenseId])
-
-  useEffect(() => {
-    if (selectedFixedExpenseId !== null) {
-      setIsPaymentFormOpen(true)
-    }
-  }, [selectedFixedExpenseId])
+  const isExpenseFormVisible = isExpenseFormOpen || editingFixedExpenseId !== null
+  const isPaymentFormVisible = isPaymentFormOpen || selectedFixedExpenseId !== null
 
   return (
     <section className="card">
@@ -98,8 +88,15 @@ export function FixedExpensesSection({
           </header>
 
           <div className="section-toolbar">
-            <button className="button button--primary" type="button" onClick={() => setIsExpenseFormOpen((value) => !value)}>
-              {isExpenseFormOpen ? 'Ocultar formulario' : editingFixedExpenseId === null ? 'Nuevo gasto fijo' : 'Editar gasto fijo'}
+            <button className="button button--primary" type="button" onClick={() => {
+              if (editingFixedExpenseId !== null) {
+                onResetFixedExpenseEditor()
+                setIsExpenseFormOpen(false)
+                return
+              }
+              setIsExpenseFormOpen((value) => !value)
+            }}>
+              {isExpenseFormVisible ? 'Ocultar formulario' : 'Nuevo gasto fijo'}
             </button>
             <div className="section-toolbar__spacer" />
             <button className="button button--secondary" type="button" onClick={onReloadFixedExpenses}>
@@ -107,7 +104,7 @@ export function FixedExpensesSection({
             </button>
           </div>
 
-          {isExpenseFormOpen ? (
+          {isExpenseFormVisible ? (
             <div className="section-panel">
               <form className="form-grid" onSubmit={onFixedExpenseSubmit}>
                 <label className="form-grid__field" htmlFor="fixedExpenseName">Nombre</label>
@@ -234,12 +231,20 @@ export function FixedExpensesSection({
           </header>
 
           <div className="section-toolbar">
-            <button className="button button--primary" type="button" onClick={() => setIsPaymentFormOpen((value) => !value)}>
-              {isPaymentFormOpen ? 'Ocultar formulario' : 'Nuevo pago'}
+            <button className="button button--primary" type="button" onClick={() => {
+              if (selectedFixedExpenseId !== null) {
+                onResetFixedExpensePaymentForm()
+                onSelectFixedExpense(null)
+                setIsPaymentFormOpen(false)
+                return
+              }
+              setIsPaymentFormOpen((value) => !value)
+            }}>
+              {isPaymentFormVisible ? 'Ocultar formulario' : 'Nuevo pago'}
             </button>
           </div>
 
-          {isPaymentFormOpen ? (
+          {isPaymentFormVisible ? (
             <div className="section-panel">
               <form className="form-grid" onSubmit={onFixedExpensePaymentSubmit}>
                 <label className="form-grid__field" htmlFor="fixedExpenseSelected">Gasto fijo</label>
