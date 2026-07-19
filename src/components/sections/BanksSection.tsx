@@ -1,4 +1,4 @@
-import { useEffect, useState, type SyntheticEvent } from 'react'
+import { useState, type SyntheticEvent } from 'react'
 import type { Bank, BankInput } from '../../types/domain'
 
 type BanksSectionProps = {
@@ -33,12 +33,7 @@ export function BanksSection({
   onDelete,
 }: BanksSectionProps) {
   const [isFormOpen, setIsFormOpen] = useState(editingBankId !== null)
-
-  useEffect(() => {
-    if (editingBankId !== null) {
-      setIsFormOpen(true)
-    }
-  }, [editingBankId])
+  const isFormVisible = isFormOpen || editingBankId !== null
 
   return (
     <section className="card">
@@ -48,8 +43,15 @@ export function BanksSection({
       </header>
 
       <div className="section-toolbar">
-        <button className="button button--primary" type="button" onClick={() => setIsFormOpen((value) => !value)}>
-          {isFormOpen ? 'Ocultar formulario' : editingBankId === null ? 'Nuevo banco' : 'Editar banco'}
+        <button className="button button--primary" type="button" onClick={() => {
+          if (editingBankId !== null) {
+            onReset()
+            setIsFormOpen(false)
+            return
+          }
+          setIsFormOpen((value) => !value)
+        }}>
+          {isFormVisible ? 'Ocultar formulario' : 'Nuevo banco'}
         </button>
         <div className="section-toolbar__spacer" />
         <button className="button button--secondary" type="button" disabled={!hasConfig} onClick={onReload}>
@@ -57,7 +59,7 @@ export function BanksSection({
         </button>
       </div>
 
-      {isFormOpen ? (
+      {isFormVisible ? (
         <div className="section-panel">
           <form className="form-grid" onSubmit={onSubmit}>
             <label className="form-grid__field" htmlFor="bankName">Nombre del banco</label>

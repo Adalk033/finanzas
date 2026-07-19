@@ -1,4 +1,4 @@
-import { useEffect, useState, type SyntheticEvent } from 'react'
+import { useState, type SyntheticEvent } from 'react'
 import { formatCurrency, getBudgetStatusLabel } from '../../app/appHelpers'
 import type { Budget, BudgetInput, Category } from '../../types/domain'
 
@@ -44,12 +44,7 @@ export function BudgetsSection({
   onDeleteBudget,
 }: BudgetsSectionProps) {
   const [isFormOpen, setIsFormOpen] = useState(editingBudgetId !== null)
-
-  useEffect(() => {
-    if (editingBudgetId !== null) {
-      setIsFormOpen(true)
-    }
-  }, [editingBudgetId])
+  const isFormVisible = isFormOpen || editingBudgetId !== null
 
   return (
     <section className="card">
@@ -62,8 +57,15 @@ export function BudgetsSection({
       {budgetError ? <p className="message message--error">{budgetError}</p> : null}
 
       <div className="section-toolbar">
-        <button className="button button--primary" type="button" onClick={() => setIsFormOpen((value) => !value)}>
-          {isFormOpen ? 'Ocultar formulario' : editingBudgetId === null ? 'Nuevo presupuesto' : 'Editar presupuesto'}
+        <button className="button button--primary" type="button" onClick={() => {
+          if (editingBudgetId !== null) {
+            onReset()
+            setIsFormOpen(false)
+            return
+          }
+          setIsFormOpen((value) => !value)
+        }}>
+          {isFormVisible ? 'Ocultar formulario' : 'Nuevo presupuesto'}
         </button>
       </div>
 
@@ -73,7 +75,7 @@ export function BudgetsSection({
             <h3 className="mini-card__title">{editingBudgetId === null ? 'Nuevo presupuesto' : 'Editar presupuesto'}</h3>
           </header>
 
-          {isFormOpen ? (
+          {isFormVisible ? (
             <div className="section-panel">
               <form className="form-grid" onSubmit={onSubmit}>
             <label className="form-grid__field" htmlFor="budgetCategory">Categoria</label>

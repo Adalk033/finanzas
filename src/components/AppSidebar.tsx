@@ -1,10 +1,10 @@
-import type { CloudConnectionStatus } from '../hooks/useSettingsPing'
+import type { DatabaseStatus } from '../hooks/useLocalDatabase'
 import type { AppSection } from '../app/appHelpers'
 
 type AppSidebarProps = {
   activeSection: AppSection
   pendingRemindersCount: number
-  cloudConnectionStatus: CloudConnectionStatus
+  databaseStatus: DatabaseStatus
   onSectionChange: (section: AppSection) => void
 }
 
@@ -22,28 +22,29 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'banks', label: 'Bancos' },
   { key: 'instruments', label: 'Instrumentos' },
   { key: 'categories', label: 'Categorias' },
-  { key: 'creditCards', label: 'Tarjetas y Transferencias' },
+  { key: 'creditCards', label: 'Tarjetas' },
+  { key: 'transfers', label: 'Transferencias' },
   { key: 'subscriptions', label: 'Suscripciones' },
   { key: 'fixedExpenses', label: 'Gastos fijos' },
   { key: 'loans', label: 'Prestamos' },
   { key: 'reminders', label: 'Recordatorios', showPendingBadge: true },
   { key: 'settings', label: 'Settings' },
 ]
-const CLOUD_STATUS_LABELS: Record<CloudConnectionStatus, string> = {
-  connected: 'Conectado a la nube',
-  disconnected: 'Sin conexión',
-  checking: 'Verificando nube',
-  unconfigured: 'Sin configurar',
+const DATABASE_STATUS_LABELS: Record<DatabaseStatus, string> = {
+  ready: 'Datos locales listos',
+  error: 'Error de almacenamiento',
+  checking: 'Verificando datos',
+  unavailable: 'Escritorio requerido',
 }
 
-export function AppSidebar({ activeSection, pendingRemindersCount, cloudConnectionStatus, onSectionChange }: AppSidebarProps) {
+export function AppSidebar({ activeSection, pendingRemindersCount, databaseStatus, onSectionChange }: AppSidebarProps) {
   return (
     <aside className="app-shell__sidebar">
       <h1 className="app-shell__brand">Finanzas Lit</h1>
 
-      <div className={`app-shell__cloud-pill app-shell__cloud-pill--${cloudConnectionStatus}`}>
-        <span className="app-shell__cloud-pill-dot" aria-hidden="true" />
-        <span>{CLOUD_STATUS_LABELS[cloudConnectionStatus]}</span>
+      <div className={`app-shell__database-pill app-shell__database-pill--${databaseStatus}`}>
+        <span className="app-shell__database-pill-dot" aria-hidden="true" />
+        <span>{DATABASE_STATUS_LABELS[databaseStatus]}</span>
       </div>
 
       {NAV_ITEMS.map((item) => (

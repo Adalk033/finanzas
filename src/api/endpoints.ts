@@ -1,6 +1,6 @@
 export const ENDPOINTS = {
   HEALTH: '/health',
-  BOOTSTRAP_PING: '/bootstrap/ping',
+  DATABASE_INFO: '/database/info',
   DASHBOARD_SUMMARY: '/dashboard/summary',
   DASHBOARD_EXPENSES_BY_CATEGORY: '/dashboard/charts/expenses-by-category',
   DASHBOARD_CASH_FLOW: '/dashboard/charts/cash-flow',

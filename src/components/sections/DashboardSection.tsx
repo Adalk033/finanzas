@@ -60,7 +60,7 @@ export function DashboardSection({
         </button>
       </div>
 
-      {!hasConfig ? <p className="message message--info">Configura API Key, endpoint y region en Settings para cargar datos.</p> : null}
+      {!hasConfig ? <p className="message message--info">Abre la aplicacion de escritorio para acceder a tus datos locales.</p> : null}
       {isDashboardLoading ? <p className="message message--info">Cargando resumen y graficas del dashboard...</p> : null}
       {dashboardError ? <p className="message message--error">{dashboardError}</p> : null}
 

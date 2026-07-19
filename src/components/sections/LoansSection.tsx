@@ -1,4 +1,4 @@
-import { useEffect, useState, type SyntheticEvent } from 'react'
+import { useState, type SyntheticEvent } from 'react'
 import { formatCurrency } from '../../app/appHelpers'
 import type {
   FinancialInstrument,
@@ -60,12 +60,7 @@ export function LoansSection({
 }: LoansSectionProps) {
   const [isLoanFormOpen, setIsLoanFormOpen] = useState(editingLoanId !== null)
   const [isRegisterFormOpen, setIsRegisterFormOpen] = useState(false)
-
-  useEffect(() => {
-    if (editingLoanId !== null) {
-      setIsLoanFormOpen(true)
-    }
-  }, [editingLoanId])
+  const isLoanFormVisible = isLoanFormOpen || editingLoanId !== null
 
   return (
     <section className="card">
@@ -82,8 +77,15 @@ export function LoansSection({
           </header>
 
           <div className="section-toolbar">
-            <button className="button button--primary" type="button" onClick={() => setIsLoanFormOpen((value) => !value)}>
-              {isLoanFormOpen ? 'Ocultar formulario' : editingLoanId === null ? 'Nuevo prestamo' : 'Editar prestamo'}
+            <button className="button button--primary" type="button" onClick={() => {
+              if (editingLoanId !== null) {
+                onReset()
+                setIsLoanFormOpen(false)
+                return
+              }
+              setIsLoanFormOpen((value) => !value)
+            }}>
+              {isLoanFormVisible ? 'Ocultar formulario' : 'Nuevo prestamo'}
             </button>
             <div className="section-toolbar__spacer" />
             <button className="button button--secondary" type="button" onClick={onReload}>
@@ -91,7 +93,7 @@ export function LoansSection({
             </button>
           </div>
 
-          {isLoanFormOpen ? (
+          {isLoanFormVisible ? (
             <div className="section-panel">
               <form className="form-grid" onSubmit={onSubmit}>
                 <label className="form-grid__field" htmlFor="loanName">Nombre</label>

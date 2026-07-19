@@ -37,6 +37,7 @@ export type AppSection =
   | 'categories'
   | 'transactions'
   | 'creditCards'
+  | 'transfers'
   | 'subscriptions'
   | 'fixedExpenses'
   | 'loans'

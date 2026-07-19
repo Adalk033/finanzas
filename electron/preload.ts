@@ -1,28 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC_CHANNELS } from './ipc-channels.js'
-import type { LocalConfig, LocalConfigInput } from '../src/types/config.js'
+import type { ApiResponse, DatabaseInfo } from '../src/types/config.js'
+import type { LocalRequestPayload } from './local-service.js'
 
-type ApiProxyRequestPayload = {
-  path: string
-  method?: string
-  headers?: Record<string, string>
-  body?: string
-}
-
-type ApiProxyResponsePayload = {
-  ok: boolean
-  status: number
-  bodyText: string
-}
-
-contextBridge.exposeInMainWorld('localConfig', {
-  getConfig: (): Promise<LocalConfig | null> =>
-    ipcRenderer.invoke(IPC_CHANNELS.GET_LOCAL_CONFIG),
-  saveConfig: (config: LocalConfigInput): Promise<LocalConfig> =>
-    ipcRenderer.invoke(IPC_CHANNELS.SAVE_LOCAL_CONFIG, config),
-})
-
-contextBridge.exposeInMainWorld('apiProxy', {
-  request: (payload: ApiProxyRequestPayload): Promise<ApiProxyResponsePayload> =>
-    ipcRenderer.invoke(IPC_CHANNELS.API_PROXY_REQUEST, payload),
+contextBridge.exposeInMainWorld('localDatabase', {
+  request: (payload: LocalRequestPayload): Promise<ApiResponse<unknown>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.DATABASE_REQUEST, payload),
+  getInfo: (): Promise<DatabaseInfo> =>
+    ipcRenderer.invoke(IPC_CHANNELS.DATABASE_INFO),
 })

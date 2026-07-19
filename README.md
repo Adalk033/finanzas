@@ -2,6 +2,9 @@
 
 Aplicacion de escritorio para gestion financiera personal con Electron + React + TypeScript + Vite.
 
+Todos los datos se guardan en una base SQLite local. La aplicacion no requiere
+cuentas, credenciales ni servicios externos.
+
 ## Requisitos
 
 - Node.js 24+
@@ -27,20 +30,20 @@ Este comando:
 - levanta Vite para renderer,
 - abre la ventana de Electron (no solo navegador web).
 
-Si necesitas levantar solo el frontend web:
-
-```bash
-npm run dev:web
-```
-
 ## Scripts principales
 
 - `npm run dev`: desarrollo completo Electron + renderer.
-- `npm run dev:web`: solo Vite web.
 - `npm run build`: build renderer + build electron typescript.
-- `npm run electron`: compila main/preload y ejecuta la app desktop desde build local.
 - `npm run electron:build`: genera paquetes instalables con electron-builder.
 - `npm run lint`: ejecuta eslint.
+- `npm run test:local`: valida operaciones y saldos contra una SQLite temporal.
+- `npm run check`: ejecuta lint y build.
+
+## Datos locales
+
+El archivo `finanzas.sqlite` se crea en el directorio de datos de Electron. Los
+montos se guardan como centavos enteros y las operaciones que afectan saldos son
+atomicas. La pantalla Settings muestra la ruta exacta del archivo en cada equipo.
 
 ## Empaquetado desktop
 

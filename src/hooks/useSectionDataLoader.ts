@@ -39,7 +39,15 @@ export function useSectionDataLoader(hasConfig: boolean, loaders: SectionLoaders
       await Promise.all([loaders.loadCategories(), loaders.loadInstruments(), loaders.loadTransactions()])
     },
     creditCards: async () => {
-      await Promise.all([loaders.loadInstruments(), loaders.loadStatements(), loaders.loadTransfers()])
+      await Promise.all([
+        loaders.loadCategories(),
+        loaders.loadInstruments(),
+        loaders.loadStatements(),
+        loaders.loadTransfers(),
+      ])
+    },
+    transfers: async () => {
+      await Promise.all([loaders.loadInstruments(), loaders.loadTransfers()])
     },
     subscriptions: async () => {
       await Promise.all([loaders.loadInstruments(), loaders.loadCategories(), loaders.loadSubscriptions()])

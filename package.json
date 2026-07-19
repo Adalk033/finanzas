@@ -10,8 +10,10 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build && node scripts/copy-preload.mjs",
+    "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test:local": "node scripts/run-local-smoke.mjs",
+    "check": "npm run lint && npm run build && npm run test:local",
     "preview": "vite preview",
     "electron:build": "npm run build && electron-builder --config electron-builder.yml"
   },
