@@ -232,7 +232,7 @@ export const EMPTY_REMINDER_FORM: ReminderInput = {
 }
 
 export const MSI_OPTIONS = [3, 6, 9, 12, 18, 24]
-export const DASHBOARD_CHART_COLORS = ['#57A6D8', '#2D8F85', '#F4C95D', '#E6A23C', '#F87171', '#A78BFA']
+export const DASHBOARD_CHART_COLORS = ['#57A6D8', '#6F86E8', '#F4C95D', '#E6A23C', '#F87171', '#A78BFA']
 export const EMPTY_DASHBOARD_SUMMARY: DashboardSummary = {
   totalAvailable: 0,
   totalCreditDebt: 0,

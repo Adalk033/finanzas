@@ -18,6 +18,20 @@ informacion en SQLite dentro del equipo.
 
 ## Stack y restricciones
 
+- pnpm es el unico gestor de paquetes permitido en este proyecto.
+- Usar siempre `pnpm install`, `pnpm run <script>` y `pnpm exec <comando>`.
+- No ejecutar `npm`, `npx`, `yarn` ni generar archivos de bloqueo de otros
+  gestores.
+- Mantener `ignoreScripts: true` en `pnpm-workspace.yaml`: ninguna dependencia
+  puede ejecutar automaticamente `preinstall`, `install` ni `postinstall`.
+- Mantener `verifyDepsBeforeRun: error`: `pnpm run` y `pnpm exec` deben fallar si
+  las dependencias estan desactualizadas, nunca ejecutar una instalacion
+  implicita.
+- No agregar scripts de ciclo de vida automaticos al proyecto ni aprobar builds
+  con `allowBuilds`, `onlyBuiltDependencies` o
+  `dangerouslyAllowAllBuilds`.
+- La reconstruccion para Electron solo puede iniciarse manualmente con
+  `pnpm run rebuild:native` y con autorizacion expresa del usuario.
 - React con componentes funcionales y hooks.
 - TypeScript en modo estricto.
 - CSS nativo con BEM y tokens de `src/styles/variables.css`.
@@ -86,8 +100,8 @@ informacion en SQLite dentro del equipo.
 - No agregar funcionalidades no solicitadas.
 - Evitar sobreingenieria.
 - Los comentarios explican el porqué, no describen lo obvio.
-- Ejecutar `npm run check` al terminar.
-- `npm run test:local` debe validar operaciones y saldos contra una base temporal.
+- Ejecutar `pnpm run check` al terminar.
+- `pnpm run test:local` debe validar operaciones y saldos contra una base temporal.
 
 ## Analisis de seguridad obligatorio
 
@@ -100,4 +114,5 @@ Despues de cada implementacion verificar:
 - Calculos financieros fuera del renderer.
 - Errores sin detalles internos.
 - Ausencia de nuevas dependencias no autorizadas.
+- Scripts de instalacion de dependencias bloqueados por pnpm.
 - Ausencia de comunicacion de red para datos financieros.

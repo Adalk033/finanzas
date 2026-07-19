@@ -1,7 +1,12 @@
 :root {
   --color-bg: #0f1218;
+  --color-sidebar: #131a24;
   --color-card: #1a212d;
-  --color-primary: #2d8f85;
+  --color-surface: #202936;
+  --color-input: #0f1824;
+  --color-primary: #6f86e8;
+  --color-primary-strong: #465db5;
+  --color-primary-soft: #20294a;
   --color-text: #f3f6fa;
   --color-text-secondary: #a9b3bf;
   --color-border: #2a3442;

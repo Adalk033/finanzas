@@ -145,7 +145,7 @@ export function CategoriesSection({
                   type="text"
                   value={categoryForm.color}
                   onChange={(event) => onCategoryFormChange({ ...categoryForm, color: event.target.value })}
-                  placeholder="#2d8f85"
+                  placeholder="#6f86e8"
                 />
 
                 <div className="form-grid__actions">

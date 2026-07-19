@@ -183,7 +183,7 @@ export function DashboardSection({
                   <Tooltip />
                   <Legend />
                   <Area type="monotone" dataKey="subscriptions" stackId="1" stroke="#57A6D8" fill="#57A6D8" name="Suscripciones" />
-                  <Area type="monotone" dataKey="fixedExpenses" stackId="1" stroke="#2D8F85" fill="#2D8F85" name="Gastos fijos" />
+                  <Area type="monotone" dataKey="fixedExpenses" stackId="1" stroke="#6F86E8" fill="#6F86E8" name="Gastos fijos" />
                   <Area type="monotone" dataKey="loanPayments" stackId="1" stroke="#E6A23C" fill="#E6A23C" name="Pagos prestamos" />
                 </AreaChart>
               </ResponsiveContainer>

@@ -2,6 +2,7 @@
   "name": "finanzas",
   "private": true,
   "version": "0.3.0",
+  "packageManager": "pnpm@11.15.0",
   "type": "module",
   "main": "dist-electron/main.js",
   "author": {
@@ -9,13 +10,14 @@
     "email": "adal_garcia1999@hotmail.com"
   },
   "scripts": {
+    "rebuild:native": "electron-builder install-app-deps",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "test:local": "node scripts/run-local-smoke.mjs",
-    "check": "npm run lint && npm run build && npm run test:local",
+    "check": "pnpm run lint && pnpm run build && pnpm run test:local",
     "preview": "vite preview",
-    "electron:build": "npm run build && electron-builder --config electron-builder.yml"
+    "electron:build": "pnpm run build && electron-builder --config electron-builder.yml"
   },
   "dependencies": {
     "better-sqlite3": "^12.8.0",
@@ -34,7 +36,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
     "babel-plugin-react-compiler": "^1.0.0",
-    "electron": "^41.1.1",
+    "electron": "^43.1.1",
     "electron-builder": "^26.8.1",
     "esbuild": "^0.27.7",
     "eslint": "^9.39.4",

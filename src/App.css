@@ -24,15 +24,13 @@
   height: 100svh;
   display: grid;
   grid-template-columns: 260px 1fr;
-  background:
-    radial-gradient(circle at 10% 10%, rgba(87, 166, 216, 0.12), transparent 35%),
-    radial-gradient(circle at 85% 85%, rgba(45, 143, 133, 0.12), transparent 30%),
-    var(--color-bg);
+  background: var(--color-bg);
   overflow: hidden;
 }
 
 .app-shell__sidebar {
   border-right: 1px solid var(--color-border);
+  background: var(--color-sidebar);
   padding: var(--space-4) var(--space-3);
   display: flex;
   flex-direction: column;
@@ -55,7 +53,7 @@
   padding: 8px 12px;
   margin-bottom: var(--space-2);
   border: 1px solid var(--color-border);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--color-card);
   color: var(--color-text-secondary);
   font-size: 12px;
   font-weight: 500;
@@ -123,7 +121,7 @@
   padding: var(--space-2);
   border: 1px solid var(--color-border);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--color-surface);
 }
 
 .settings-database__row dt {
@@ -142,7 +140,7 @@
   border-radius: 12px;
   padding: 12px;
   color: var(--color-text);
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--color-card);
   text-align: left;
   font: 500 14px/1 var(--font-base);
   cursor: pointer;
@@ -159,7 +157,7 @@
 
 .nav-button--active {
   border-color: var(--color-primary);
-  background: rgba(45, 143, 133, 0.14);
+  background: var(--color-primary-soft);
 }
 
 .nav-button__label {
@@ -189,7 +187,7 @@
 .card {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
-  background: linear-gradient(165deg, rgba(255, 255, 255, 0.03), transparent 40%), var(--color-card);
+  background: var(--color-card);
   box-shadow: var(--shadow-card);
   padding: var(--space-4);
 }
@@ -238,7 +236,7 @@
   width: 100%;
   border: 1px solid var(--color-border);
   border-radius: 12px;
-  background: #0f1824;
+  background: var(--color-input);
   color: var(--color-text);
   font: 400 16px/1.25 var(--font-base);
   padding: 12px 14px;
@@ -248,7 +246,7 @@
 .form-grid__input:focus-visible {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px rgba(45, 143, 133, 0.2);
+  box-shadow: 0 0 0 2px rgba(111, 134, 232, 0.24);
 }
 
 .form-grid__actions {
@@ -270,9 +268,9 @@
 }
 
 .button--primary {
-  border: 1px solid var(--color-primary);
+  border: 1px solid var(--color-primary-strong);
   color: #ffffff;
-  background: var(--color-primary);
+  background: var(--color-primary-strong);
 }
 
 .button--secondary {
@@ -342,7 +340,7 @@
 .group-card {
   border: 1px solid var(--color-border);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.015);
+  background: var(--color-surface);
   padding: var(--space-2);
 }
 
@@ -366,7 +364,7 @@
 .mini-card {
   border: 1px solid var(--color-border);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--color-surface);
   padding: var(--space-3);
 }
 
@@ -394,7 +392,7 @@
 .category-card {
   border: 1px solid var(--color-border);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.015);
+  background: var(--color-surface);
   padding: var(--space-3);
 }
 
@@ -447,7 +445,7 @@
 .summary-card {
   border: 1px solid var(--color-border);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--color-surface);
   padding: var(--space-2);
 }
 
@@ -559,9 +557,7 @@
   flex-direction: column;
   justify-content: flex-end;
   min-height: 184px;
-  background:
-    radial-gradient(circle at 90% 10%, color-mix(in srgb, var(--color-info) 28%, transparent), transparent 45%),
-    var(--color-primary);
+  background: var(--color-primary-strong);
   color: var(--color-text);
 }
 
