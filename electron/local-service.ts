@@ -16,6 +16,8 @@ type InstrumentRow = DbRow & {
   current_amount_cents: number | null
   current_balance_cents: number | null
   credit_limit_cents: number | null
+  currency_id: number
+  linked_account_id: number | null
 }
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
@@ -25,11 +27,12 @@ const LAST_FOUR = /^\d{4}$/
 const INSTRUMENT_TYPES = new Set(['credit_card', 'debit_card', 'account'])
 const CATEGORY_TYPES = new Set(['expense', 'income', 'both'])
 const TRANSACTION_TYPES = new Set(['expense', 'income'])
-const TRANSFER_TYPES = new Set(['card_payment', 'inter_account', 'loan_payment', 'other'])
+const TRANSFER_TYPES = new Set(['card_payment', 'inter_account', 'other'])
 const PAYMENT_TYPES = new Set(['fixed', 'variable'])
 const BILLING_CYCLES = new Set(['monthly', 'yearly', 'weekly'])
 const SIMULATION_TYPES = new Set(['direct_purchase', 'msi', 'loan'])
 const REMINDER_TYPES = new Set(['payment', 'cutoff', 'subscription', 'loan', 'custom'])
+const RECURRING_INCOME_FREQUENCIES = new Set(['weekly', 'biweekly', 'monthly', 'yearly'])
 const MSI_MONTHS = new Set([3, 6, 9, 12, 18, 24])
 
 class ValidationError extends Error {}
@@ -103,14 +106,6 @@ function requiredBoolean(input: Input, key: string, defaultValue?: boolean): boo
     throw new ValidationError(`${key} debe ser booleano.`)
   }
   return value
-}
-
-function optionalBoolean(input: Input, key: string): boolean | null {
-  const value = input[key]
-  if (value === null || value === undefined) {
-    return null
-  }
-  return requiredBoolean(input, key)
 }
 
 function requiredEnum(input: Input, key: string, allowed: Set<string>): string {
@@ -190,6 +185,7 @@ function requireEntity(db: Database.Database, table: string, id: number): DbRow 
     'banks', 'financial_instruments', 'categories', 'subcategories', 'transactions',
     'credit_card_statements', 'transfers', 'loans', 'subscriptions', 'fixed_expenses',
     'fixed_expense_payments', 'budgets', 'simulations', 'reminders',
+    'recurring_incomes', 'savings_goals',
   ])
   if (!allowedTables.has(table)) {
     throw new Error('Tabla interna no permitida.')
@@ -229,7 +225,9 @@ function mapInstrument(row: DbRow): Record<string, unknown> {
     cutOffDay: toNullableNumber(row.cut_off_day),
     paymentDueDay: toNullableNumber(row.payment_due_day),
     annualRate: toNullableNumber(row.annual_rate),
-    currentAmount: fromCents(row.current_amount_cents),
+    currentAmount: fromCents(row.linked_current_amount_cents ?? row.current_amount_cents),
+    linkedAccountId: toNullableNumber(row.linked_account_id),
+    linkedAccountName: row.linked_account_name ?? null,
     notes: row.notes ?? null,
     isActive: toBoolean(row.is_active),
     createdAt: row.created_at,
@@ -271,6 +269,9 @@ function mapTransaction(row: DbRow): Record<string, unknown> {
     msiMonthlyAmount: fromCents(row.msi_monthly_amount_cents),
     msiStartDate: row.msi_start_date ?? null,
     msiRemaining: toNullableNumber(row.msi_remaining),
+    affectsBalance: row.affects_balance === undefined ? true : toBoolean(row.affects_balance),
+    sourceType: row.source_type ?? null,
+    sourceId: toNullableNumber(row.source_id),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -357,6 +358,7 @@ function mapLoanPayment(row: DbRow): Record<string, unknown> {
     isPaid: toBoolean(row.is_paid),
     paidDate: row.paid_date ?? null,
     notes: row.notes ?? null,
+    transactionId: toNullableNumber(row.transaction_id),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -415,6 +417,7 @@ function mapFixedExpensePayment(row: DbRow): Record<string, unknown> {
     paymentDate: row.payment_date ?? null,
     isPaid: toBoolean(row.is_paid),
     notes: row.notes ?? null,
+    transactionId: toNullableNumber(row.transaction_id),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -436,11 +439,54 @@ function mapReminder(row: DbRow): Record<string, unknown> {
   }
 }
 
+function mapRecurringIncome(row: DbRow): Record<string, unknown> {
+  return {
+    id: toNumber(row.id),
+    name: row.name,
+    instrumentId: toNumber(row.instrument_id),
+    instrumentName: row.instrument_name ?? null,
+    categoryId: toNullableNumber(row.category_id),
+    categoryName: row.category_name ?? null,
+    subcategoryId: toNullableNumber(row.subcategory_id),
+    subcategoryName: row.subcategory_name ?? null,
+    currencyId: toNumber(row.currency_id),
+    amount: fromCents(row.amount_cents),
+    frequency: row.frequency,
+    paymentDay: toNullableNumber(row.payment_day),
+    nextPayment: row.next_payment,
+    isActive: toBoolean(row.is_active),
+    notes: row.notes ?? null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
+}
+
+function mapSavingsGoal(row: DbRow): Record<string, unknown> {
+  const target = toNumber(row.target_amount_cents)
+  const current = toNumber(row.current_amount_cents)
+  return {
+    id: toNumber(row.id),
+    name: row.name,
+    targetAmount: fromCents(target),
+    currentAmount: fromCents(current),
+    targetDate: row.target_date ?? null,
+    instrumentId: toNullableNumber(row.instrument_id),
+    instrumentName: row.instrument_name ?? null,
+    progressPercent: target > 0 ? Math.min(100, Math.round((current / target) * 10_000) / 100) : 0,
+    notes: row.notes ?? null,
+    isActive: toBoolean(row.is_active),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
+}
+
 function instrumentSelect(where = ''): string {
   return `
-    SELECT i.*, b.name AS bank_name
+    SELECT i.*, b.name AS bank_name, linked.name AS linked_account_name,
+           linked.current_amount_cents AS linked_current_amount_cents
     FROM financial_instruments i
     JOIN banks b ON b.id = i.bank_id
+    LEFT JOIN financial_instruments linked ON linked.id = i.linked_account_id
     ${where}
   `
 }
@@ -508,12 +554,23 @@ function fixedExpenseSelect(where = ''): string {
   `
 }
 
-function getInstrument(db: Database.Database, id: number): InstrumentRow {
-  const row = db.prepare('SELECT * FROM financial_instruments WHERE id = ? AND is_active = 1').get(id)
+function getInstrument(db: Database.Database, id: number, requireActive = true): InstrumentRow {
+  const row = db.prepare(`
+    SELECT * FROM financial_instruments
+    WHERE id = ? AND (? = 0 OR is_active = 1)
+  `).get(id, Number(requireActive))
   if (!row) {
     throw new ValidationError('El instrumento seleccionado no existe o esta inactivo.')
   }
   return row as InstrumentRow
+}
+
+function getBalanceInstrument(db: Database.Database, instrument: InstrumentRow): InstrumentRow {
+  const linkedAccountId = toNullableNumber(instrument.linked_account_id)
+  if (instrument.type !== 'debit_card' || linkedAccountId === null) {
+    return instrument
+  }
+  return getInstrument(db, linkedAccountId, false)
 }
 
 function applyInstrumentImpact(
@@ -523,9 +580,10 @@ function applyInstrumentImpact(
   amountCents: number,
   direction: 1 | -1,
 ): void {
+  instrument = getBalanceInstrument(db, instrument)
   const signed = (type === 'expense' ? 1 : -1) * amountCents * direction
   if (instrument.type === 'credit_card') {
-    const balance = Math.max(0, toNumber(instrument.current_balance_cents) + signed)
+    const balance = toNumber(instrument.current_balance_cents) + signed
     const limit = toNumber(instrument.credit_limit_cents)
     db.prepare(`
       UPDATE financial_instruments
@@ -560,7 +618,12 @@ function addDays(dateValue: string, count: number): string {
 }
 
 function todayIso(): string {
-  return new Date().toISOString().slice(0, 10)
+  const now = new Date()
+  return [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0'),
+  ].join('-')
 }
 
 function computeMsiStartDate(transactionDate: string, cutOffDay: number): string {
@@ -662,6 +725,7 @@ function validateInstrument(body: Input): {
   paymentDueDay: number | null
   annualRate: number | null
   currentAmount: number | null
+  linkedAccountId: number | null
   notes: string | null
   isActive: boolean
 } {
@@ -689,6 +753,7 @@ function validateInstrument(body: Input): {
     paymentDueDay: type === 'credit_card' ? optionalInteger(body, 'paymentDueDay', 1, 31) : null,
     annualRate: type === 'credit_card' ? optionalRate(body, 'annualRate') : null,
     currentAmount: type === 'credit_card' ? null : (optionalMoneyToCents(body, 'currentAmount') ?? 0),
+    linkedAccountId: type === 'debit_card' ? optionalInteger(body, 'linkedAccountId') : null,
     notes: optionalString(body, 'notes', 2000),
     isActive: requiredBoolean(body, 'isActive', true),
   }
@@ -711,39 +776,107 @@ function saveInstrument(db: Database.Database, body: Input, id?: number): Record
   if (!currency) {
     throw new ValidationError('La moneda seleccionada no existe.')
   }
-  const availableCredit = input.type === 'credit_card'
+  if (input.linkedAccountId !== null) {
+    if (id === input.linkedAccountId) {
+      throw new ValidationError('Una tarjeta de debito no puede vincularse consigo misma.')
+    }
+    const linked = getInstrument(db, input.linkedAccountId)
+    if (linked.type !== 'account' || toNumber(linked.currency_id) !== input.currencyId) {
+      throw new ValidationError('La tarjeta de debito debe vincularse a una cuenta activa de la misma moneda.')
+    }
+    input.currentAmount = 0
+  }
+  let availableCredit = input.type === 'credit_card'
     ? Math.max((input.creditLimit ?? 0) - (input.currentBalance ?? 0), 0)
     : null
 
   if (id) {
-    requireEntity(db, 'financial_instruments', id)
+    const existing = requireEntity(db, 'financial_instruments', id)
+    const activity = db.prepare(`
+      SELECT
+        (SELECT COUNT(*) FROM transactions WHERE instrument_id = ?) +
+        (SELECT COUNT(*) FROM transfers
+          WHERE source_instrument_id = ? OR destination_instrument_id = ?) +
+        (SELECT COUNT(*) FROM loans WHERE instrument_id = ?) AS total
+    `).get(id, id, id, id) as { total: number }
+    if (activity.total > 0) {
+      if (
+        existing.type !== input.type
+        || toNumber(existing.currency_id) !== input.currencyId
+        || toNullableNumber(existing.linked_account_id) !== input.linkedAccountId
+      ) {
+        throw new ValidationError('No se puede cambiar tipo, moneda o cuenta vinculada con movimientos registrados.')
+      }
+      if (
+        (
+          input.type === 'credit_card'
+          && input.currentBalance !== toNullableNumber(existing.current_balance_cents)
+        )
+        || (
+          input.type !== 'credit_card'
+          && input.linkedAccountId === null
+          && input.currentAmount !== toNullableNumber(existing.current_amount_cents)
+        )
+      ) {
+        throw new ValidationError('Usa la accion Conciliar para modificar un saldo con historial.')
+      }
+      input.currentBalance = toNullableNumber(existing.current_balance_cents)
+      input.currentAmount = toNullableNumber(existing.current_amount_cents)
+      availableCredit = input.type === 'credit_card'
+        ? Math.max((input.creditLimit ?? 0) - (input.currentBalance ?? 0), 0)
+        : null
+    }
     db.prepare(`
       UPDATE financial_instruments
       SET bank_id = ?, name = ?, type = ?, last_four = ?, currency_id = ?,
           credit_limit_cents = ?, current_balance_cents = ?, available_credit_cents = ?,
           cut_off_day = ?, payment_due_day = ?, annual_rate = ?, current_amount_cents = ?,
-          notes = ?, is_active = ?, updated_at = datetime('now')
+          linked_account_id = ?, notes = ?, is_active = ?, updated_at = datetime('now')
       WHERE id = ?
     `).run(
       input.bankId, input.name, input.type, input.lastFour, input.currencyId,
       input.creditLimit, input.currentBalance, availableCredit, input.cutOffDay,
-      input.paymentDueDay, input.annualRate, input.currentAmount, input.notes,
+      input.paymentDueDay, input.annualRate, input.currentAmount, input.linkedAccountId, input.notes,
       Number(input.isActive), id,
     )
   } else {
-    const result = db.prepare(`
-      INSERT INTO financial_instruments (
-        bank_id, name, type, last_four, currency_id, credit_limit_cents,
-        current_balance_cents, available_credit_cents, cut_off_day, payment_due_day,
-        annual_rate, current_amount_cents, notes, is_active
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      input.bankId, input.name, input.type, input.lastFour, input.currencyId,
-      input.creditLimit, input.currentBalance, availableCredit, input.cutOffDay,
-      input.paymentDueDay, input.annualRate, input.currentAmount, input.notes,
-      Number(input.isActive),
-    )
-    id = Number(result.lastInsertRowid)
+    const create = db.transaction(() => {
+      const result = db.prepare(`
+        INSERT INTO financial_instruments (
+          bank_id, name, type, last_four, currency_id, credit_limit_cents,
+          current_balance_cents, available_credit_cents, cut_off_day, payment_due_day,
+          annual_rate, current_amount_cents, linked_account_id, notes, is_active
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        input.bankId, input.name, input.type, input.lastFour, input.currencyId,
+        input.creditLimit, input.currentBalance, availableCredit, input.cutOffDay,
+        input.paymentDueDay, input.annualRate, input.currentAmount, input.linkedAccountId, input.notes,
+        Number(input.isActive),
+      )
+      const instrumentId = Number(result.lastInsertRowid)
+      const openingAmount = input.type === 'credit_card'
+        ? toNumber(input.currentBalance)
+        : input.linkedAccountId === null
+          ? toNumber(input.currentAmount)
+          : 0
+      if (openingAmount > 0) {
+        db.prepare(`
+          INSERT INTO transactions (
+            instrument_id, currency_id, type, amount_cents, description,
+            transaction_date, affects_balance, source_type, source_id
+          ) VALUES (?, ?, ?, ?, 'Saldo inicial', ?, 0, 'opening_balance', ?)
+        `).run(
+          instrumentId,
+          input.currencyId,
+          input.type === 'credit_card' ? 'expense' : 'income',
+          openingAmount,
+          todayIso(),
+          instrumentId,
+        )
+      }
+      return instrumentId
+    })
+    id = create()
   }
   return mapInstrument(asRow(db.prepare(instrumentSelect('WHERE i.id = ?')).get(id)))
 }
@@ -754,6 +887,44 @@ function deleteInstrument(db: Database.Database, id: number): { id: number } {
     UPDATE financial_instruments SET is_active = 0, updated_at = datetime('now') WHERE id = ?
   `).run(id)
   return { id }
+}
+
+function reconcileInstrument(
+  db: Database.Database,
+  id: number,
+  body: Input,
+): Record<string, unknown> {
+  const instrument = getInstrument(db, id)
+  const balanceInstrument = getBalanceInstrument(db, instrument)
+  const actualCents = moneyToCents(body.actualBalance, 'actualBalance', true)
+  const reconciliationDate = requiredDate(body, 'reconciliationDate')
+  const notes = optionalString(body, 'notes', 2000)
+  const currentCents = balanceInstrument.type === 'credit_card'
+    ? toNumber(balanceInstrument.current_balance_cents)
+    : toNumber(balanceInstrument.current_amount_cents)
+  const delta = actualCents - currentCents
+  if (delta === 0) {
+    throw new ValidationError('El saldo capturado ya coincide con el saldo registrado.')
+  }
+  const type: 'expense' | 'income' = balanceInstrument.type === 'credit_card'
+    ? (delta > 0 ? 'expense' : 'income')
+    : (delta > 0 ? 'income' : 'expense')
+  const transaction = saveTransaction(db, {
+    instrumentId: id,
+    currencyId: toNumber(balanceInstrument.currency_id),
+    type,
+    amount: Math.abs(delta) / 100,
+    description: 'Ajuste de conciliacion',
+    transactionDate: reconciliationDate,
+    notes,
+    isMsi: false,
+    affectsBalance: true,
+    sourceType: 'reconciliation',
+  }, undefined, true)
+  return {
+    instrument: mapInstrument(asRow(db.prepare(instrumentSelect('WHERE i.id = ?')).get(id))),
+    transaction,
+  }
 }
 
 function categoryCanDelete(db: Database.Database, id: number): boolean {
@@ -910,6 +1081,9 @@ function validateTransaction(db: Database.Database, body: Input): {
   msiMonths: number | null
   msiMonthlyAmountCents: number | null
   msiStartDate: string | null
+  affectsBalance: boolean
+  sourceType: string | null
+  sourceId: number | null
 } {
   const instrumentId = requiredInteger(body, 'instrumentId')
   const instrument = getInstrument(db, instrumentId)
@@ -917,6 +1091,12 @@ function validateTransaction(db: Database.Database, body: Input): {
   const subcategoryId = optionalInteger(body, 'subcategoryId')
   validateCategoryLinks(db, categoryId, subcategoryId)
   const type = requiredEnum(body, 'type', TRANSACTION_TYPES) as 'expense' | 'income'
+  if (categoryId !== null) {
+    const category = db.prepare('SELECT type FROM categories WHERE id = ?').get(categoryId) as { type: string }
+    if (category.type !== 'both' && category.type !== type) {
+      throw new ValidationError('La categoria seleccionada no corresponde al tipo de movimiento.')
+    }
+  }
   const amountCents = moneyToCents(body.amount, 'amount')
   const isMsi = requiredBoolean(body, 'isMsi', false)
   const msiMonths = isMsi ? requiredInteger(body, 'msiMonths', 1, 24) : null
@@ -924,11 +1104,15 @@ function validateTransaction(db: Database.Database, body: Input): {
     throw new ValidationError('MSI solo admite compras con tarjeta a 3, 6, 9, 12, 18 o 24 meses.')
   }
   const transactionDate = requiredDate(body, 'transactionDate')
+  const currencyId = requiredInteger(body, 'currencyId')
+  if (currencyId !== toNumber(instrument.currency_id)) {
+    throw new ValidationError('La moneda del movimiento debe coincidir con la del instrumento.')
+  }
   return {
     instrumentId,
     categoryId,
     subcategoryId,
-    currencyId: requiredInteger(body, 'currencyId'),
+    currencyId,
     type,
     amountCents,
     description: optionalString(body, 'description', 255),
@@ -938,6 +1122,9 @@ function validateTransaction(db: Database.Database, body: Input): {
     msiMonths,
     msiMonthlyAmountCents: isMsi ? Math.round(amountCents / (msiMonths ?? 1)) : null,
     msiStartDate: isMsi ? computeMsiStartDate(transactionDate, toNumber(instrument.cut_off_day ?? 31)) : null,
+    affectsBalance: requiredBoolean(body, 'affectsBalance', true),
+    sourceType: optionalString(body, 'sourceType', 30),
+    sourceId: optionalInteger(body, 'sourceId'),
   }
 }
 
@@ -967,47 +1154,75 @@ function listTransactions(db: Database.Database, url: URL): Record<string, unkno
     .map(mapTransaction)
 }
 
-function saveTransaction(db: Database.Database, body: Input, id?: number): Record<string, unknown> {
+function saveTransaction(
+  db: Database.Database,
+  body: Input,
+  id?: number,
+  allowInternalSource = false,
+): Record<string, unknown> {
   const input = validateTransaction(db, body)
+  if (!allowInternalSource) {
+    input.sourceType = null
+    input.sourceId = null
+  }
   const operation = db.transaction(() => {
     let previousInstrumentId: number | null = null
     if (id) {
       const previous = requireEntity(db, 'transactions', id)
+      if (previous.source_type === 'loan_interest') {
+        throw new ValidationError('El interes se corrige revirtiendo el pago del prestamo.')
+      }
+      if (previous.source_type === 'opening_balance') {
+        throw new ValidationError('El saldo inicial es un asiento protegido del instrumento.')
+      }
+      if (previous.source_type === 'fixed_expense') {
+        throw new ValidationError('Modifica este movimiento desde el pago del gasto fijo.')
+      }
+      input.sourceType ??= previous.source_type as string | null
+      input.sourceId ??= toNullableNumber(previous.source_id)
       previousInstrumentId = toNumber(previous.instrument_id)
-      applyInstrumentImpact(
-        db,
-        getInstrument(db, toNumber(previous.instrument_id)),
-        previous.type as 'expense' | 'income',
-        toNumber(previous.amount_cents),
-        -1,
-      )
+      if (previous.affects_balance === undefined || toBoolean(previous.affects_balance)) {
+        applyInstrumentImpact(
+          db,
+          getInstrument(db, toNumber(previous.instrument_id), false),
+          previous.type as 'expense' | 'income',
+          toNumber(previous.amount_cents),
+          -1,
+        )
+      }
       db.prepare(`
         UPDATE transactions
         SET instrument_id = ?, category_id = ?, subcategory_id = ?, currency_id = ?, type = ?,
             amount_cents = ?, description = ?, transaction_date = ?, notes = ?, is_msi = ?,
             msi_months = ?, msi_monthly_amount_cents = ?, msi_start_date = ?, msi_remaining = ?,
+            affects_balance = ?, source_type = ?, source_id = ?,
             updated_at = datetime('now')
         WHERE id = ?
       `).run(
         input.instrumentId, input.categoryId, input.subcategoryId, input.currencyId, input.type,
         input.amountCents, input.description, input.transactionDate, input.notes, Number(input.isMsi),
-        input.msiMonths, input.msiMonthlyAmountCents, input.msiStartDate, input.msiMonths, id,
+        input.msiMonths, input.msiMonthlyAmountCents, input.msiStartDate, input.msiMonths,
+        Number(input.affectsBalance), input.sourceType, input.sourceId, id,
       )
     } else {
       const result = db.prepare(`
         INSERT INTO transactions (
           instrument_id, category_id, subcategory_id, currency_id, type, amount_cents,
           description, transaction_date, notes, is_msi, msi_months,
-          msi_monthly_amount_cents, msi_start_date, msi_remaining
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          msi_monthly_amount_cents, msi_start_date, msi_remaining,
+          affects_balance, source_type, source_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         input.instrumentId, input.categoryId, input.subcategoryId, input.currencyId, input.type,
         input.amountCents, input.description, input.transactionDate, input.notes, Number(input.isMsi),
         input.msiMonths, input.msiMonthlyAmountCents, input.msiStartDate, input.msiMonths,
+        Number(input.affectsBalance), input.sourceType, input.sourceId,
       )
       id = Number(result.lastInsertRowid)
     }
-    applyInstrumentImpact(db, getInstrument(db, input.instrumentId), input.type, input.amountCents, 1)
+    if (input.affectsBalance) {
+      applyInstrumentImpact(db, getInstrument(db, input.instrumentId), input.type, input.amountCents, 1)
+    }
     if (previousInstrumentId !== null && previousInstrumentId !== input.instrumentId) {
       refreshInstrumentStatements(db, previousInstrumentId)
     }
@@ -1020,14 +1235,29 @@ function saveTransaction(db: Database.Database, body: Input, id?: number): Recor
 function deleteTransaction(db: Database.Database, id: number): { id: number } {
   const operation = db.transaction(() => {
     const row = requireEntity(db, 'transactions', id)
+    if (row.source_type === 'loan_interest') {
+      throw new ValidationError('El interes se elimina revirtiendo el pago del prestamo.')
+    }
+    if (row.source_type === 'opening_balance') {
+      throw new ValidationError('El saldo inicial es un asiento protegido del instrumento.')
+    }
+    if (row.source_type === 'fixed_expense' && row.source_id) {
+      db.prepare(`
+        UPDATE fixed_expense_payments
+        SET is_paid = 0, transaction_id = NULL, updated_at = datetime('now')
+        WHERE id = ?
+      `).run(row.source_id)
+    }
     const instrumentId = toNumber(row.instrument_id)
-    applyInstrumentImpact(
-      db,
-      getInstrument(db, instrumentId),
-      row.type as 'expense' | 'income',
-      toNumber(row.amount_cents),
-      -1,
-    )
+    if (row.affects_balance === undefined || toBoolean(row.affects_balance)) {
+      applyInstrumentImpact(
+        db,
+        getInstrument(db, instrumentId, false),
+        row.type as 'expense' | 'income',
+        toNumber(row.amount_cents),
+        -1,
+      )
+    }
     db.prepare('DELETE FROM transactions WHERE id = ?').run(id)
     refreshInstrumentStatements(db, instrumentId)
   })
@@ -1073,6 +1303,9 @@ function statementMovementRows(
     ORDER BY t.transaction_date DESC, t.id DESC
   `).all(instrumentId, previous, cutOffDate, cutOffDate) as DbRow[]
   return rows.filter((row) => {
+    if (row.source_type === 'opening_balance' || row.source_type === 'reconciliation') {
+      return false
+    }
     if (!toBoolean(row.is_msi)) {
       return true
     }
@@ -1094,15 +1327,17 @@ function calculateStatementTotal(
     SELECT COALESCE(SUM(CASE WHEN type = 'expense' THEN amount_cents ELSE -amount_cents END), 0) AS total
     FROM transactions
     WHERE instrument_id = ? AND is_msi = 0 AND transaction_date > ? AND transaction_date <= ?
+      AND COALESCE(source_type, '') NOT IN ('opening_balance', 'reconciliation')
   `).get(instrumentId, previous, cutOffDate) as { total: number }
   const msiRows = db.prepare(`
-    SELECT msi_start_date, msi_months, msi_monthly_amount_cents
+    SELECT amount_cents, msi_start_date, msi_months, msi_monthly_amount_cents
     FROM transactions
     WHERE instrument_id = ? AND is_msi = 1 AND msi_start_date <= ?
   `).all(instrumentId, cutOffDate) as Array<{
     msi_start_date: string
     msi_months: number
     msi_monthly_amount_cents: number
+    amount_cents: number
   }>
   let msiTotal = 0
   for (const row of msiRows) {
@@ -1111,7 +1346,9 @@ function calculateStatementTotal(
     const elapsed = (end.getUTCFullYear() - start.getUTCFullYear()) * 12
       + end.getUTCMonth() - start.getUTCMonth()
     if (elapsed >= 0 && elapsed < row.msi_months) {
-      msiTotal += row.msi_monthly_amount_cents
+      msiTotal += elapsed === row.msi_months - 1
+        ? row.amount_cents - row.msi_monthly_amount_cents * (row.msi_months - 1)
+        : row.msi_monthly_amount_cents
     }
   }
   return Math.max(0, toNumber(regular.total) + msiTotal)
@@ -1232,23 +1469,15 @@ function saveStatement(db: Database.Database, body: Input, id?: number): Record<
     const noInterestPayment = body.noInterestPayment === undefined
       ? toNullableNumber(existing.no_interest_payment_cents)
       : optionalMoneyToCents(body, 'noInterestPayment')
-    const isPaid = optionalBoolean(body, 'isPaid')
-    const paidAmount = body.paidAmount === undefined
-      ? toNullableNumber(existing.paid_amount_cents)
-      : optionalMoneyToCents(body, 'paidAmount')
-    const paidDate = body.paidDate === undefined
-      ? (existing.paid_date as string | null)
-      : optionalDate(body, 'paidDate')
     db.prepare(`
       UPDATE credit_card_statements
       SET payment_due_date = ?, minimum_payment_cents = ?, no_interest_payment_cents = ?,
-          is_paid = COALESCE(?, is_paid), paid_amount_cents = ?, paid_date = ?,
           updated_at = datetime('now')
       WHERE id = ?
     `).run(
-      paymentDueDate, minimumPayment, noInterestPayment,
-      isPaid === null ? null : Number(isPaid), paidAmount, paidDate, id,
+      paymentDueDate, minimumPayment, noInterestPayment, id,
     )
+    refreshStatementPayment(db, id)
   } else {
     const instrumentId = requiredInteger(body, 'instrumentId')
     const instrument = getInstrument(db, instrumentId)
@@ -1276,7 +1505,9 @@ function saveStatement(db: Database.Database, body: Input, id?: number): Record<
 
 function deleteStatement(db: Database.Database, id: number): { id: number } {
   requireEntity(db, 'credit_card_statements', id)
-  const linked = db.prepare('SELECT COUNT(*) AS total FROM transfers WHERE statement_id = ?').get(id) as { total: number }
+  const linked = db.prepare(`
+    SELECT COUNT(*) AS total FROM statement_payment_allocations WHERE statement_id = ?
+  `).get(id) as { total: number }
   if (linked.total > 0) {
     throw new ValidationError('No se puede eliminar un estado de cuenta con pagos relacionados.')
   }
@@ -1300,6 +1531,8 @@ function applyTransferImpact(
   amountCents: number,
   direction: 1 | -1,
 ): void {
+  source = getBalanceInstrument(db, source)
+  destination = getBalanceInstrument(db, destination)
   if (source.type === 'credit_card') {
     throw new ValidationError('El origen de una transferencia debe ser una cuenta o tarjeta de debito.')
   }
@@ -1335,16 +1568,82 @@ function refreshStatementPayment(db: Database.Database, statementId: number | nu
   }
   const statement = requireEntity(db, 'credit_card_statements', statementId)
   const paid = db.prepare(`
-    SELECT COALESCE(SUM(amount_cents), 0) AS total FROM transfers WHERE statement_id = ?
+    SELECT COALESCE(SUM(amount_cents), 0) AS total
+    FROM statement_payment_allocations
+    WHERE statement_id = ?
   `).get(statementId) as { total: number }
   const paidAmount = toNumber(paid.total)
   const isPaid = paidAmount >= toNumber(statement.total_amount_cents) && toNumber(statement.total_amount_cents) > 0
   db.prepare(`
     UPDATE credit_card_statements
-    SET paid_amount_cents = ?, is_paid = ?, paid_date = CASE WHEN ? THEN COALESCE(paid_date, date('now')) ELSE NULL END,
+    SET paid_amount_cents = ?, is_paid = ?, paid_date = CASE WHEN ? THEN COALESCE(paid_date, date('now', 'localtime')) ELSE NULL END,
         updated_at = datetime('now')
     WHERE id = ?
   `).run(paidAmount, Number(isPaid), Number(isPaid), statementId)
+  if (isPaid) {
+    db.prepare(`
+      UPDATE reminders
+      SET is_dismissed = 1, updated_at = datetime('now')
+      WHERE reference_type = 'statement' AND reference_id = ?
+    `).run(statementId)
+  }
+}
+
+function allocateCardPayment(
+  db: Database.Database,
+  transferId: number,
+  instrumentId: number,
+  amountCents: number,
+  transferDate: string,
+  requestedStatementId: number | null,
+): number[] {
+  const candidates = requestedStatementId === null
+    ? db.prepare(`
+        SELECT st.id, st.total_amount_cents,
+          COALESCE(SUM(a.amount_cents), 0) AS allocated_cents
+        FROM credit_card_statements st
+        LEFT JOIN statement_payment_allocations a ON a.statement_id = st.id
+        WHERE st.instrument_id = ? AND st.cut_off_date <= ?
+        GROUP BY st.id
+        HAVING st.total_amount_cents > allocated_cents
+        ORDER BY st.cut_off_date, st.id
+      `).all(instrumentId, transferDate) as Array<{
+        id: number
+        total_amount_cents: number
+        allocated_cents: number
+      }>
+    : db.prepare(`
+        SELECT st.id, st.total_amount_cents,
+          COALESCE(SUM(a.amount_cents), 0) AS allocated_cents
+        FROM credit_card_statements st
+        LEFT JOIN statement_payment_allocations a ON a.statement_id = st.id
+        WHERE st.id = ?
+        GROUP BY st.id
+      `).all(requestedStatementId) as Array<{
+        id: number
+        total_amount_cents: number
+        allocated_cents: number
+      }>
+  let remaining = amountCents
+  const affected: number[] = []
+  const insert = db.prepare(`
+    INSERT INTO statement_payment_allocations (transfer_id, statement_id, amount_cents)
+    VALUES (?, ?, ?)
+  `)
+  for (const statement of candidates) {
+    if (remaining <= 0) break
+    const outstanding = Math.max(
+      toNumber(statement.total_amount_cents) - toNumber(statement.allocated_cents),
+      0,
+    )
+    const allocation = Math.min(remaining, outstanding)
+    if (allocation <= 0) continue
+    insert.run(transferId, statement.id, allocation)
+    affected.push(statement.id)
+    remaining -= allocation
+  }
+  db.prepare('UPDATE transfers SET statement_id = ? WHERE id = ?').run(affected[0] ?? null, transferId)
+  return affected
 }
 
 function validateTransfer(db: Database.Database, body: Input, transferId?: number): {
@@ -1366,6 +1665,11 @@ function validateTransfer(db: Database.Database, body: Input, transferId?: numbe
   }
   const source = getInstrument(db, sourceId)
   const destination = getInstrument(db, destinationId)
+  const sourceBalanceInstrument = getBalanceInstrument(db, source)
+  const destinationBalanceInstrument = getBalanceInstrument(db, destination)
+  if (sourceBalanceInstrument.id === destinationBalanceInstrument.id) {
+    throw new ValidationError('El origen y el destino representan la misma cuenta.')
+  }
   if (source.type === 'credit_card') {
     throw new ValidationError('El origen debe ser una cuenta o tarjeta de debito.')
   }
@@ -1393,19 +1697,8 @@ function validateTransfer(db: Database.Database, body: Input, transferId?: numbe
     }
   }
   const transferDate = requiredDate(body, 'transferDate')
-  let statementId = optionalInteger(body, 'statementId')
-  if (type === 'card_payment' && statementId === null) {
-    ensureAutomaticStatements(db)
-    const automaticStatement = db.prepare(`
-      SELECT id
-      FROM credit_card_statements
-      WHERE instrument_id = ? AND cut_off_date <= ? AND is_paid = 0
-        AND total_amount_cents > COALESCE(paid_amount_cents, 0)
-      ORDER BY cut_off_date
-      LIMIT 1
-    `).get(destinationId, transferDate) as { id: number } | undefined
-    statementId = automaticStatement?.id ?? null
-  }
+  const statementId = optionalInteger(body, 'statementId')
+  if (type === 'card_payment') ensureAutomaticStatements(db)
   if (statementId !== null) {
     const statement = requireEntity(db, 'credit_card_statements', statementId)
     if (toNumber(statement.instrument_id) !== destinationId) {
@@ -1416,11 +1709,21 @@ function validateTransfer(db: Database.Database, body: Input, transferId?: numbe
   if (loanId !== null) {
     requireEntity(db, 'loans', loanId)
   }
+  const currencyId = requiredInteger(body, 'currencyId')
+  if (
+    currencyId !== toNumber(sourceBalanceInstrument.currency_id)
+    || currencyId !== toNumber(destinationBalanceInstrument.currency_id)
+  ) {
+    throw new ValidationError('Las transferencias solo se permiten entre instrumentos de la misma moneda.')
+  }
+  if (type === 'loan_payment' && loanId === null) {
+    throw new ValidationError('Un pago de prestamo debe indicar el prestamo relacionado.')
+  }
   return {
     sourceId,
     destinationId,
     amountCents,
-    currencyId: requiredInteger(body, 'currencyId'),
+    currencyId,
     transferDate,
     type,
     statementId,
@@ -1440,15 +1743,19 @@ function listTransfers(db: Database.Database, instrumentId?: number): Record<str
 
 function saveTransfer(db: Database.Database, body: Input, id?: number): Record<string, unknown> {
   const input = validateTransfer(db, body, id)
-  let previousStatementId: number | null = null
+  const affectedStatements = new Set<number>()
   const operation = db.transaction(() => {
     if (id) {
       const previous = requireEntity(db, 'transfers', id)
-      previousStatementId = toNullableNumber(previous.statement_id)
+      const previousAllocations = db.prepare(`
+        SELECT statement_id FROM statement_payment_allocations WHERE transfer_id = ?
+      `).all(id) as Array<{ statement_id: number }>
+      previousAllocations.forEach((item) => affectedStatements.add(item.statement_id))
+      db.prepare('DELETE FROM statement_payment_allocations WHERE transfer_id = ?').run(id)
       applyTransferImpact(
         db,
-        getInstrument(db, toNumber(previous.source_instrument_id)),
-        getInstrument(db, toNumber(previous.destination_instrument_id)),
+        getInstrument(db, toNumber(previous.source_instrument_id), false),
+        getInstrument(db, toNumber(previous.destination_instrument_id), false),
         toNumber(previous.amount_cents),
         -1,
       )
@@ -1483,8 +1790,18 @@ function saveTransfer(db: Database.Database, body: Input, id?: number): Record<s
       input.amountCents,
       1,
     )
-    refreshStatementPayment(db, previousStatementId)
-    refreshStatementPayment(db, input.statementId)
+    if (input.type === 'card_payment') {
+      const allocatedStatements = allocateCardPayment(
+        db,
+        id!,
+        input.destinationId,
+        input.amountCents,
+        input.transferDate,
+        input.statementId,
+      )
+      allocatedStatements.forEach((statementId) => affectedStatements.add(statementId))
+    }
+    affectedStatements.forEach((statementId) => refreshStatementPayment(db, statementId))
   })
   operation()
   return mapTransfer(asRow(db.prepare(transferSelect('WHERE tr.id = ?')).get(id)))
@@ -1493,16 +1810,18 @@ function saveTransfer(db: Database.Database, body: Input, id?: number): Record<s
 function deleteTransfer(db: Database.Database, id: number): { id: number } {
   const operation = db.transaction(() => {
     const row = requireEntity(db, 'transfers', id)
-    const statementId = toNullableNumber(row.statement_id)
+    const statements = db.prepare(`
+      SELECT statement_id FROM statement_payment_allocations WHERE transfer_id = ?
+    `).all(id) as Array<{ statement_id: number }>
     applyTransferImpact(
       db,
-      getInstrument(db, toNumber(row.source_instrument_id)),
-      getInstrument(db, toNumber(row.destination_instrument_id)),
+      getInstrument(db, toNumber(row.source_instrument_id), false),
+      getInstrument(db, toNumber(row.destination_instrument_id), false),
       toNumber(row.amount_cents),
       -1,
     )
     db.prepare('DELETE FROM transfers WHERE id = ?').run(id)
-    refreshStatementPayment(db, statementId)
+    statements.forEach((item) => refreshStatementPayment(db, item.statement_id))
   })
   operation()
   return { id }
@@ -1534,16 +1853,20 @@ function validateLoan(db: Database.Database, body: Input): {
     throw new ValidationError('annualRate es obligatoria para prestamos de tasa variable.')
   }
   const instrumentId = optionalInteger(body, 'instrumentId')
+  const currencyId = requiredInteger(body, 'currencyId')
   if (instrumentId !== null) {
     const instrument = getInstrument(db, instrumentId)
     if (instrument.type === 'credit_card') {
       throw new ValidationError('El instrumento de pago del prestamo debe ser una cuenta o debito.')
     }
+    if (currencyId !== toNumber(instrument.currency_id)) {
+      throw new ValidationError('La moneda del prestamo debe coincidir con la cuenta de pago.')
+    }
   }
   return {
     name: requiredString(body, 'name', 150),
     lender: optionalString(body, 'lender', 100),
-    currencyId: requiredInteger(body, 'currencyId'),
+    currencyId,
     originalAmountCents: moneyToCents(body.originalAmount, 'originalAmount'),
     annualRate,
     totalInstallments: requiredInteger(body, 'totalInstallments', 1, 600),
@@ -1571,13 +1894,7 @@ function rebuildLoanSchedule(
 ): void {
   db.prepare('DELETE FROM loan_payments WHERE loan_id = ?').run(loanId)
   const monthlyRate = (annualRate ?? 0) / 100 / 12
-  const variablePayment = monthlyRate === 0
-    ? Math.round(originalAmountCents / totalInstallments)
-    : Math.round(
-      originalAmountCents * monthlyRate
-      * ((1 + monthlyRate) ** totalInstallments)
-      / (((1 + monthlyRate) ** totalInstallments) - 1),
-    )
+  const variablePayment = Math.round(originalAmountCents / totalInstallments)
   let remaining = originalAmountCents
   const insert = db.prepare(`
     INSERT INTO loan_payments (
@@ -1585,11 +1902,19 @@ function rebuildLoanSchedule(
     ) VALUES (?, ?, ?, ?, ?, ?)
   `)
   for (let installment = 1; installment <= totalInstallments; installment += 1) {
-    const interest = paymentType === 'variable' ? Math.round(remaining * monthlyRate) : 0
-    const requestedPayment = paymentType === 'fixed' ? (fixedPaymentCents ?? 0) : variablePayment
+    const interest = Math.round(remaining * monthlyRate)
+    const requestedPayment = paymentType === 'fixed'
+      ? (fixedPaymentCents ?? 0)
+      : variablePayment
+    if (paymentType === 'fixed' && requestedPayment <= interest) {
+      throw new ValidationError('El pago fijo debe ser mayor al interes mensual inicial.')
+    }
+    const equalPrincipal = Math.round(originalAmountCents / totalInstallments)
     const principal = installment === totalInstallments
       ? remaining
-      : Math.min(remaining, Math.max(1, requestedPayment - interest))
+      : paymentType === 'variable'
+        ? Math.min(remaining, equalPrincipal)
+        : Math.min(remaining, Math.max(1, requestedPayment - interest))
     const amount = principal + interest
     insert.run(
       loanId,
@@ -1601,6 +1926,39 @@ function rebuildLoanSchedule(
     )
     remaining -= principal
   }
+}
+
+function rebuildRemainingLoanSchedule(db: Database.Database, loanId: number): void {
+  const loan = requireEntity(db, 'loans', loanId)
+  const pending = db.prepare(`
+    SELECT id FROM loan_payments
+    WHERE loan_id = ? AND is_paid = 0
+    ORDER BY installment_num
+  `).all(loanId) as Array<{ id: number }>
+  if (pending.length === 0) return
+  const monthlyRate = (toNumber(loan.annual_rate) || 0) / 100 / 12
+  const paymentType = String(loan.payment_type)
+  const fixedPayment = toNullableNumber(loan.fixed_payment_cents) ?? 0
+  let remaining = toNumber(loan.remaining_amount_cents)
+  const equalPrincipal = Math.round(remaining / pending.length)
+  const update = db.prepare(`
+    UPDATE loan_payments
+    SET amount_cents = ?, principal_cents = ?, interest_cents = ?, updated_at = datetime('now')
+    WHERE id = ?
+  `)
+  pending.forEach((payment, index) => {
+    const interest = Math.round(remaining * monthlyRate)
+    if (paymentType === 'fixed' && fixedPayment <= interest) {
+      throw new ValidationError('El pago fijo ya no cubre el interes del saldo pendiente.')
+    }
+    const principal = index === pending.length - 1
+      ? remaining
+      : paymentType === 'variable'
+        ? Math.min(remaining, equalPrincipal)
+        : Math.min(remaining, Math.max(1, fixedPayment - interest))
+    update.run(principal + interest, principal, interest, payment.id)
+    remaining -= principal
+  })
 }
 
 function listLoans(db: Database.Database): Record<string, unknown>[] {
@@ -1630,6 +1988,7 @@ function saveLoan(db: Database.Database, body: Input, id?: number): Record<strin
           input.name, input.lender, input.annualRate, input.fixedPaymentCents, input.paymentDay,
           input.endDate, input.instrumentId, input.notes, Number(input.isActive), id,
         )
+        rebuildRemainingLoanSchedule(db, id)
         return
       }
       db.prepare(`
@@ -1703,9 +2062,13 @@ function payLoanInstallment(
     const amountCents = body.amount === undefined
       ? toNumber(payment.amount_cents)
       : moneyToCents(body.amount, 'amount')
+    const interestCents = toNumber(payment.interest_cents)
+    if (amountCents <= interestCents) {
+      throw new ValidationError('El pago debe cubrir el interes y una parte del capital.')
+    }
     const principalCents = Math.min(
       toNumber(loan.remaining_amount_cents),
-      toNumber(payment.principal_cents ?? amountCents),
+      amountCents - interestCents,
     )
     const instrumentId = toNullableNumber(loan.instrument_id)
     if (instrumentId !== null) {
@@ -1713,17 +2076,37 @@ function payLoanInstallment(
       if (instrument.type === 'credit_card') {
         throw new ValidationError('El pago del prestamo requiere una cuenta o tarjeta de debito.')
       }
+      const balanceInstrument = getBalanceInstrument(db, instrument)
       db.prepare(`
         UPDATE financial_instruments
         SET current_amount_cents = current_amount_cents - ?, updated_at = datetime('now')
         WHERE id = ?
-      `).run(amountCents, instrumentId)
+      `).run(amountCents, balanceInstrument.id)
+    }
+    let transactionId: number | null = null
+    if (interestCents > 0 && instrumentId !== null) {
+      const transaction = db.prepare(`
+        INSERT INTO transactions (
+          instrument_id, currency_id, type, amount_cents, description,
+          transaction_date, notes, affects_balance, source_type, source_id
+        ) VALUES (?, ?, 'expense', ?, ?, ?, ?, 0, 'loan_interest', ?)
+      `).run(
+        instrumentId,
+        loan.currency_id,
+        interestCents,
+        `Interes de ${String(loan.name)}`,
+        paidDate,
+        notes,
+        payment.id,
+      )
+      transactionId = Number(transaction.lastInsertRowid)
     }
     db.prepare(`
       UPDATE loan_payments
-      SET amount_cents = ?, is_paid = 1, paid_date = ?, notes = ?, updated_at = datetime('now')
+      SET amount_cents = ?, principal_cents = ?, interest_cents = ?, is_paid = 1,
+          paid_date = ?, notes = ?, transaction_id = ?, updated_at = datetime('now')
       WHERE id = ?
-    `).run(amountCents, paidDate, notes, payment.id)
+    `).run(amountCents, principalCents, interestCents, paidDate, notes, transactionId, payment.id)
     db.prepare(`
       UPDATE loans
       SET remaining_amount_cents = MAX(remaining_amount_cents - ?, 0),
@@ -1732,6 +2115,12 @@ function payLoanInstallment(
           updated_at = datetime('now')
       WHERE id = ?
     `).run(principalCents, loanId)
+    db.prepare(`
+      UPDATE reminders
+      SET is_dismissed = 1, updated_at = datetime('now')
+      WHERE reference_type = 'loan_payment' AND reference_id = ?
+    `).run(payment.id)
+    rebuildRemainingLoanSchedule(db, loanId)
   })
   operation()
   const loan = mapLoan(asRow(db.prepare(loanSelect('WHERE l.id = ?')).get(loanId)))
@@ -1739,6 +2128,59 @@ function payLoanInstallment(
     SELECT * FROM loan_payments WHERE loan_id = ? AND installment_num = ?
   `).get(loanId, installmentNum)))
   return { loan, payment }
+}
+
+function undoLoanInstallment(
+  db: Database.Database,
+  loanId: number,
+  installmentNum: number,
+): Record<string, unknown> {
+  const operation = db.transaction(() => {
+    const loan = requireEntity(db, 'loans', loanId)
+    const payment = db.prepare(`
+      SELECT * FROM loan_payments WHERE loan_id = ? AND installment_num = ?
+    `).get(loanId, installmentNum) as DbRow | undefined
+    if (!payment || !toBoolean(payment.is_paid)) {
+      throw new ValidationError('La cuota no esta pagada.')
+    }
+    const instrumentId = toNullableNumber(loan.instrument_id)
+    if (instrumentId !== null) {
+      const instrument = getBalanceInstrument(db, getInstrument(db, instrumentId, false))
+      db.prepare(`
+        UPDATE financial_instruments
+        SET current_amount_cents = current_amount_cents + ?, updated_at = datetime('now')
+        WHERE id = ?
+      `).run(toNumber(payment.amount_cents), instrument.id)
+    }
+    const transactionId = toNullableNumber(payment.transaction_id)
+    db.prepare(`
+      UPDATE loan_payments
+      SET is_paid = 0, paid_date = NULL, notes = NULL, transaction_id = NULL,
+          updated_at = datetime('now')
+      WHERE id = ?
+    `).run(payment.id)
+    if (transactionId !== null) {
+      db.prepare('DELETE FROM transactions WHERE id = ?').run(transactionId)
+    }
+    const paid = db.prepare(`
+      SELECT COUNT(*) AS count, COALESCE(SUM(principal_cents), 0) AS principal
+      FROM loan_payments WHERE loan_id = ? AND is_paid = 1
+    `).get(loanId) as { count: number; principal: number }
+    db.prepare(`
+      UPDATE loans
+      SET remaining_amount_cents = MAX(original_amount_cents - ?, 0),
+          paid_installments = ?, is_active = 1, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(paid.principal, paid.count, loanId)
+    rebuildRemainingLoanSchedule(db, loanId)
+  })
+  operation()
+  return {
+    loan: mapLoan(asRow(db.prepare(loanSelect('WHERE l.id = ?')).get(loanId))),
+    payment: mapLoanPayment(asRow(db.prepare(`
+      SELECT * FROM loan_payments WHERE loan_id = ? AND installment_num = ?
+    `).get(loanId, installmentNum))),
+  }
 }
 
 function validateSubscription(db: Database.Database, body: Input): {
@@ -1755,16 +2197,26 @@ function validateSubscription(db: Database.Database, body: Input): {
   notes: string | null
 } {
   const instrumentId = requiredInteger(body, 'instrumentId')
-  getInstrument(db, instrumentId)
+  const instrument = getInstrument(db, instrumentId)
   const categoryId = optionalInteger(body, 'categoryId')
   const subcategoryId = optionalInteger(body, 'subcategoryId')
   validateCategoryLinks(db, categoryId, subcategoryId)
+  if (categoryId !== null) {
+    const category = requireEntity(db, 'categories', categoryId)
+    if (category.type !== 'expense' && category.type !== 'both') {
+      throw new ValidationError('La suscripcion requiere una categoria de gasto.')
+    }
+  }
+  const currencyId = requiredInteger(body, 'currencyId')
+  if (currencyId !== toNumber(instrument.currency_id)) {
+    throw new ValidationError('La moneda debe coincidir con la del instrumento.')
+  }
   return {
     name: requiredString(body, 'name', 150),
     instrumentId,
     categoryId,
     subcategoryId,
-    currencyId: requiredInteger(body, 'currencyId'),
+    currencyId,
     amountCents: moneyToCents(body.amount, 'amount'),
     billingCycle: requiredEnum(body, 'billingCycle', BILLING_CYCLES),
     billingDay: optionalInteger(body, 'billingDay', 1, 31),
@@ -1830,7 +2282,7 @@ function processDueSubscriptions(db: Database.Database): void {
   const due = db.prepare(`
     SELECT s.* FROM subscriptions s
     JOIN financial_instruments i ON i.id = s.instrument_id AND i.is_active = 1
-    WHERE s.is_active = 1 AND s.next_billing IS NOT NULL AND s.next_billing <= date('now')
+    WHERE s.is_active = 1 AND s.next_billing IS NOT NULL AND s.next_billing <= date('now', 'localtime')
     ORDER BY s.next_billing
     LIMIT 100
   `).all() as DbRow[]
@@ -1848,12 +2300,13 @@ function processDueSubscriptions(db: Database.Database): void {
           const result = db.prepare(`
             INSERT INTO transactions (
               instrument_id, category_id, subcategory_id, currency_id, type,
-              amount_cents, description, transaction_date, notes
-            ) VALUES (?, ?, ?, ?, 'expense', ?, ?, ?, ?)
+              amount_cents, description, transaction_date, notes,
+              affects_balance, source_type, source_id
+            ) VALUES (?, ?, ?, ?, 'expense', ?, ?, ?, ?, 1, 'subscription', ?)
           `).run(
             subscription.instrument_id, subscription.category_id, subscription.subcategory_id,
             subscription.currency_id, subscription.amount_cents,
-            `Cargo automatico: ${subscription.name}`, chargeDate, note,
+            `Cargo automatico: ${subscription.name}`, chargeDate, note, subscription.id,
           )
           if (result.changes > 0) {
             const instrumentId = toNumber(subscription.instrument_id)
@@ -1877,9 +2330,246 @@ function processDueSubscriptions(db: Database.Database): void {
       db.prepare(`
         UPDATE subscriptions SET next_billing = ?, updated_at = datetime('now') WHERE id = ?
       `).run(chargeDate, subscription.id)
+      db.prepare(`
+        UPDATE reminders
+        SET is_dismissed = 1, updated_at = datetime('now')
+        WHERE reference_type = 'subscription' AND reference_id = ? AND reminder_date < ?
+      `).run(subscription.id, chargeDate)
     }
   })
   operation()
+}
+
+function recurringIncomeSelect(where = ''): string {
+  return `
+    SELECT r.*, i.name AS instrument_name, c.name AS category_name,
+           s.name AS subcategory_name
+    FROM recurring_incomes r
+    JOIN financial_instruments i ON i.id = r.instrument_id
+    LEFT JOIN categories c ON c.id = r.category_id
+    LEFT JOIN subcategories s ON s.id = r.subcategory_id
+    ${where}
+  `
+}
+
+function nextRecurringIncomeDate(
+  current: string,
+  frequency: string,
+  paymentDay: number | null,
+): string {
+  if (frequency === 'weekly') return addDays(current, 7)
+  if (frequency === 'biweekly') return addDays(current, 14)
+  if (frequency === 'yearly') return addMonths(current, 12, paymentDay)
+  return addMonths(current, 1, paymentDay)
+}
+
+function listRecurringIncomes(db: Database.Database): Record<string, unknown>[] {
+  return (db.prepare(`
+    ${recurringIncomeSelect()}
+    ORDER BY r.is_active DESC, r.next_payment, r.name
+  `).all() as DbRow[]).map(mapRecurringIncome)
+}
+
+function saveRecurringIncome(
+  db: Database.Database,
+  body: Input,
+  id?: number,
+): Record<string, unknown> {
+  const instrumentId = requiredInteger(body, 'instrumentId')
+  const instrument = getInstrument(db, instrumentId)
+  if (instrument.type === 'credit_card') {
+    throw new ValidationError('Un ingreso recurrente requiere una cuenta o tarjeta de debito.')
+  }
+  const categoryId = optionalInteger(body, 'categoryId')
+  const subcategoryId = optionalInteger(body, 'subcategoryId')
+  validateCategoryLinks(db, categoryId, subcategoryId)
+  if (categoryId !== null) {
+    const category = requireEntity(db, 'categories', categoryId)
+    if (category.type !== 'income' && category.type !== 'both') {
+      throw new ValidationError('El ingreso recurrente requiere una categoria de ingreso.')
+    }
+  }
+  const currencyId = requiredInteger(body, 'currencyId')
+  if (currencyId !== toNumber(instrument.currency_id)) {
+    throw new ValidationError('La moneda debe coincidir con la del instrumento.')
+  }
+  const values = {
+    name: requiredString(body, 'name', 150),
+    instrumentId,
+    categoryId,
+    subcategoryId,
+    currencyId,
+    amountCents: moneyToCents(body.amount, 'amount'),
+    frequency: requiredEnum(body, 'frequency', RECURRING_INCOME_FREQUENCIES),
+    paymentDay: optionalInteger(body, 'paymentDay', 1, 31),
+    nextPayment: requiredDate(body, 'nextPayment'),
+    isActive: requiredBoolean(body, 'isActive', true),
+    notes: optionalString(body, 'notes', 2000),
+  }
+  if (id) {
+    requireEntity(db, 'recurring_incomes', id)
+    db.prepare(`
+      UPDATE recurring_incomes
+      SET name = ?, instrument_id = ?, category_id = ?, subcategory_id = ?,
+          currency_id = ?, amount_cents = ?, frequency = ?, payment_day = ?,
+          next_payment = ?, is_active = ?, notes = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(
+      values.name, values.instrumentId, values.categoryId, values.subcategoryId,
+      values.currencyId, values.amountCents, values.frequency, values.paymentDay,
+      values.nextPayment, Number(values.isActive), values.notes, id,
+    )
+  } else {
+    const result = db.prepare(`
+      INSERT INTO recurring_incomes (
+        name, instrument_id, category_id, subcategory_id, currency_id,
+        amount_cents, frequency, payment_day, next_payment, is_active, notes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      values.name, values.instrumentId, values.categoryId, values.subcategoryId,
+      values.currencyId, values.amountCents, values.frequency, values.paymentDay,
+      values.nextPayment, Number(values.isActive), values.notes,
+    )
+    id = Number(result.lastInsertRowid)
+  }
+  return mapRecurringIncome(asRow(
+    db.prepare(recurringIncomeSelect('WHERE r.id = ?')).get(id),
+  ))
+}
+
+function deleteRecurringIncome(db: Database.Database, id: number): { id: number } {
+  requireEntity(db, 'recurring_incomes', id)
+  db.prepare(`
+    UPDATE recurring_incomes
+    SET is_active = 0, updated_at = datetime('now')
+    WHERE id = ?
+  `).run(id)
+  return { id }
+}
+
+function processDueRecurringIncomes(db: Database.Database): void {
+  const due = db.prepare(`
+    SELECT r.* FROM recurring_incomes r
+    JOIN financial_instruments i ON i.id = r.instrument_id AND i.is_active = 1
+    WHERE r.is_active = 1 AND r.next_payment <= ?
+    ORDER BY r.next_payment
+    LIMIT 100
+  `).all(todayIso()) as DbRow[]
+  if (due.length === 0) return
+  const operation = db.transaction(() => {
+    for (const income of due) {
+      let paymentDate = String(income.next_payment)
+      let processed = 0
+      while (paymentDate <= todayIso() && processed < 24) {
+        const note = `LOCAL_RECURRING_INCOME:${income.id}:${paymentDate}`
+        const exists = db.prepare('SELECT id FROM transactions WHERE notes = ?').get(note)
+        if (!exists) {
+          const result = db.prepare(`
+            INSERT INTO transactions (
+              instrument_id, category_id, subcategory_id, currency_id, type,
+              amount_cents, description, transaction_date, notes, affects_balance,
+              source_type, source_id
+            ) VALUES (?, ?, ?, ?, 'income', ?, ?, ?, ?, 1, 'recurring_income', ?)
+          `).run(
+            income.instrument_id, income.category_id, income.subcategory_id,
+            income.currency_id, income.amount_cents,
+            `Ingreso automatico: ${String(income.name)}`, paymentDate, note, income.id,
+          )
+          if (result.changes > 0) {
+            applyInstrumentImpact(
+              db,
+              getInstrument(db, toNumber(income.instrument_id)),
+              'income',
+              toNumber(income.amount_cents),
+              1,
+            )
+          }
+        }
+        paymentDate = nextRecurringIncomeDate(
+          paymentDate,
+          String(income.frequency),
+          toNullableNumber(income.payment_day),
+        )
+        processed += 1
+      }
+      db.prepare(`
+        UPDATE recurring_incomes
+        SET next_payment = ?, updated_at = datetime('now')
+        WHERE id = ?
+      `).run(paymentDate, income.id)
+    }
+  })
+  operation()
+}
+
+function listSavingsGoals(db: Database.Database): Record<string, unknown>[] {
+  return (db.prepare(`
+    SELECT g.*, i.name AS instrument_name
+    FROM savings_goals g
+    LEFT JOIN financial_instruments i ON i.id = g.instrument_id
+    ORDER BY g.is_active DESC, g.target_date, g.name
+  `).all() as DbRow[]).map(mapSavingsGoal)
+}
+
+function saveSavingsGoal(
+  db: Database.Database,
+  body: Input,
+  id?: number,
+): Record<string, unknown> {
+  const instrumentId = optionalInteger(body, 'instrumentId')
+  if (instrumentId !== null) {
+    const instrument = getInstrument(db, instrumentId)
+    if (instrument.type === 'credit_card') {
+      throw new ValidationError('Una meta debe vincularse a una cuenta de ahorro.')
+    }
+  }
+  const values = {
+    name: requiredString(body, 'name', 150),
+    targetAmountCents: moneyToCents(body.targetAmount, 'targetAmount'),
+    currentAmountCents: moneyToCents(body.currentAmount, 'currentAmount', true),
+    targetDate: optionalDate(body, 'targetDate'),
+    instrumentId,
+    notes: optionalString(body, 'notes', 2000),
+    isActive: requiredBoolean(body, 'isActive', true),
+  }
+  if (id) {
+    requireEntity(db, 'savings_goals', id)
+    db.prepare(`
+      UPDATE savings_goals
+      SET name = ?, target_amount_cents = ?, current_amount_cents = ?,
+          target_date = ?, instrument_id = ?, notes = ?, is_active = ?,
+          updated_at = datetime('now')
+      WHERE id = ?
+    `).run(
+      values.name, values.targetAmountCents, values.currentAmountCents,
+      values.targetDate, values.instrumentId, values.notes, Number(values.isActive), id,
+    )
+  } else {
+    const result = db.prepare(`
+      INSERT INTO savings_goals (
+        name, target_amount_cents, current_amount_cents, target_date,
+        instrument_id, notes, is_active
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      values.name, values.targetAmountCents, values.currentAmountCents,
+      values.targetDate, values.instrumentId, values.notes, Number(values.isActive),
+    )
+    id = Number(result.lastInsertRowid)
+  }
+  return mapSavingsGoal(asRow(db.prepare(`
+    SELECT g.*, i.name AS instrument_name
+    FROM savings_goals g
+    LEFT JOIN financial_instruments i ON i.id = g.instrument_id
+    WHERE g.id = ?
+  `).get(id)))
+}
+
+function deleteSavingsGoal(db: Database.Database, id: number): { id: number } {
+  requireEntity(db, 'savings_goals', id)
+  db.prepare(`
+    UPDATE savings_goals SET is_active = 0, updated_at = datetime('now') WHERE id = ?
+  `).run(id)
+  return { id }
 }
 
 function validateFixedExpense(db: Database.Database, body: Input): {
@@ -1895,18 +2585,26 @@ function validateFixedExpense(db: Database.Database, body: Input): {
   notes: string | null
 } {
   const instrumentId = optionalInteger(body, 'instrumentId')
-  if (instrumentId !== null) {
-    getInstrument(db, instrumentId)
-  }
+  const instrument = instrumentId === null ? null : getInstrument(db, instrumentId)
   const categoryId = optionalInteger(body, 'categoryId')
   const subcategoryId = optionalInteger(body, 'subcategoryId')
   validateCategoryLinks(db, categoryId, subcategoryId)
+  if (categoryId !== null) {
+    const category = requireEntity(db, 'categories', categoryId)
+    if (category.type !== 'expense' && category.type !== 'both') {
+      throw new ValidationError('El gasto fijo requiere una categoria de gasto.')
+    }
+  }
+  const currencyId = requiredInteger(body, 'currencyId')
+  if (instrument && currencyId !== toNumber(instrument.currency_id)) {
+    throw new ValidationError('La moneda debe coincidir con la del instrumento.')
+  }
   return {
     name: requiredString(body, 'name', 150),
     instrumentId,
     categoryId,
     subcategoryId,
-    currencyId: requiredInteger(body, 'currencyId'),
+    currencyId,
     estimatedAmountCents: moneyToCents(body.estimatedAmount, 'estimatedAmount'),
     isVariable: requiredBoolean(body, 'isVariable', false),
     paymentDay: optionalInteger(body, 'paymentDay', 1, 31),
@@ -1972,32 +2670,63 @@ function saveFixedExpensePayment(
   body: Input,
   paymentId?: number,
 ): Record<string, unknown> {
-  requireEntity(db, 'fixed_expenses', fixedExpenseId)
+  const fixedExpense = requireEntity(db, 'fixed_expenses', fixedExpenseId)
   const amountCents = moneyToCents(body.amount, 'amount')
   const periodMonth = requiredInteger(body, 'periodMonth', 1, 12)
   const periodYear = requiredInteger(body, 'periodYear', 2000, 2200)
   const paymentDate = optionalDate(body, 'paymentDate')
   const isPaid = requiredBoolean(body, 'isPaid', false)
   const notes = optionalString(body, 'notes', 2000)
-  if (paymentId) {
-    const payment = requireEntity(db, 'fixed_expense_payments', paymentId)
-    if (toNumber(payment.fixed_expense_id) !== fixedExpenseId) {
-      throw new ValidationError('El pago no pertenece al gasto fijo indicado.')
+  const operation = db.transaction(() => {
+    if (paymentId) {
+      const payment = requireEntity(db, 'fixed_expense_payments', paymentId)
+      if (toNumber(payment.fixed_expense_id) !== fixedExpenseId) {
+        throw new ValidationError('El pago no pertenece al gasto fijo indicado.')
+      }
+      const transactionId = toNullableNumber(payment.transaction_id)
+      if (transactionId !== null) {
+        db.prepare(`
+          UPDATE fixed_expense_payments SET transaction_id = NULL WHERE id = ?
+        `).run(paymentId)
+        deleteTransaction(db, transactionId)
+      }
+      db.prepare(`
+        UPDATE fixed_expense_payments
+        SET amount_cents = ?, period_month = ?, period_year = ?, payment_date = ?,
+            is_paid = ?, notes = ?, transaction_id = NULL, updated_at = datetime('now')
+        WHERE id = ?
+      `).run(amountCents, periodMonth, periodYear, paymentDate, Number(isPaid), notes, paymentId)
+    } else {
+      const result = db.prepare(`
+        INSERT INTO fixed_expense_payments (
+          fixed_expense_id, amount_cents, period_month, period_year, payment_date, is_paid, notes
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(fixedExpenseId, amountCents, periodMonth, periodYear, paymentDate, Number(isPaid), notes)
+      paymentId = Number(result.lastInsertRowid)
     }
-    db.prepare(`
-      UPDATE fixed_expense_payments
-      SET amount_cents = ?, period_month = ?, period_year = ?, payment_date = ?,
-          is_paid = ?, notes = ?, updated_at = datetime('now')
-      WHERE id = ?
-    `).run(amountCents, periodMonth, periodYear, paymentDate, Number(isPaid), notes, paymentId)
-  } else {
-    const result = db.prepare(`
-      INSERT INTO fixed_expense_payments (
-        fixed_expense_id, amount_cents, period_month, period_year, payment_date, is_paid, notes
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(fixedExpenseId, amountCents, periodMonth, periodYear, paymentDate, Number(isPaid), notes)
-    paymentId = Number(result.lastInsertRowid)
-  }
+    const instrumentId = toNullableNumber(fixedExpense.instrument_id)
+    if (isPaid && instrumentId !== null) {
+      const transaction = saveTransaction(db, {
+        instrumentId,
+        categoryId: toNullableNumber(fixedExpense.category_id),
+        subcategoryId: toNullableNumber(fixedExpense.subcategory_id),
+        currencyId: toNumber(fixedExpense.currency_id),
+        type: 'expense',
+        amount: amountCents / 100,
+        description: `Pago de ${String(fixedExpense.name)}`,
+        transactionDate: paymentDate ?? `${periodYear}-${String(periodMonth).padStart(2, '0')}-01`,
+        notes,
+        isMsi: false,
+        affectsBalance: true,
+        sourceType: 'fixed_expense',
+        sourceId: paymentId,
+      }, undefined, true)
+      db.prepare(`
+        UPDATE fixed_expense_payments SET transaction_id = ? WHERE id = ?
+      `).run(toNumber(transaction.id), paymentId)
+    }
+  })
+  operation()
   return mapFixedExpensePayment(asRow(
     db.prepare('SELECT * FROM fixed_expense_payments WHERE id = ?').get(paymentId),
   ))
@@ -2012,7 +2741,17 @@ function deleteFixedExpensePayment(
   if (toNumber(payment.fixed_expense_id) !== fixedExpenseId) {
     throw new ValidationError('El pago no pertenece al gasto fijo indicado.')
   }
-  db.prepare('DELETE FROM fixed_expense_payments WHERE id = ?').run(paymentId)
+  const operation = db.transaction(() => {
+    const transactionId = toNullableNumber(payment.transaction_id)
+    if (transactionId !== null) {
+      db.prepare(`
+        UPDATE fixed_expense_payments SET transaction_id = NULL WHERE id = ?
+      `).run(paymentId)
+      deleteTransaction(db, transactionId)
+    }
+    db.prepare('DELETE FROM fixed_expense_payments WHERE id = ?').run(paymentId)
+  })
+  operation()
   return { id: paymentId }
 }
 
@@ -2023,10 +2762,12 @@ function budgetSpent(db: Database.Database, categoryId: number | null, month: nu
     ? db.prepare(`
         SELECT COALESCE(SUM(amount_cents), 0) AS total FROM transactions
         WHERE type = 'expense' AND transaction_date >= ? AND transaction_date < ?
+          AND COALESCE(source_type, '') NOT IN ('reconciliation', 'opening_balance')
       `).get(start, end)
     : db.prepare(`
         SELECT COALESCE(SUM(amount_cents), 0) AS total FROM transactions
         WHERE type = 'expense' AND category_id = ? AND transaction_date >= ? AND transaction_date < ?
+          AND COALESCE(source_type, '') NOT IN ('reconciliation', 'opening_balance')
       `).get(categoryId, start, end)
   return toNumber(asRow(row).total)
 }
@@ -2084,8 +2825,15 @@ function saveBudget(db: Database.Database, body: Input, id?: number): Record<str
   const categoryId = optionalInteger(body, 'categoryId')
   if (categoryId !== null) {
     validateCategoryLinks(db, categoryId, null)
+    const category = requireEntity(db, 'categories', categoryId)
+    if (category.type !== 'expense' && category.type !== 'both') {
+      throw new ValidationError('El presupuesto requiere una categoria de gasto.')
+    }
   }
   const currencyId = requiredInteger(body, 'currencyId')
+  if (!db.prepare('SELECT id FROM currencies WHERE id = ?').get(currencyId)) {
+    throw new ValidationError('La moneda seleccionada no existe.')
+  }
   const amountCents = moneyToCents(body.amount, 'amount')
   const month = requiredInteger(body, 'month', 1, 12)
   const year = requiredInteger(body, 'year', 2000, 2200)
@@ -2156,6 +2904,15 @@ function saveSimulation(db: Database.Database, body: Input): Record<string, unkn
   }
   const summary = getDashboardSummary(db)
   const obligations = getMonthlyObligationsCents(db)
+  const threeMonthsAgo = addMonths(`${todayIso().slice(0, 7)}-01`, -3)
+  const averages = db.prepare(`
+    SELECT
+      COALESCE(SUM(CASE WHEN type = 'income' THEN amount_cents ELSE 0 END), 0) / 3 AS income,
+      COALESCE(SUM(CASE WHEN type = 'expense' THEN amount_cents ELSE 0 END), 0) / 3 AS expense
+    FROM transactions
+    WHERE transaction_date >= ?
+      AND COALESCE(source_type, '') NOT IN ('reconciliation', 'opening_balance')
+  `).get(threeMonthsAgo) as { income: number; expense: number }
   let monthlyImpact = amountCents
   if (scenarioType === 'msi') {
     monthlyImpact = Math.round(amountCents / (msiMonths ?? 1))
@@ -2170,12 +2927,34 @@ function saveSimulation(db: Database.Database, body: Input): Record<string, unkn
   const creditAvailableCents = instrument?.type === 'credit_card'
     ? toNumber(instrument.credit_limit_cents) - toNumber(instrument.current_balance_cents) - amountCents
     : null
+  const averageIncomeCents = Math.round(toNumber(averages.income))
+  const averageExpenseCents = Math.round(toNumber(averages.expense))
+  const monthlyDisposableCents = averageIncomeCents - Math.max(averageExpenseCents, obligations)
+  const emergencyReserveCents = averageExpenseCents * 3
+  const debtServiceRatio = averageIncomeCents > 0
+    ? (obligations + monthlyImpact) / averageIncomeCents
+    : 1
+  const projectedCreditUtilization = instrument?.type === 'credit_card'
+    ? (
+        toNumber(instrument.current_balance_cents) + amountCents
+      ) / Math.max(toNumber(instrument.credit_limit_cents), 1)
+    : null
   const favorable = projectedAvailableCents >= 0
     && (creditAvailableCents === null || creditAvailableCents >= 0)
-    && projectedAvailableCents >= obligations + monthlyImpact
+    && monthlyDisposableCents >= monthlyImpact
+    && debtServiceRatio <= 0.4
+    && (projectedCreditUtilization === null || projectedCreditUtilization <= 0.5)
+    && (
+      scenarioType !== 'direct_purchase'
+      || instrument?.type === 'credit_card'
+      || projectedAvailableCents >= emergencyReserveCents
+    )
   const snapshot = {
     summary,
     monthlyObligations: obligations / 100,
+    averageMonthlyIncome: averageIncomeCents / 100,
+    averageMonthlyExpense: averageExpenseCents / 100,
+    emergencyReserveTarget: emergencyReserveCents / 100,
     instrument: instrument ? mapInstrument(instrument) : null,
   }
   const resultJson = {
@@ -2184,6 +2963,11 @@ function saveSimulation(db: Database.Database, body: Input): Record<string, unkn
     monthlyImpact: monthlyImpact / 100,
     projectedAvailable: projectedAvailableCents / 100,
     projectedCreditAvailable: creditAvailableCents === null ? null : creditAvailableCents / 100,
+    monthlyDisposable: monthlyDisposableCents / 100,
+    debtServiceRatio: Math.round(debtServiceRatio * 10_000) / 100,
+    projectedCreditUtilization: projectedCreditUtilization === null
+      ? null
+      : Math.round(projectedCreditUtilization * 10_000) / 100,
     isFavorable: favorable,
   }
   const result = db.prepare(`
@@ -2249,11 +3033,83 @@ function deleteReminder(db: Database.Database, id: number): { id: number } {
   return { id }
 }
 
+function ensureAutomaticReminders(db: Database.Database): void {
+  const until = addDays(todayIso(), 7)
+  const exists = db.prepare(`
+    SELECT id FROM reminders
+    WHERE type = ? AND reference_type = ? AND reference_id = ? AND reminder_date = ?
+      AND is_dismissed = 0
+    LIMIT 1
+  `)
+  const insert = db.prepare(`
+    INSERT INTO reminders (
+      title, description, reminder_date, type, reference_id, reference_type
+    ) VALUES (?, ?, ?, ?, ?, ?)
+  `)
+  const statements = db.prepare(`
+    SELECT st.id, st.payment_due_date, i.name
+    FROM credit_card_statements st
+    JOIN financial_instruments i ON i.id = st.instrument_id
+    WHERE st.is_paid = 0
+      AND st.total_amount_cents > COALESCE(st.paid_amount_cents, 0)
+      AND st.payment_due_date <= ?
+  `).all(until) as Array<{ id: number; payment_due_date: string; name: string }>
+  for (const statement of statements) {
+    if (!exists.get('payment', 'statement', statement.id, statement.payment_due_date)) {
+      insert.run(
+        `Pago de tarjeta: ${statement.name}`,
+        'Tienes un estado de cuenta pendiente.',
+        statement.payment_due_date,
+        'payment',
+        statement.id,
+        'statement',
+      )
+    }
+  }
+  const loanPayments = db.prepare(`
+    SELECT p.id, p.payment_date, l.name
+    FROM loan_payments p
+    JOIN loans l ON l.id = p.loan_id
+    WHERE p.is_paid = 0 AND l.is_active = 1 AND p.payment_date <= ?
+  `).all(until) as Array<{ id: number; payment_date: string; name: string }>
+  for (const payment of loanPayments) {
+    if (!exists.get('loan', 'loan_payment', payment.id, payment.payment_date)) {
+      insert.run(
+        `Cuota de prestamo: ${payment.name}`,
+        'Tienes una cuota de prestamo proxima.',
+        payment.payment_date,
+        'loan',
+        payment.id,
+        'loan_payment',
+      )
+    }
+  }
+  const subscriptions = db.prepare(`
+    SELECT id, name, next_billing
+    FROM subscriptions
+    WHERE is_active = 1 AND next_billing IS NOT NULL AND next_billing <= ?
+  `).all(until) as Array<{ id: number; name: string; next_billing: string }>
+  for (const subscription of subscriptions) {
+    if (!exists.get('subscription', 'subscription', subscription.id, subscription.next_billing)) {
+      insert.run(
+        `Suscripcion: ${subscription.name}`,
+        'Se aproxima un cargo recurrente.',
+        subscription.next_billing,
+        'subscription',
+        subscription.id,
+        'subscription',
+      )
+    }
+  }
+}
+
 function getDashboardSummary(db: Database.Database): Record<string, number> {
   const instruments = db.prepare(`
     SELECT
-      COALESCE(SUM(CASE WHEN type IN ('account', 'debit_card') THEN current_amount_cents ELSE 0 END), 0) AS available,
-      COALESCE(SUM(CASE WHEN type = 'credit_card' THEN current_balance_cents ELSE 0 END), 0) AS credit_debt,
+      COALESCE(SUM(CASE
+        WHEN type = 'account' OR (type = 'debit_card' AND linked_account_id IS NULL)
+        THEN current_amount_cents ELSE 0 END), 0) AS available,
+      COALESCE(SUM(CASE WHEN type = 'credit_card' THEN MAX(current_balance_cents, 0) ELSE 0 END), 0) AS credit_debt,
       COALESCE(SUM(CASE WHEN type = 'credit_card' THEN available_credit_cents ELSE 0 END), 0) AS available_credit
     FROM financial_instruments WHERE is_active = 1
   `).get() as { available: number; credit_debt: number; available_credit: number }
@@ -2278,8 +3134,9 @@ function getDashboardExpensesByCategory(db: Database.Database): Record<string, u
     FROM transactions t
     LEFT JOIN categories c ON c.id = t.category_id
     WHERE t.type = 'expense'
-      AND t.transaction_date >= date('now', 'start of month')
-      AND t.transaction_date < date('now', 'start of month', '+1 month')
+      AND COALESCE(t.source_type, '') NOT IN ('reconciliation', 'opening_balance')
+      AND t.transaction_date >= date('now', 'localtime', 'start of month')
+      AND t.transaction_date < date('now', 'localtime', 'start of month', '+1 month')
     GROUP BY COALESCE(c.name, 'Sin categoria')
     ORDER BY total DESC
   `).all() as Array<{ category: string; total: number }>
@@ -2308,21 +3165,67 @@ function getDashboardCashFlow(db: Database.Database): Record<string, unknown>[] 
     const end = addMonths(start, 1)
     const row = db.prepare(`
       SELECT
-        COALESCE(SUM(CASE WHEN type = 'income' THEN amount_cents ELSE 0 END), 0) AS income,
-        COALESCE(SUM(CASE WHEN type = 'expense' THEN amount_cents ELSE 0 END), 0) AS expense
-      FROM transactions WHERE transaction_date >= ? AND transaction_date < ?
-    `).get(start, end) as { income: number; expense: number }
-    return { month: label, income: row.income / 100, expense: row.expense / 100 }
+        COALESCE(SUM(CASE
+          WHEN t.type = 'income' AND t.affects_balance = 1
+            AND i.type IN ('account', 'debit_card')
+          THEN t.amount_cents ELSE 0 END), 0) AS income,
+        COALESCE(SUM(CASE WHEN t.type = 'expense' THEN t.amount_cents ELSE 0 END), 0) AS expense,
+        COALESCE(SUM(CASE
+          WHEN t.affects_balance = 1 AND t.type = 'expense'
+            AND i.type IN ('account', 'debit_card')
+          THEN t.amount_cents ELSE 0 END), 0) AS cash_expenses
+      FROM transactions t
+      JOIN financial_instruments i ON i.id = t.instrument_id
+      WHERE t.transaction_date >= ? AND t.transaction_date < ?
+        AND COALESCE(t.source_type, '') NOT IN ('reconciliation', 'opening_balance')
+    `).get(start, end) as { income: number; expense: number; cash_expenses: number }
+    const debt = db.prepare(`
+      SELECT
+        (SELECT COALESCE(SUM(amount_cents), 0)
+          FROM transfers
+          WHERE type = 'card_payment' AND transfer_date >= ? AND transfer_date < ?) +
+        (SELECT COALESCE(SUM(p.amount_cents), 0)
+          FROM loan_payments p
+          JOIN loans l ON l.id = p.loan_id
+          WHERE p.is_paid = 1 AND l.instrument_id IS NOT NULL
+            AND p.paid_date >= ? AND p.paid_date < ?) AS total
+    `).get(start, end, start, end) as { total: number }
+    const income = toNumber(row.income) / 100
+    const expense = toNumber(row.expense) / 100
+    const debtPayments = toNumber(debt.total) / 100
+    const cashExpenses = toNumber(row.cash_expenses) / 100
+    return {
+      month: label,
+      income,
+      expense,
+      debtPayments,
+      netCashFlow: income - cashExpenses - debtPayments,
+    }
   })
 }
 
 function getDashboardBalanceEvolution(db: Database.Database): Record<string, unknown> {
   const instruments = db.prepare(`
-    SELECT id, name, current_amount_cents
+    SELECT
+      id,
+      name,
+      current_amount_cents,
+      (
+        SELECT MIN(t.transaction_date)
+        FROM transactions t
+        WHERE t.instrument_id = financial_instruments.id
+          AND t.source_type = 'opening_balance'
+      ) AS opening_date
     FROM financial_instruments
-    WHERE is_active = 1 AND type IN ('account', 'debit_card')
+    WHERE is_active = 1
+      AND (type = 'account' OR (type = 'debit_card' AND linked_account_id IS NULL))
     ORDER BY name
-  `).all() as Array<{ id: number; name: string; current_amount_cents: number }>
+  `).all() as Array<{
+    id: number
+    name: string
+    current_amount_cents: number
+    opening_date: string | null
+  }>
   const months = monthSequence(6)
   const series = instruments.map((instrument) => ({
     key: `instrument_${instrument.id}`,
@@ -2332,21 +3235,45 @@ function getDashboardBalanceEvolution(db: Database.Database): Record<string, unk
     const end = addMonths(start, 1)
     const point: Record<string, string | number> = { month: label }
     for (const instrument of instruments) {
+      if (instrument.opening_date !== null && end <= instrument.opening_date) {
+        point[`instrument_${instrument.id}`] = 0
+        continue
+      }
       const laterTransactions = db.prepare(`
-        SELECT COALESCE(SUM(CASE WHEN type = 'income' THEN amount_cents ELSE -amount_cents END), 0) AS net
-        FROM transactions WHERE instrument_id = ? AND transaction_date >= ?
-      `).get(instrument.id, end) as { net: number }
+        SELECT COALESCE(SUM(CASE
+          WHEN t.type = 'income' THEN t.amount_cents ELSE -t.amount_cents END), 0) AS net
+        FROM transactions t
+        JOIN financial_instruments movement_instrument ON movement_instrument.id = t.instrument_id
+        WHERE (t.instrument_id = ? OR movement_instrument.linked_account_id = ?)
+          AND t.affects_balance = 1 AND t.transaction_date >= ?
+      `).get(instrument.id, instrument.id, end) as { net: number }
       const laterTransfers = db.prepare(`
         SELECT
           COALESCE(SUM(CASE
-            WHEN destination_instrument_id = ? THEN amount_cents
-            WHEN source_instrument_id = ? THEN -amount_cents
+            WHEN destination_instrument_id = ? OR destination.linked_account_id = ? THEN amount_cents
+            WHEN source_instrument_id = ? OR source.linked_account_id = ? THEN -amount_cents
             ELSE 0
           END), 0) AS net
-        FROM transfers WHERE transfer_date >= ?
-      `).get(instrument.id, instrument.id, end) as { net: number }
+        FROM transfers
+        JOIN financial_instruments source ON source.id = source_instrument_id
+        JOIN financial_instruments destination ON destination.id = destination_instrument_id
+        WHERE transfer_date >= ?
+      `).get(
+        instrument.id, instrument.id, instrument.id, instrument.id, end,
+      ) as { net: number }
+      const laterLoanPayments = db.prepare(`
+        SELECT COALESCE(SUM(-p.amount_cents), 0) AS net
+        FROM loan_payments p
+        JOIN loans l ON l.id = p.loan_id
+        LEFT JOIN financial_instruments payment_instrument ON payment_instrument.id = l.instrument_id
+        WHERE p.is_paid = 1 AND p.paid_date >= ?
+          AND (l.instrument_id = ? OR payment_instrument.linked_account_id = ?)
+      `).get(end, instrument.id, instrument.id) as { net: number }
       point[`instrument_${instrument.id}`] = (
-        instrument.current_amount_cents - laterTransactions.net - laterTransfers.net
+        instrument.current_amount_cents
+        - laterTransactions.net
+        - laterTransfers.net
+        - laterLoanPayments.net
       ) / 100
     }
     return point
@@ -2402,15 +3329,39 @@ function getDashboardFutureExpenses(db: Database.Database): Record<string, unkno
       FROM loan_payments p JOIN loans l ON l.id = p.loan_id
       WHERE p.is_paid = 0 AND l.is_active = 1 AND p.payment_date >= ? AND p.payment_date < ?
     `).get(start, end) as { total: number }
+    const msiRows = db.prepare(`
+      SELECT amount_cents, msi_months, msi_monthly_amount_cents, msi_start_date
+      FROM transactions
+      WHERE is_msi = 1 AND msi_start_date IS NOT NULL
+    `).all() as Array<{
+      amount_cents: number
+      msi_months: number
+      msi_monthly_amount_cents: number
+      msi_start_date: string
+    }>
+    const pointDate = new Date(`${start}T00:00:00Z`)
+    let creditCardInstallmentsCents = 0
+    for (const msi of msiRows) {
+      const msiDate = new Date(`${msi.msi_start_date}T00:00:00Z`)
+      const elapsed = (pointDate.getUTCFullYear() - msiDate.getUTCFullYear()) * 12
+        + pointDate.getUTCMonth() - msiDate.getUTCMonth()
+      if (elapsed >= 0 && elapsed < msi.msi_months) {
+        creditCardInstallmentsCents += elapsed === msi.msi_months - 1
+          ? msi.amount_cents - msi.msi_monthly_amount_cents * (msi.msi_months - 1)
+          : msi.msi_monthly_amount_cents
+      }
+    }
     const subscriptionAmount = Math.round(subscriptions.total) / 100
     const fixedAmount = fixed.total / 100
     const loanAmount = loans.total / 100
+    const creditCardInstallments = creditCardInstallmentsCents / 100
     return {
       month: label,
       subscriptions: subscriptionAmount,
       fixedExpenses: fixedAmount,
       loanPayments: loanAmount,
-      total: subscriptionAmount + fixedAmount + loanAmount,
+      creditCardInstallments,
+      total: subscriptionAmount + fixedAmount + loanAmount + creditCardInstallments,
     }
   })
 }
@@ -2490,6 +3441,10 @@ function routeRequest(
     const bankId = Number(url.searchParams.get('bank_id'))
     return listInstruments(db, Number.isInteger(bankId) && bankId > 0 ? bankId : undefined)
   }
+  const reconciliation = path.match(/^\/instruments\/(\d+)\/reconcile$/)
+  if (reconciliation && method === 'POST') {
+    return reconcileInstrument(db, requireId(reconciliation), input())
+  }
   const instrumentResult = entityRoute(
     '/instruments',
     () => listInstruments(db),
@@ -2565,6 +3520,14 @@ function routeRequest(
   if (payLoan && method === 'POST') {
     return payLoanInstallment(db, Number(payLoan[1]), Number(payLoan[2]), input())
   }
+  const undoLoanPayment = path.match(/^\/loans\/(\d+)\/payments\/(\d+)\/unpay$/)
+  if (undoLoanPayment && method === 'POST') {
+    return undoLoanInstallment(
+      db,
+      Number(undoLoanPayment[1]),
+      Number(undoLoanPayment[2]),
+    )
+  }
   const loanPayments = path.match(/^\/loans\/(\d+)\/payments$/)
   if (loanPayments && method === 'GET') return listLoanPayments(db, requireId(loanPayments))
   const loanResult = entityRoute(
@@ -2584,6 +3547,15 @@ function routeRequest(
     (id) => deleteSubscription(db, id),
   )
   if (subscriptionResult !== undefined) return subscriptionResult
+
+  const recurringIncomeResult = entityRoute(
+    '/recurring-incomes',
+    () => listRecurringIncomes(db),
+    (value) => saveRecurringIncome(db, value),
+    (id, value) => saveRecurringIncome(db, value, id),
+    (id) => deleteRecurringIncome(db, id),
+  )
+  if (recurringIncomeResult !== undefined) return recurringIncomeResult
 
   const fixedPayment = path.match(/^\/fixed-expenses\/(\d+)\/payments\/(\d+)$/)
   if (fixedPayment && method === 'PUT') {
@@ -2613,6 +3585,15 @@ function routeRequest(
     (id) => deleteBudget(db, id),
   )
   if (budgetResult !== undefined) return budgetResult
+
+  const savingsGoalResult = entityRoute(
+    '/savings-goals',
+    () => listSavingsGoals(db),
+    (value) => saveSavingsGoal(db, value),
+    (id, value) => saveSavingsGoal(db, value, id),
+    (id) => deleteSavingsGoal(db, id),
+  )
+  if (savingsGoalResult !== undefined) return savingsGoalResult
 
   if (path === '/simulations' && method === 'GET') return listSimulations(db)
   if (path === '/simulations' && method === 'POST') return saveSimulation(db, input())
@@ -2645,9 +3626,14 @@ export function handleLocalRequest(payload: LocalRequestPayload): ApiResponse<un
       throw new ValidationError('La ruta local no es valida.')
     }
     const db = getDatabase()
-    processDueSubscriptions(db)
     const url = new URL(payload.path, 'local://finanzas')
-    return { success: true, data: routeRequest(db, url, method, payload.body) }
+    const data = routeRequest(db, url, method, payload.body)
+    if (method !== 'GET') {
+      processDueSubscriptions(db)
+      processDueRecurringIncomes(db)
+      ensureAutomaticReminders(db)
+    }
+    return { success: true, data }
   } catch (error) {
     return { success: false, error: safeError(error) }
   }
@@ -2655,4 +3641,167 @@ export function handleLocalRequest(payload: LocalRequestPayload): ApiResponse<un
 
 export function getLocalDatabaseInfo(): DatabaseInfo {
   return databaseInfo(getDatabase())
+}
+
+export function runLocalMaintenance(): void {
+  const db = getDatabase()
+  ensureAutomaticStatements(db)
+  processDueSubscriptions(db)
+  processDueRecurringIncomes(db)
+  ensureAutomaticReminders(db)
+}
+
+export function getDueReminderNotifications(): Array<{ id: number; title: string; body: string }> {
+  const db = getDatabase()
+  return (db.prepare(`
+    SELECT id, title, COALESCE(description, '') AS body
+    FROM reminders
+    WHERE is_read = 0 AND is_dismissed = 0 AND reminder_date <= ?
+    ORDER BY reminder_date, id
+    LIMIT 10
+  `).all(todayIso()) as Array<{ id: number; title: string; body: string }>)
+}
+
+function escapeCsv(value: unknown): string {
+  const text = String(value ?? '')
+  return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text
+}
+
+function parseCsvRows(content: string): string[][] {
+  const rows: string[][] = []
+  let row: string[] = []
+  let current = ''
+  let quoted = false
+  for (let index = 0; index < content.length; index += 1) {
+    const character = content[index]
+    if (character === '"') {
+      if (quoted && content[index + 1] === '"') {
+        current += '"'
+        index += 1
+      } else {
+        quoted = !quoted
+      }
+      continue
+    }
+    if (character === ',' && !quoted) {
+      row.push(current)
+      current = ''
+      continue
+    }
+    if ((character === '\n' || character === '\r') && !quoted) {
+      if (character === '\r' && content[index + 1] === '\n') index += 1
+      row.push(current)
+      if (row.some((value) => value.trim())) rows.push(row)
+      row = []
+      current = ''
+      continue
+    }
+    current += character
+  }
+  row.push(current)
+  if (row.some((value) => value.trim())) rows.push(row)
+  if (quoted) {
+    throw new ValidationError('El CSV contiene una comilla sin cerrar.')
+  }
+  return rows
+}
+
+export function exportTransactionsCsv(): string {
+  const db = getDatabase()
+  const headers = [
+    'date',
+    'type',
+    'amount',
+    'instrument_id',
+    'instrument',
+    'category_id',
+    'subcategory_id',
+    'description',
+    'notes',
+    'affects_balance',
+  ]
+  const rows = db.prepare(`
+    SELECT t.*, i.name AS instrument_name
+    FROM transactions t
+    JOIN financial_instruments i ON i.id = t.instrument_id
+    ORDER BY t.transaction_date, t.id
+  `).all() as DbRow[]
+  return [
+    headers.join(','),
+    ...rows.map((row) => [
+      row.transaction_date,
+      row.type,
+      toNumber(row.amount_cents) / 100,
+      row.instrument_id,
+      row.instrument_name,
+      row.category_id ?? '',
+      row.subcategory_id ?? '',
+      row.description ?? '',
+      row.notes ?? '',
+      row.affects_balance,
+    ].map(escapeCsv).join(',')),
+  ].join('\n')
+}
+
+export function importTransactionsCsv(content: string): { imported: number; skipped: number } {
+  const rows = parseCsvRows(content)
+  if (rows.length < 2 || rows.length > 50_001) {
+    throw new ValidationError('El CSV debe contener entre 1 y 50000 movimientos.')
+  }
+  const headers = rows[0]
+  const requiredHeaders = ['date', 'type', 'amount', 'instrument_id']
+  if (!requiredHeaders.every((header) => headers.includes(header))) {
+    throw new ValidationError('El CSV no contiene las columnas obligatorias.')
+  }
+  const indexOf = (header: string): number => headers.indexOf(header)
+  const db = getDatabase()
+  let imported = 0
+  let skipped = 0
+  const operation = db.transaction(() => {
+    for (const values of rows.slice(1)) {
+      const instrumentId = Number(values[indexOf('instrument_id')])
+      const amount = Number(values[indexOf('amount')])
+      const transactionDate = values[indexOf('date')]
+      const type = values[indexOf('type')]
+      const descriptionIndex = indexOf('description')
+      const description = descriptionIndex >= 0 ? values[descriptionIndex] : ''
+      const amountCents = moneyToCents(amount, 'amount')
+      const duplicate = db.prepare(`
+        SELECT id FROM transactions
+        WHERE instrument_id = ? AND transaction_date = ? AND type = ?
+          AND amount_cents = ? AND COALESCE(description, '') = ?
+        LIMIT 1
+      `).get(instrumentId, transactionDate, type, amountCents, description)
+      if (duplicate) {
+        skipped += 1
+        continue
+      }
+      const categoryIndex = indexOf('category_id')
+      const subcategoryIndex = indexOf('subcategory_id')
+      const notesIndex = indexOf('notes')
+      const affectsIndex = indexOf('affects_balance')
+      const instrument = getInstrument(db, instrumentId)
+      saveTransaction(db, {
+        instrumentId,
+        categoryId: categoryIndex >= 0 && values[categoryIndex]
+          ? Number(values[categoryIndex])
+          : null,
+        subcategoryId: subcategoryIndex >= 0 && values[subcategoryIndex]
+          ? Number(values[subcategoryIndex])
+          : null,
+        currencyId: toNumber(instrument.currency_id),
+        type,
+        amount,
+        description,
+        transactionDate,
+        notes: notesIndex >= 0 ? values[notesIndex] : '',
+        isMsi: false,
+        affectsBalance: affectsIndex < 0 || values[affectsIndex] !== '0',
+        sourceType: 'csv_import',
+      }, undefined, true)
+      imported += 1
+    }
+  })
+  operation()
+  return { imported, skipped }
 }

@@ -63,6 +63,15 @@ export function DashboardSection({
       {!hasConfig ? <p className="message message--info">Abre la aplicacion de escritorio para acceder a tus datos locales.</p> : null}
       {isDashboardLoading ? <p className="message message--info">Cargando resumen y graficas del dashboard...</p> : null}
       {dashboardError ? <p className="message message--error">{dashboardError}</p> : null}
+      {hasConfig
+        && dashboardSummary.totalAvailable === 0
+        && dashboardSummary.totalCreditDebt === 0
+        && dashboardSummary.totalLoanDebt === 0 ? (
+          <p className="message message--info">
+            Para comenzar: crea un banco, registra tus cuentas con su saldo inicial y agrega tus movimientos.
+            Despues usa Conciliar para ajustar el saldo sin sobrescribir el historial.
+          </p>
+        ) : null}
 
       <div className="dashboard-grid">
         <article className="summary-card">
@@ -114,7 +123,7 @@ export function DashboardSection({
 
         <article className="mini-card">
           <header className="mini-card__header">
-            <h3 className="mini-card__title">Flujo mensual: ingresos vs egresos</h3>
+            <h3 className="mini-card__title">Flujo de efectivo y gasto reconocido</h3>
           </header>
           {dashboardCashFlow.length === 0 ? (
             <p className="card__subtitle">No hay datos suficientes para el flujo mensual.</p>
@@ -128,7 +137,9 @@ export function DashboardSection({
                   <Tooltip />
                   <Legend />
                   <Bar dataKey="income" fill="var(--color-success)" name="Ingresos" />
-                  <Bar dataKey="expense" fill="var(--color-error)" name="Egresos" />
+                  <Bar dataKey="expense" fill="var(--color-error)" name="Gasto reconocido" />
+                  <Bar dataKey="debtPayments" fill="#E6A23C" name="Pagos de deuda" />
+                  <Line type="monotone" dataKey="netCashFlow" stroke="#57A6D8" name="Flujo neto" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -185,6 +196,7 @@ export function DashboardSection({
                   <Area type="monotone" dataKey="subscriptions" stackId="1" stroke="#57A6D8" fill="#57A6D8" name="Suscripciones" />
                   <Area type="monotone" dataKey="fixedExpenses" stackId="1" stroke="#6F86E8" fill="#6F86E8" name="Gastos fijos" />
                   <Area type="monotone" dataKey="loanPayments" stackId="1" stroke="#E6A23C" fill="#E6A23C" name="Pagos prestamos" />
+                  <Area type="monotone" dataKey="creditCardInstallments" stackId="1" stroke="#F87171" fill="#F87171" name="Mensualidades MSI" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>

@@ -39,6 +39,8 @@ export function App() {
     remindersController,
     selectors,
     transactionsController,
+    recurringIncomesController,
+    savingsGoalsController,
   } = useAppControllers()
 
   if (databaseController.isLoading) {
@@ -107,7 +109,9 @@ export function App() {
               }}
               onEdit={banksController.startBankEdit}
               onDelete={(bankId) => {
-                void banksController.handleBankDelete(bankId)
+                if (window.confirm('¿Archivar este banco y sus instrumentos?')) {
+                  void banksController.handleBankDelete(bankId)
+                }
               }}
             />
           ) : null}
@@ -136,7 +140,12 @@ export function App() {
               }}
               onEdit={instrumentsController.startInstrumentEdit}
               onDelete={(instrumentId) => {
-                void instrumentsController.handleInstrumentDelete(instrumentId, banksController.banks)
+                if (window.confirm('¿Archivar este instrumento? Sus movimientos se conservaran.')) {
+                  void instrumentsController.handleInstrumentDelete(instrumentId, banksController.banks)
+                }
+              }}
+              onReconcile={(instrumentId, payload) => {
+                void instrumentsController.handleInstrumentReconcile(instrumentId, payload)
               }}
             />
           ) : null}
@@ -167,11 +176,15 @@ export function App() {
               }}
               onEditCategory={categoriesController.startCategoryEdit}
               onDeleteCategory={(categoryId) => {
-                void categoriesController.handleCategoryDelete(categoryId)
+                if (window.confirm('¿Archivar esta categoria?')) {
+                  void categoriesController.handleCategoryDelete(categoryId)
+                }
               }}
               onEditSubcategory={categoriesController.startSubcategoryEdit}
               onDeleteSubcategory={(subcategoryId) => {
-                void categoriesController.handleSubcategoryDelete(subcategoryId)
+                if (window.confirm('¿Archivar esta subcategoria?')) {
+                  void categoriesController.handleSubcategoryDelete(subcategoryId)
+                }
               }}
             />
           ) : null}
@@ -201,7 +214,9 @@ export function App() {
               onTransactionSubmit={transactionsController.handleTransactionSubmit}
               onTransactionEdit={transactionsController.startTransactionEdit}
               onTransactionDelete={(transactionId) => {
-                void transactionsController.handleTransactionDelete(transactionId)
+                if (window.confirm('¿Eliminar este movimiento y revertir su impacto en el saldo?')) {
+                  void transactionsController.handleTransactionDelete(transactionId)
+                }
               }}
               onResetTransactionForm={transactionsController.resetTransactionForm}
               onFiltersChange={transactionsController.setTransactionFilters}
@@ -269,6 +284,11 @@ export function App() {
                   creditCardsController.loadCardMovements(),
                 ])
               }}
+              onDeletePayment={(transferId) => {
+                if (window.confirm('¿Eliminar este pago y restaurar los saldos y estados de cuenta?')) {
+                  void creditCardsController.handleTransferDelete(transferId)
+                }
+              }}
             />
           ) : null}
 
@@ -294,7 +314,9 @@ export function App() {
               }}
               onEdit={creditCardsController.startTransferEdit}
               onDelete={(transferId) => {
-                void creditCardsController.handleTransferDelete(transferId)
+                if (window.confirm('¿Eliminar esta transferencia y revertir ambos saldos?')) {
+                  void creditCardsController.handleTransferDelete(transferId)
+                }
               }}
             />
           ) : null}
@@ -320,7 +342,25 @@ export function App() {
               }}
               onEdit={subscriptionsController.startSubscriptionEdit}
               onDelete={(subscriptionId) => {
-                void subscriptionsController.handleSubscriptionDelete(subscriptionId)
+                if (window.confirm('¿Archivar esta suscripcion?')) {
+                  void subscriptionsController.handleSubscriptionDelete(subscriptionId)
+                }
+              }}
+              recurringIncomes={recurringIncomesController.recurringIncomes}
+              recurringIncomeForm={recurringIncomesController.recurringIncomeForm}
+              editingRecurringIncomeId={recurringIncomesController.editingRecurringIncomeId}
+              recurringIncomeMessage={recurringIncomesController.recurringIncomeMessage}
+              recurringIncomeError={recurringIncomesController.recurringIncomeError}
+              incomeInstruments={recurringIncomesController.incomeInstruments}
+              incomeCategories={recurringIncomesController.incomeCategories}
+              onRecurringIncomeFormChange={recurringIncomesController.setRecurringIncomeForm}
+              onRecurringIncomeSubmit={recurringIncomesController.handleRecurringIncomeSubmit}
+              onRecurringIncomeReset={recurringIncomesController.resetRecurringIncomeForm}
+              onRecurringIncomeEdit={recurringIncomesController.startRecurringIncomeEdit}
+              onRecurringIncomeDelete={(id) => {
+                if (window.confirm('¿Archivar este ingreso recurrente?')) {
+                  void recurringIncomesController.handleRecurringIncomeDelete(id)
+                }
               }}
             />
           ) : null}
@@ -357,10 +397,14 @@ export function App() {
                 void fixedExpensesController.loadFixedExpensePayments(fixedExpenseId)
               }}
               onDeleteFixedExpense={(fixedExpenseId) => {
-                void fixedExpensesController.handleFixedExpenseDelete(fixedExpenseId)
+                if (window.confirm('¿Archivar este gasto fijo?')) {
+                  void fixedExpensesController.handleFixedExpenseDelete(fixedExpenseId)
+                }
               }}
               onDeleteFixedExpensePayment={(paymentId) => {
-                void fixedExpensesController.handleFixedExpensePaymentDelete(paymentId)
+                if (window.confirm('¿Eliminar este pago y revertir su movimiento asociado?')) {
+                  void fixedExpensesController.handleFixedExpensePaymentDelete(paymentId)
+                }
               }}
             />
           ) : null}
@@ -392,10 +436,17 @@ export function App() {
               }}
               onEditLoan={loansController.startLoanEdit}
               onDeleteLoan={(loanId) => {
-                void loansController.handleLoanDelete(loanId)
+                if (window.confirm('¿Archivar este prestamo?')) {
+                  void loansController.handleLoanDelete(loanId)
+                }
               }}
               onPayInstallment={(installmentNum) => {
                 void loansController.handlePayInstallment(installmentNum)
+              }}
+              onUndoInstallment={(installmentNum) => {
+                if (window.confirm('¿Revertir este pago y restaurar el saldo de la cuenta?')) {
+                  void loansController.handleUndoInstallment(installmentNum)
+                }
               }}
             />
           ) : null}
@@ -422,7 +473,24 @@ export function App() {
               }}
               onEditBudget={budgetsController.startBudgetEdit}
               onDeleteBudget={(budgetId) => {
-                void budgetsController.handleBudgetDelete(budgetId)
+                if (window.confirm('¿Eliminar este presupuesto?')) {
+                  void budgetsController.handleBudgetDelete(budgetId)
+                }
+              }}
+              savingsGoals={savingsGoalsController.savingsGoals}
+              savingsGoalForm={savingsGoalsController.savingsGoalForm}
+              editingSavingsGoalId={savingsGoalsController.editingSavingsGoalId}
+              savingsGoalMessage={savingsGoalsController.savingsGoalMessage}
+              savingsGoalError={savingsGoalsController.savingsGoalError}
+              goalInstruments={savingsGoalsController.goalInstruments}
+              onSavingsGoalFormChange={savingsGoalsController.setSavingsGoalForm}
+              onSavingsGoalSubmit={savingsGoalsController.handleSavingsGoalSubmit}
+              onSavingsGoalReset={savingsGoalsController.resetSavingsGoalForm}
+              onSavingsGoalEdit={savingsGoalsController.startSavingsGoalEdit}
+              onSavingsGoalDelete={(id) => {
+                if (window.confirm('¿Archivar esta meta de ahorro?')) {
+                  void savingsGoalsController.handleSavingsGoalDelete(id)
+                }
               }}
             />
           ) : null}
@@ -444,7 +512,9 @@ export function App() {
                 void simulatorController.loadSimulations()
               }}
               onDelete={(simulationId) => {
-                void simulatorController.handleSimulationDelete(simulationId)
+                if (window.confirm('¿Eliminar esta simulacion?')) {
+                  void simulatorController.handleSimulationDelete(simulationId)
+                }
               }}
             />
           ) : null}
@@ -473,7 +543,9 @@ export function App() {
                 void remindersController.handleReminderDismiss(reminder)
               }}
               onDelete={(reminderId) => {
-                void remindersController.handleReminderDelete(reminderId)
+                if (window.confirm('¿Eliminar este recordatorio?')) {
+                  void remindersController.handleReminderDelete(reminderId)
+                }
               }}
             />
           ) : null}

@@ -141,7 +141,7 @@ export function FixedExpensesSection({
                   }}
                 >
                   <option value="">Sin instrumento</option>
-                  {instruments.map((instrument) => (
+                  {instruments.filter((instrument) => instrument.isActive).map((instrument) => (
                     <option key={instrument.id} value={instrument.id}>{instrument.name}</option>
                   ))}
                 </select>

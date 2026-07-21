@@ -55,6 +55,7 @@ type CreditCardsSectionProps = {
   onSaveStatementUpdate: () => void
   onCancelStatementUpdate: () => void
   onReload: () => void
+  onDeletePayment: (transferId: number) => void
 }
 
 function formatDate(value: string | null): string {
@@ -75,7 +76,12 @@ function getStatementStatus(statement: CreditCardStatement | null): {
   if (statement.isPaid || statement.outstandingAmount === 0) {
     return { label: 'Pagado', modifier: 'success' }
   }
-  const today = new Date().toISOString().slice(0, 10)
+  const now = new Date()
+  const today = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0'),
+  ].join('-')
   if (statement.paymentDueDate < today) return { label: 'Vencido', modifier: 'error' }
   return { label: 'Pendiente', modifier: 'warning' }
 }
@@ -163,6 +169,7 @@ export function CreditCardsSection({
   onSaveStatementUpdate,
   onCancelStatementUpdate,
   onReload,
+  onDeletePayment,
 }: CreditCardsSectionProps) {
   const [activeTab, setActiveTab] = useState<CardTab>('summary')
   const [actionPanel, setActionPanel] = useState<ActionPanel>(null)
@@ -538,16 +545,21 @@ export function CreditCardsSection({
                     <h3 className="mini-card__title">Pagos realizados</h3>
                     <div className="table-wrap">
                       <table className="table">
-                        <thead><tr><th>Fecha</th><th>Cuenta origen</th><th>Descripción</th><th>Monto</th></tr></thead>
+                        <thead><tr><th>Fecha</th><th>Cuenta origen</th><th>Descripción</th><th>Monto</th><th>Acciones</th></tr></thead>
                         <tbody>
                           {selectedCardPayments.length === 0
-                            ? <tr><td colSpan={4}>No hay pagos registrados.</td></tr>
+                            ? <tr><td colSpan={5}>No hay pagos registrados.</td></tr>
                             : selectedCardPayments.map((payment) => (
                               <tr key={payment.id}>
                                 <td>{formatDate(payment.transferDate)}</td>
                                 <td>{payment.sourceInstrumentName ?? '-'}</td>
                                 <td>{payment.description ?? 'Pago de tarjeta'}</td>
                                 <td className="table__amount table__amount--positive">{formatCurrency(payment.amount)}</td>
+                                <td>
+                                  <button className="button button--danger" type="button" onClick={() => onDeletePayment(payment.id)}>
+                                    Eliminar
+                                  </button>
+                                </td>
                               </tr>
                             ))}
                         </tbody>

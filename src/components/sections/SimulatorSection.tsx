@@ -228,7 +228,8 @@ export function SimulatorSection({
                   <th>Escenario</th>
                   <th>Monto</th>
                   <th>Compromiso mensual</th>
-                  <th>Balance neto proyectado</th>
+                  <th>Disponible proyectado</th>
+                  <th>Deuda / ingreso</th>
                   <th>Viabilidad</th>
                   <th>Acciones</th>
                 </tr>
@@ -236,13 +237,13 @@ export function SimulatorSection({
               <tbody>
                 {isSimulationsLoading ? (
                   <tr>
-                    <td colSpan={8}>Cargando simulaciones...</td>
+                    <td colSpan={9}>Cargando simulaciones...</td>
                   </tr>
                 ) : null}
 
                 {!isSimulationsLoading && simulations.length === 0 ? (
                   <tr>
-                    <td colSpan={8}>No hay simulaciones registradas.</td>
+                    <td colSpan={9}>No hay simulaciones registradas.</td>
                   </tr>
                 ) : null}
 
@@ -251,16 +252,15 @@ export function SimulatorSection({
                     const result = simulation.resultJson as {
                       scenarioType?: SimulationScenarioType
                       amount?: number
-                      monthlyCommitmentIncrease?: number
-                      projectedSummary?: {
-                        netBalance?: number
-                      }
+                      monthlyImpact?: number
+                      projectedAvailable?: number
+                      debtServiceRatio?: number
                     }
 
                     const scenarioType = result.scenarioType ?? 'direct_purchase'
                     const amount = result.amount ?? 0
-                    const monthlyCommitmentIncrease = result.monthlyCommitmentIncrease ?? 0
-                    const projectedNetBalance = result.projectedSummary?.netBalance ?? 0
+                    const monthlyCommitmentIncrease = result.monthlyImpact ?? 0
+                    const projectedAvailable = result.projectedAvailable ?? 0
 
                     return (
                       <tr key={simulation.id}>
@@ -269,7 +269,8 @@ export function SimulatorSection({
                         <td>{getSimulationScenarioLabel(scenarioType)}</td>
                         <td>{formatCurrency(amount)}</td>
                         <td>{formatCurrency(monthlyCommitmentIncrease)}</td>
-                        <td>{formatCurrency(projectedNetBalance)}</td>
+                        <td>{formatCurrency(projectedAvailable)}</td>
+                        <td>{(result.debtServiceRatio ?? 0).toFixed(1)}%</td>
                         <td>
                           <span className={`badge ${simulation.isFavorable ? 'badge--success' : 'badge--warning'}`}>
                             {simulation.isFavorable ? 'Favorable' : 'No favorable'}

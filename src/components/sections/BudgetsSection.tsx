@@ -1,6 +1,13 @@
 import { useState, type SyntheticEvent } from 'react'
 import { formatCurrency, getBudgetStatusLabel } from '../../app/appHelpers'
-import type { Budget, BudgetInput, Category } from '../../types/domain'
+import type {
+  Budget,
+  BudgetInput,
+  Category,
+  FinancialInstrument,
+  SavingsGoal,
+  SavingsGoalInput,
+} from '../../types/domain'
 
 type BudgetsSectionProps = {
   hasConfig: boolean
@@ -21,6 +28,17 @@ type BudgetsSectionProps = {
   onApplyFilter: () => void
   onEditBudget: (budget: Budget) => void
   onDeleteBudget: (budgetId: number) => void
+  savingsGoals: SavingsGoal[]
+  savingsGoalForm: SavingsGoalInput
+  editingSavingsGoalId: number | null
+  savingsGoalMessage: string
+  savingsGoalError: string
+  goalInstruments: FinancialInstrument[]
+  onSavingsGoalFormChange: (form: SavingsGoalInput) => void
+  onSavingsGoalSubmit: (event: SyntheticEvent<HTMLFormElement>) => void
+  onSavingsGoalReset: () => void
+  onSavingsGoalEdit: (goal: SavingsGoal) => void
+  onSavingsGoalDelete: (id: number) => void
 }
 
 export function BudgetsSection({
@@ -42,6 +60,17 @@ export function BudgetsSection({
   onApplyFilter,
   onEditBudget,
   onDeleteBudget,
+  savingsGoals,
+  savingsGoalForm,
+  editingSavingsGoalId,
+  savingsGoalMessage,
+  savingsGoalError,
+  goalInstruments,
+  onSavingsGoalFormChange,
+  onSavingsGoalSubmit,
+  onSavingsGoalReset,
+  onSavingsGoalEdit,
+  onSavingsGoalDelete,
 }: BudgetsSectionProps) {
   const [isFormOpen, setIsFormOpen] = useState(editingBudgetId !== null)
   const isFormVisible = isFormOpen || editingBudgetId !== null
@@ -281,6 +310,54 @@ export function BudgetsSection({
           </div>
         </article>
       </div>
+
+      <article className="mini-card">
+        <header className="mini-card__header">
+          <h3 className="mini-card__title">Metas de ahorro</h3>
+          <p className="mini-card__subtitle">Da seguimiento a tu fondo de emergencia y objetivos personales.</p>
+        </header>
+        <form className="form-grid" onSubmit={onSavingsGoalSubmit}>
+          <label className="form-grid__field" htmlFor="goalName">Meta</label>
+          <input id="goalName" className="form-grid__input" value={savingsGoalForm.name} onChange={(event) => onSavingsGoalFormChange({ ...savingsGoalForm, name: event.target.value })} required />
+          <label className="form-grid__field" htmlFor="goalTarget">Monto objetivo</label>
+          <input id="goalTarget" className="form-grid__input" type="number" min={0.01} step="0.01" value={savingsGoalForm.targetAmount} onChange={(event) => onSavingsGoalFormChange({ ...savingsGoalForm, targetAmount: Number(event.target.value) })} required />
+          <label className="form-grid__field" htmlFor="goalCurrent">Ahorrado</label>
+          <input id="goalCurrent" className="form-grid__input" type="number" min={0} step="0.01" value={savingsGoalForm.currentAmount} onChange={(event) => onSavingsGoalFormChange({ ...savingsGoalForm, currentAmount: Number(event.target.value) })} />
+          <label className="form-grid__field" htmlFor="goalDate">Fecha objetivo</label>
+          <input id="goalDate" className="form-grid__input" type="date" value={savingsGoalForm.targetDate} onChange={(event) => onSavingsGoalFormChange({ ...savingsGoalForm, targetDate: event.target.value })} />
+          <label className="form-grid__field" htmlFor="goalInstrument">Cuenta vinculada</label>
+          <select id="goalInstrument" className="form-grid__input" value={savingsGoalForm.instrumentId ?? ''} onChange={(event) => onSavingsGoalFormChange({ ...savingsGoalForm, instrumentId: event.target.value ? Number(event.target.value) : null })}>
+            <option value="">Sin cuenta vinculada</option>
+            {goalInstruments.map((instrument) => <option key={instrument.id} value={instrument.id}>{instrument.name}</option>)}
+          </select>
+          <div className="form-grid__actions">
+            <button className="button button--primary" type="submit" disabled={!hasConfig}>{editingSavingsGoalId === null ? 'Crear meta' : 'Guardar meta'}</button>
+            <button className="button button--secondary" type="button" onClick={onSavingsGoalReset}>Limpiar</button>
+          </div>
+        </form>
+        {savingsGoalError ? <p className="message message--error">{savingsGoalError}</p> : null}
+        {savingsGoalMessage ? <p className="message message--success">{savingsGoalMessage}</p> : null}
+        <div className="table-wrap">
+          <table className="table">
+            <thead><tr><th>Meta</th><th>Objetivo</th><th>Ahorrado</th><th>Avance</th><th>Fecha</th><th>Acciones</th></tr></thead>
+            <tbody>
+              {savingsGoals.length === 0 ? <tr><td colSpan={6}>No hay metas registradas.</td></tr> : savingsGoals.map((goal) => (
+                <tr key={goal.id}>
+                  <td>{goal.name}{goal.isActive ? '' : ' · Archivada'}</td>
+                  <td>{formatCurrency(goal.targetAmount)}</td>
+                  <td>{formatCurrency(goal.currentAmount)}</td>
+                  <td>{goal.progressPercent}%</td>
+                  <td>{goal.targetDate ?? '-'}</td>
+                  <td><div className="table__actions">
+                    <button className="button button--secondary" type="button" onClick={() => onSavingsGoalEdit(goal)}>Editar</button>
+                    <button className="button button--danger" type="button" onClick={() => onSavingsGoalDelete(goal.id)}>Archivar</button>
+                  </div></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </article>
     </section>
   )
 }

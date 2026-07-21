@@ -6,6 +6,8 @@ import type {
   Subscription,
   SubscriptionBillingCycle,
   SubscriptionInput,
+  RecurringIncome,
+  RecurringIncomeInput,
 } from '../../types/domain'
 
 type SubscriptionsSectionProps = {
@@ -26,6 +28,18 @@ type SubscriptionsSectionProps = {
   onReload: () => void
   onEdit: (subscription: Subscription) => void
   onDelete: (subscriptionId: number) => void
+  recurringIncomes: RecurringIncome[]
+  recurringIncomeForm: RecurringIncomeInput
+  editingRecurringIncomeId: number | null
+  recurringIncomeMessage: string
+  recurringIncomeError: string
+  incomeInstruments: FinancialInstrument[]
+  incomeCategories: Category[]
+  onRecurringIncomeFormChange: (form: RecurringIncomeInput) => void
+  onRecurringIncomeSubmit: (event: SyntheticEvent<HTMLFormElement>) => void
+  onRecurringIncomeReset: () => void
+  onRecurringIncomeEdit: (income: RecurringIncome) => void
+  onRecurringIncomeDelete: (id: number) => void
 }
 
 export function SubscriptionsSection({
@@ -46,6 +60,18 @@ export function SubscriptionsSection({
   onReload,
   onEdit,
   onDelete,
+  recurringIncomes,
+  recurringIncomeForm,
+  editingRecurringIncomeId,
+  recurringIncomeMessage,
+  recurringIncomeError,
+  incomeInstruments,
+  incomeCategories,
+  onRecurringIncomeFormChange,
+  onRecurringIncomeSubmit,
+  onRecurringIncomeReset,
+  onRecurringIncomeEdit,
+  onRecurringIncomeDelete,
 }: SubscriptionsSectionProps) {
   const [isFormOpen, setIsFormOpen] = useState(editingSubscriptionId !== null)
   const isFormVisible = isFormOpen || editingSubscriptionId !== null
@@ -104,7 +130,7 @@ export function SubscriptionsSection({
                   required
                 >
                   <option value={0}>Selecciona instrumento</option>
-                  {instruments.map((instrument) => (
+                  {instruments.filter((instrument) => instrument.isActive).map((instrument) => (
                     <option key={instrument.id} value={instrument.id}>{instrument.name}</option>
                   ))}
                 </select>
@@ -280,6 +306,137 @@ export function SubscriptionsSection({
           </tbody>
         </table>
       </div>
+
+      <article className="mini-card">
+        <header className="mini-card__header">
+          <h3 className="mini-card__title">Ingresos recurrentes</h3>
+          <p className="mini-card__subtitle">
+            Genera automaticamente nomina, renta u otros ingresos programados.
+          </p>
+        </header>
+        <form className="form-grid" onSubmit={onRecurringIncomeSubmit}>
+          <label className="form-grid__field" htmlFor="recurringIncomeName">Nombre</label>
+          <input
+            id="recurringIncomeName"
+            className="form-grid__input"
+            value={recurringIncomeForm.name}
+            onChange={(event) => onRecurringIncomeFormChange({
+              ...recurringIncomeForm,
+              name: event.target.value,
+            })}
+            required
+          />
+          <label className="form-grid__field" htmlFor="recurringIncomeInstrument">Cuenta</label>
+          <select
+            id="recurringIncomeInstrument"
+            className="form-grid__input"
+            value={recurringIncomeForm.instrumentId}
+            onChange={(event) => onRecurringIncomeFormChange({
+              ...recurringIncomeForm,
+              instrumentId: Number(event.target.value),
+            })}
+            required
+          >
+            <option value={0}>Selecciona una cuenta</option>
+            {incomeInstruments.map((instrument) => (
+              <option key={instrument.id} value={instrument.id}>{instrument.name}</option>
+            ))}
+          </select>
+          <label className="form-grid__field" htmlFor="recurringIncomeCategory">Categoria</label>
+          <select
+            id="recurringIncomeCategory"
+            className="form-grid__input"
+            value={recurringIncomeForm.categoryId ?? ''}
+            onChange={(event) => onRecurringIncomeFormChange({
+              ...recurringIncomeForm,
+              categoryId: event.target.value ? Number(event.target.value) : null,
+              subcategoryId: null,
+            })}
+          >
+            <option value="">Sin categoria</option>
+            {incomeCategories.map((category) => (
+              <option key={category.id} value={category.id}>{category.name}</option>
+            ))}
+          </select>
+          <label className="form-grid__field" htmlFor="recurringIncomeAmount">Monto</label>
+          <input
+            id="recurringIncomeAmount"
+            className="form-grid__input"
+            type="number"
+            min={0.01}
+            step="0.01"
+            value={recurringIncomeForm.amount}
+            onChange={(event) => onRecurringIncomeFormChange({
+              ...recurringIncomeForm,
+              amount: Number(event.target.value),
+            })}
+            required
+          />
+          <label className="form-grid__field" htmlFor="recurringIncomeFrequency">Frecuencia</label>
+          <select
+            id="recurringIncomeFrequency"
+            className="form-grid__input"
+            value={recurringIncomeForm.frequency}
+            onChange={(event) => onRecurringIncomeFormChange({
+              ...recurringIncomeForm,
+              frequency: event.target.value as RecurringIncomeInput['frequency'],
+            })}
+          >
+            <option value="weekly">Semanal</option>
+            <option value="biweekly">Quincenal</option>
+            <option value="monthly">Mensual</option>
+            <option value="yearly">Anual</option>
+          </select>
+          <label className="form-grid__field" htmlFor="recurringIncomeNext">Proximo ingreso</label>
+          <input
+            id="recurringIncomeNext"
+            className="form-grid__input"
+            type="date"
+            value={recurringIncomeForm.nextPayment}
+            onChange={(event) => onRecurringIncomeFormChange({
+              ...recurringIncomeForm,
+              nextPayment: event.target.value,
+            })}
+            required
+          />
+          <div className="form-grid__actions">
+            <button className="button button--primary" type="submit" disabled={!hasConfig}>
+              {editingRecurringIncomeId === null ? 'Crear ingreso recurrente' : 'Guardar cambios'}
+            </button>
+            <button className="button button--secondary" type="button" onClick={onRecurringIncomeReset}>
+              Limpiar
+            </button>
+          </div>
+        </form>
+        {recurringIncomeError ? <p className="message message--error">{recurringIncomeError}</p> : null}
+        {recurringIncomeMessage ? <p className="message message--success">{recurringIncomeMessage}</p> : null}
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr><th>Nombre</th><th>Cuenta</th><th>Monto</th><th>Frecuencia</th><th>Proximo</th><th>Acciones</th></tr>
+            </thead>
+            <tbody>
+              {recurringIncomes.length === 0 ? (
+                <tr><td colSpan={6}>No hay ingresos recurrentes.</td></tr>
+              ) : recurringIncomes.map((income) => (
+                <tr key={income.id}>
+                  <td>{income.name}{income.isActive ? '' : ' · Archivado'}</td>
+                  <td>{income.instrumentName ?? '-'}</td>
+                  <td>{formatCurrency(income.amount)}</td>
+                  <td>{income.frequency}</td>
+                  <td>{income.nextPayment}</td>
+                  <td>
+                    <div className="table__actions">
+                      <button className="button button--secondary" type="button" onClick={() => onRecurringIncomeEdit(income)}>Editar</button>
+                      <button className="button button--danger" type="button" onClick={() => onRecurringIncomeDelete(income.id)}>Archivar</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </article>
     </section>
   )
 }

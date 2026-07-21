@@ -90,7 +90,8 @@ export function TransactionsSection({
   }
 
   const isNoBalanceImpactTransaction = (transaction: Transaction): boolean => {
-    return (transaction.notes ?? '').startsWith(NO_BALANCE_IMPACT_NOTE_PREFIX)
+    return !transaction.affectsBalance
+      || (transaction.notes ?? '').startsWith(NO_BALANCE_IMPACT_NOTE_PREFIX)
   }
 
   return (
@@ -139,7 +140,7 @@ export function TransactionsSection({
               required
             >
               <option value={0}>Selecciona instrumento</option>
-              {instruments.map((instrument) => (
+              {instruments.filter((instrument) => instrument.isActive).map((instrument) => (
                 <option key={instrument.id} value={instrument.id}>{instrument.name}</option>
               ))}
             </select>
@@ -188,7 +189,10 @@ export function TransactionsSection({
               }}
             >
               <option value="">Sin categoria</option>
-              {categories.map((category) => (
+              {categories.filter((category) => (
+                category.isActive
+                && (category.type === transactionForm.type || category.type === 'both')
+              )).map((category) => (
                 <option key={category.id} value={category.id}>{category.name}</option>
               ))}
             </select>
@@ -205,7 +209,7 @@ export function TransactionsSection({
               disabled={transactionSubcategoryOptions.length === 0}
             >
               <option value="">Sin subcategoria</option>
-              {transactionSubcategoryOptions.map((subcategory) => (
+              {transactionSubcategoryOptions.filter((subcategory) => subcategory.isActive).map((subcategory) => (
                 <option key={subcategory.id} value={subcategory.id}>{subcategory.name}</option>
               ))}
             </select>
@@ -264,22 +268,19 @@ export function TransactionsSection({
                 {transactionForm.isMsi ? (
                   <>
                     <label className="form-grid__field" htmlFor="transactionMsiMonths">Meses MSI</label>
-                    <input
+                    <select
                       id="transactionMsiMonths"
                       className="form-grid__input"
-                      type="number"
-                      min={1}
-                      max={120}
-                      step={1}
                       value={transactionForm.msiMonths ?? 3}
                       onChange={(event) => {
                         const value = Number(event.target.value)
-                        if (value >= 1 && value <= 120) {
-                          onTransactionFormChange({ ...transactionForm, msiMonths: value })
-                        }
+                        onTransactionFormChange({ ...transactionForm, msiMonths: value })
                       }}
-                      placeholder="Ej: 4, 6, 12..."
-                    />
+                    >
+                      {[3, 6, 9, 12, 18, 24].map((months) => (
+                        <option key={months} value={months}>{months} meses</option>
+                      ))}
+                    </select>
                   </>
                 ) : null}
               </>
@@ -451,21 +452,29 @@ export function TransactionsSection({
                   </td>
                   <td>{transaction.isMsi ? `${transaction.msiMonths ?? '-'} meses` : '-'}</td>
                   <td>
-                    {isAutoAdjustmentTransaction(transaction)
+                    {transaction.sourceType === 'opening_balance'
+                      ? 'Saldo inicial'
+                      : transaction.sourceType === 'reconciliation'
+                        ? 'Conciliacion'
+                        : isAutoAdjustmentTransaction(transaction)
                       ? 'Ajuste automatico'
                       : isNoBalanceImpactTransaction(transaction)
                         ? 'Historico (sin impacto saldo)'
                         : 'Manual'}
                   </td>
                   <td>
-                    <div className="table__actions">
-                      <button className="button button--secondary" type="button" onClick={() => onTransactionEdit(transaction)}>
-                        Editar
-                      </button>
-                      <button className="button button--danger" type="button" onClick={() => onTransactionDelete(transaction.id)}>
-                        Eliminar
-                      </button>
-                    </div>
+                    {transaction.sourceType === 'opening_balance' ? (
+                      <span>Gestionado desde el instrumento</span>
+                    ) : (
+                      <div className="table__actions">
+                        <button className="button button--secondary" type="button" onClick={() => onTransactionEdit(transaction)}>
+                          Editar
+                        </button>
+                        <button className="button button--danger" type="button" onClick={() => onTransactionDelete(transaction.id)}>
+                          Eliminar
+                        </button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))

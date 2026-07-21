@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import type { AppSection } from '../app/appHelpers'
 
 type SectionLoaders = {
@@ -10,9 +10,11 @@ type SectionLoaders = {
   loadStatements: () => Promise<void>
   loadTransfers: () => Promise<void>
   loadSubscriptions: () => Promise<void>
+  loadRecurringIncomes: () => Promise<void>
   loadFixedExpenses: () => Promise<void>
   loadLoans: () => Promise<void>
   loadBudgets: () => Promise<void>
+  loadSavingsGoals: () => Promise<void>
   loadReminders: () => Promise<void>
   loadSimulations: () => Promise<void>
 }
@@ -20,6 +22,24 @@ type SectionLoaders = {
 export function useSectionDataLoader(hasConfig: boolean, loaders: SectionLoaders) {
   const [activeSection, setActiveSection] = useState<AppSection>('dashboard')
   const [isSectionLoading, setIsSectionLoading] = useState(false)
+  const initialLoadStarted = useRef(false)
+  const loadInitialData = useEffectEvent(async (): Promise<void> => {
+    setIsSectionLoading(true)
+    await Promise.all([
+      loaders.loadDashboard(),
+      loaders.loadReminders(),
+      loaders.loadBanks(),
+      loaders.loadInstruments(),
+      loaders.loadCategories(),
+    ])
+    setIsSectionLoading(false)
+  })
+
+  useEffect(() => {
+    if (!hasConfig || initialLoadStarted.current) return
+    initialLoadStarted.current = true
+    void Promise.resolve().then(loadInitialData)
+  }, [hasConfig])
 
   const sectionHandlers: Record<AppSection, () => Promise<void>> = {
     dashboard: async () => {
@@ -50,7 +70,12 @@ export function useSectionDataLoader(hasConfig: boolean, loaders: SectionLoaders
       await Promise.all([loaders.loadInstruments(), loaders.loadTransfers()])
     },
     subscriptions: async () => {
-      await Promise.all([loaders.loadInstruments(), loaders.loadCategories(), loaders.loadSubscriptions()])
+      await Promise.all([
+        loaders.loadInstruments(),
+        loaders.loadCategories(),
+        loaders.loadSubscriptions(),
+        loaders.loadRecurringIncomes(),
+      ])
     },
     fixedExpenses: async () => {
       await Promise.all([loaders.loadInstruments(), loaders.loadCategories(), loaders.loadFixedExpenses()])
@@ -59,7 +84,12 @@ export function useSectionDataLoader(hasConfig: boolean, loaders: SectionLoaders
       await Promise.all([loaders.loadInstruments(), loaders.loadLoans()])
     },
     budgets: async () => {
-      await Promise.all([loaders.loadCategories(), loaders.loadBudgets()])
+      await Promise.all([
+        loaders.loadCategories(),
+        loaders.loadInstruments(),
+        loaders.loadBudgets(),
+        loaders.loadSavingsGoals(),
+      ])
     },
     reminders: async () => {
       await loaders.loadReminders()

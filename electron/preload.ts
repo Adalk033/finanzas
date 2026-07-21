@@ -8,4 +8,12 @@ contextBridge.exposeInMainWorld('localDatabase', {
     ipcRenderer.invoke(IPC_CHANNELS.DATABASE_REQUEST, payload),
   getInfo: (): Promise<DatabaseInfo> =>
     ipcRenderer.invoke(IPC_CHANNELS.DATABASE_INFO),
+  backup: (): Promise<Record<string, unknown>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.DATABASE_BACKUP),
+  restore: (): Promise<Record<string, unknown>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.DATABASE_RESTORE),
+  exportCsv: (): Promise<Record<string, unknown>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.TRANSACTIONS_EXPORT_CSV),
+  importCsv: (): Promise<Record<string, unknown>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.TRANSACTIONS_IMPORT_CSV),
 })

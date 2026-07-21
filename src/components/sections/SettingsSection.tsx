@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { getLocalDatabaseBridge } from '../../app/localDatabaseBridge'
 import type { DatabaseInfo } from '../../types/config'
 
 type SettingsSectionProps = {
@@ -13,6 +15,36 @@ export function SettingsSection({
   error,
   onRefresh,
 }: SettingsSectionProps) {
+  const [actionMessage, setActionMessage] = useState('')
+  const [actionError, setActionError] = useState('')
+  const [isActionRunning, setIsActionRunning] = useState(false)
+
+  const runFileAction = async (
+    action: 'backup' | 'restore' | 'exportCsv' | 'importCsv',
+  ): Promise<void> => {
+    const bridge = getLocalDatabaseBridge()
+    if (!bridge) return
+    setIsActionRunning(true)
+    setActionMessage('')
+    setActionError('')
+    const result = await bridge[action]()
+    setIsActionRunning(false)
+    if (!result.success) {
+      setActionError(result.error ?? 'No se pudo completar la operacion.')
+      return
+    }
+    if (result.canceled) return
+    if (action === 'backup') setActionMessage('Respaldo creado correctamente.')
+    if (action === 'exportCsv') setActionMessage('Movimientos exportados correctamente.')
+    if (action === 'importCsv') {
+      setActionMessage(`Importacion completada: ${result.imported ?? 0} nuevos, ${result.skipped ?? 0} duplicados.`)
+      onRefresh()
+    }
+    if (action === 'restore') {
+      window.location.reload()
+    }
+  }
+
   return (
     <section className="card">
       <header className="card__header">
@@ -30,6 +62,22 @@ export function SettingsSection({
           onClick={onRefresh}
         >
           {isLoading ? 'Verificando...' : 'Actualizar estado'}
+        </button>
+        <button className="button button--secondary" type="button" disabled={isActionRunning} onClick={() => void runFileAction('backup')}>
+          Crear respaldo
+        </button>
+        <button className="button button--secondary" type="button" disabled={isActionRunning} onClick={() => {
+          if (window.confirm('La restauracion reemplazara los datos actuales. Se conservara una copia de seguridad automatica. ¿Continuar?')) {
+            void runFileAction('restore')
+          }
+        }}>
+          Restaurar respaldo
+        </button>
+        <button className="button button--secondary" type="button" disabled={isActionRunning} onClick={() => void runFileAction('exportCsv')}>
+          Exportar CSV
+        </button>
+        <button className="button button--secondary" type="button" disabled={isActionRunning} onClick={() => void runFileAction('importCsv')}>
+          Importar CSV
         </button>
       </div>
 
@@ -61,6 +109,12 @@ export function SettingsSection({
       ) : null}
 
       {error ? <p className="message message--error">{error}</p> : null}
+      {actionMessage ? <p className="message message--success">{actionMessage}</p> : null}
+      {actionError ? <p className="message message--error">{actionError}</p> : null}
+      <p className="card__subtitle">
+        El CSV usa identificadores de instrumento para evitar asignar movimientos a una cuenta incorrecta.
+        Puedes exportar primero una plantilla y editarla antes de importar.
+      </p>
     </section>
   )
 }

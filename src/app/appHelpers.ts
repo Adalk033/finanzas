@@ -27,6 +27,8 @@ import type {
   TransactionFilters,
   TransactionInput,
   TransferInput,
+  RecurringIncomeInput,
+  SavingsGoalInput,
 } from '../types/domain'
 
 export type AppSection =
@@ -45,7 +47,12 @@ export type AppSection =
   | 'reminders'
   | 'simulator'
 
-const TODAY_ISO = new Date().toISOString().slice(0, 10)
+const currentDate = new Date()
+const TODAY_ISO = [
+  currentDate.getFullYear(),
+  String(currentDate.getMonth() + 1).padStart(2, '0'),
+  String(currentDate.getDate()).padStart(2, '0'),
+].join('-')
 
 export const EMPTY_BANK_FORM: BankInput = {
   name: '',
@@ -68,6 +75,7 @@ export const EMPTY_INSTRUMENT_FORM: FinancialInstrumentInput = {
   paymentDueDay: 1,
   annualRate: null,
   currentAmount: 0,
+  linkedAccountId: null,
   notes: '',
   isActive: true,
 }
@@ -99,6 +107,7 @@ export const EMPTY_TRANSACTION_FORM: TransactionInput = {
   notes: '',
   isMsi: false,
   msiMonths: null,
+  affectsBalance: true,
 }
 
 export const EMPTY_TRANSACTION_FILTERS: TransactionFilters = {
@@ -231,6 +240,30 @@ export const EMPTY_REMINDER_FORM: ReminderInput = {
   isDismissed: false,
 }
 
+export const EMPTY_RECURRING_INCOME_FORM: RecurringIncomeInput = {
+  name: '',
+  instrumentId: 0,
+  categoryId: null,
+  subcategoryId: null,
+  currencyId: 1,
+  amount: 0,
+  frequency: 'monthly',
+  paymentDay: 1,
+  nextPayment: TODAY_ISO,
+  isActive: true,
+  notes: '',
+}
+
+export const EMPTY_SAVINGS_GOAL_FORM: SavingsGoalInput = {
+  name: '',
+  targetAmount: 0,
+  currentAmount: 0,
+  targetDate: '',
+  instrumentId: null,
+  notes: '',
+  isActive: true,
+}
+
 export const MSI_OPTIONS = [3, 6, 9, 12, 18, 24]
 export const DASHBOARD_CHART_COLORS = ['#57A6D8', '#6F86E8', '#F4C95D', '#E6A23C', '#F87171', '#A78BFA']
 export const EMPTY_DASHBOARD_SUMMARY: DashboardSummary = {
@@ -265,6 +298,7 @@ export function toEditableInstrument(instrument: FinancialInstrument): Financial
     paymentDueDay: instrument.paymentDueDay,
     annualRate: instrument.annualRate,
     currentAmount: instrument.currentAmount,
+    linkedAccountId: instrument.linkedAccountId,
     notes: instrument.notes ?? '',
     isActive: instrument.isActive,
   }

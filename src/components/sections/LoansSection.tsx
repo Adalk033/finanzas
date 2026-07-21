@@ -32,6 +32,7 @@ type LoansSectionProps = {
   onEditLoan: (loan: Loan) => void
   onDeleteLoan: (loanId: number) => void
   onPayInstallment: (installmentNum: number) => void
+  onUndoInstallment: (installmentNum: number) => void
 }
 
 export function LoansSection({
@@ -57,6 +58,7 @@ export function LoansSection({
   onEditLoan,
   onDeleteLoan,
   onPayInstallment,
+  onUndoInstallment,
 }: LoansSectionProps) {
   const [isLoanFormOpen, setIsLoanFormOpen] = useState(editingLoanId !== null)
   const [isRegisterFormOpen, setIsRegisterFormOpen] = useState(false)
@@ -180,10 +182,23 @@ export function LoansSection({
                       onChange={(event) => onLoanFormChange({ ...loanForm, fixedPayment: Number(event.target.value) })}
                       required
                     />
+                    <label className="form-grid__field" htmlFor="loanAnnualRateFixed">Tasa anual (%)</label>
+                    <input
+                      id="loanAnnualRateFixed"
+                      className="form-grid__input"
+                      type="number"
+                      min={0}
+                      step="0.0001"
+                      value={loanForm.annualRate ?? 0}
+                      onChange={(event) => onLoanFormChange({
+                        ...loanForm,
+                        annualRate: Number(event.target.value),
+                      })}
+                    />
                   </>
                 ) : (
                   <>
-                    <label className="form-grid__field" htmlFor="loanAnnualRate">Tasa anual (decimal)</label>
+                    <label className="form-grid__field" htmlFor="loanAnnualRate">Tasa anual (%)</label>
                     <input
                       id="loanAnnualRate"
                       className="form-grid__input"
@@ -277,7 +292,7 @@ export function LoansSection({
                   onChange={(event) => onLoanPaymentRegisterChange({ ...loanPaymentRegister, paidDate: event.target.value })}
                 />
 
-                <label className="form-grid__field" htmlFor="loanRegisterAmount">Monto (opcional, debe coincidir)</label>
+                <label className="form-grid__field" htmlFor="loanRegisterAmount">Monto (opcional; acepta abono extra)</label>
                 <input
                   id="loanRegisterAmount"
                   className="form-grid__input"
@@ -432,6 +447,15 @@ export function LoansSection({
                             >
                               Pagar
                             </button>
+                            {payment.isPaid ? (
+                              <button
+                                className="button button--danger"
+                                type="button"
+                                onClick={() => onUndoInstallment(payment.installmentNum)}
+                              >
+                                Revertir
+                              </button>
+                            ) : null}
                           </div>
                         </td>
                       </tr>

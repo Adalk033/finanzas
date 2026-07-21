@@ -9,6 +9,19 @@ export type LocalRequestPayload = {
 export type LocalDatabaseBridge = {
   request: (payload: LocalRequestPayload) => Promise<ApiResponse<unknown>>
   getInfo: () => Promise<DatabaseInfo>
+  backup: () => Promise<FileActionResult>
+  restore: () => Promise<FileActionResult>
+  exportCsv: () => Promise<FileActionResult>
+  importCsv: () => Promise<FileActionResult>
+}
+
+export type FileActionResult = {
+  success: boolean
+  canceled?: boolean
+  path?: string
+  imported?: number
+  skipped?: number
+  error?: string
 }
 
 type ElectronWindow = Window & {
