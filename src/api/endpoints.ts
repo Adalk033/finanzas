@@ -20,4 +20,6 @@ export const ENDPOINTS = {
   SIMULATIONS: '/simulations',
   REMINDERS: '/reminders',
   REMINDERS_PENDING: '/reminders/pending',
+  RECURRING_INCOMES: '/recurring-incomes',
+  SAVINGS_GOALS: '/savings-goals',
 } as const

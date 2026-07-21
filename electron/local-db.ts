@@ -1,4 +1,6 @@
 import Database from 'better-sqlite3'
+import fs from 'node:fs'
+import path from 'node:path'
 
 let database: Database.Database | null = null
 let databasePath = ''
@@ -46,6 +48,7 @@ const SCHEMA = `
     payment_due_day INTEGER CHECK (payment_due_day IS NULL OR payment_due_day BETWEEN 1 AND 31),
     annual_rate REAL,
     current_amount_cents INTEGER DEFAULT 0,
+    linked_account_id INTEGER REFERENCES financial_instruments(id),
     is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
     notes TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -91,6 +94,9 @@ const SCHEMA = `
     msi_monthly_amount_cents INTEGER,
     msi_start_date TEXT,
     msi_remaining INTEGER,
+    affects_balance INTEGER NOT NULL DEFAULT 1 CHECK (affects_balance IN (0, 1)),
+    source_type TEXT,
+    source_id INTEGER,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
@@ -144,6 +150,7 @@ const SCHEMA = `
     is_paid INTEGER NOT NULL DEFAULT 0 CHECK (is_paid IN (0, 1)),
     paid_date TEXT,
     notes TEXT,
+    transaction_id INTEGER REFERENCES transactions(id),
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(loan_id, installment_num)
@@ -208,6 +215,7 @@ const SCHEMA = `
     payment_date TEXT,
     is_paid INTEGER NOT NULL DEFAULT 0 CHECK (is_paid IN (0, 1)),
     notes TEXT,
+    transaction_id INTEGER REFERENCES transactions(id),
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(fixed_expense_id, period_month, period_year)
@@ -255,13 +263,131 @@ const SCHEMA = `
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS statement_payment_allocations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    transfer_id INTEGER NOT NULL REFERENCES transfers(id) ON DELETE CASCADE,
+    statement_id INTEGER NOT NULL REFERENCES credit_card_statements(id),
+    amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(transfer_id, statement_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS recurring_incomes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 150),
+    instrument_id INTEGER NOT NULL REFERENCES financial_instruments(id),
+    category_id INTEGER REFERENCES categories(id),
+    subcategory_id INTEGER REFERENCES subcategories(id),
+    currency_id INTEGER NOT NULL REFERENCES currencies(id),
+    amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+    frequency TEXT NOT NULL CHECK (frequency IN ('weekly', 'biweekly', 'monthly', 'yearly')),
+    payment_day INTEGER CHECK (payment_day IS NULL OR payment_day BETWEEN 1 AND 31),
+    next_payment TEXT NOT NULL,
+    is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS savings_goals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 150),
+    target_amount_cents INTEGER NOT NULL CHECK (target_amount_cents > 0),
+    current_amount_cents INTEGER NOT NULL DEFAULT 0 CHECK (current_amount_cents >= 0),
+    target_date TEXT,
+    instrument_id INTEGER REFERENCES financial_instruments(id),
+    notes TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
   CREATE INDEX IF NOT EXISTS idx_instruments_bank ON financial_instruments(bank_id);
   CREATE INDEX IF NOT EXISTS idx_transactions_instrument_date ON transactions(instrument_id, transaction_date);
   CREATE INDEX IF NOT EXISTS idx_transactions_category_date ON transactions(category_id, transaction_date);
   CREATE INDEX IF NOT EXISTS idx_transfers_instruments_date ON transfers(source_instrument_id, destination_instrument_id, transfer_date);
   CREATE INDEX IF NOT EXISTS idx_loan_payments_loan ON loan_payments(loan_id, installment_num);
   CREATE INDEX IF NOT EXISTS idx_reminders_pending ON reminders(is_dismissed, is_read, reminder_date);
+  CREATE INDEX IF NOT EXISTS idx_recurring_incomes_due ON recurring_incomes(is_active, next_payment);
 `
+
+function hasColumn(table: string, column: string): boolean {
+  if (!database) {
+    return false
+  }
+  const allowedTables = new Set([
+    'financial_instruments',
+    'transactions',
+    'loan_payments',
+    'fixed_expense_payments',
+  ])
+  if (!allowedTables.has(table)) {
+    throw new Error('Tabla de migracion no permitida.')
+  }
+  const columns = database.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
+  return columns.some((item) => item.name === column)
+}
+
+function addColumn(table: string, definition: string, column: string): void {
+  if (!database || hasColumn(table, column)) {
+    return
+  }
+  const allowedDefinitions = new Map<string, Set<string>>([
+    ['financial_instruments', new Set([
+      'linked_account_id INTEGER REFERENCES financial_instruments(id)',
+    ])],
+    ['transactions', new Set([
+      'affects_balance INTEGER NOT NULL DEFAULT 1 CHECK (affects_balance IN (0, 1))',
+      'source_type TEXT',
+      'source_id INTEGER',
+    ])],
+    ['loan_payments', new Set([
+      'transaction_id INTEGER REFERENCES transactions(id)',
+    ])],
+    ['fixed_expense_payments', new Set([
+      'transaction_id INTEGER REFERENCES transactions(id)',
+    ])],
+  ])
+  if (!allowedDefinitions.get(table)?.has(definition)) {
+    throw new Error('Definicion de migracion no permitida.')
+  }
+  database.exec(`ALTER TABLE ${table} ADD COLUMN ${definition}`)
+}
+
+function migrateSchema(): void {
+  addColumn(
+    'financial_instruments',
+    'linked_account_id INTEGER REFERENCES financial_instruments(id)',
+    'linked_account_id',
+  )
+  addColumn(
+    'transactions',
+    'affects_balance INTEGER NOT NULL DEFAULT 1 CHECK (affects_balance IN (0, 1))',
+    'affects_balance',
+  )
+  addColumn('transactions', 'source_type TEXT', 'source_type')
+  addColumn('transactions', 'source_id INTEGER', 'source_id')
+  addColumn(
+    'loan_payments',
+    'transaction_id INTEGER REFERENCES transactions(id)',
+    'transaction_id',
+  )
+  addColumn(
+    'fixed_expense_payments',
+    'transaction_id INTEGER REFERENCES transactions(id)',
+    'transaction_id',
+  )
+  database?.exec(`
+    CREATE INDEX IF NOT EXISTS idx_instruments_linked_account
+      ON financial_instruments(linked_account_id);
+    CREATE INDEX IF NOT EXISTS idx_statement_allocations_statement
+      ON statement_payment_allocations(statement_id);
+    INSERT OR IGNORE INTO statement_payment_allocations (transfer_id, statement_id, amount_cents)
+    SELECT id, statement_id, amount_cents
+    FROM transfers
+    WHERE statement_id IS NOT NULL;
+  `)
+}
 
 export function initializeLocalDb(dbPath: string): void {
   databasePath = dbPath
@@ -271,6 +397,7 @@ export function initializeLocalDb(dbPath: string): void {
   database.pragma('busy_timeout = 5000')
   database.pragma('synchronous = NORMAL')
   database.exec(SCHEMA)
+  migrateSchema()
 
   database.prepare(`
     INSERT INTO currencies (id, code, name, symbol, is_default)
@@ -280,7 +407,7 @@ export function initializeLocalDb(dbPath: string): void {
 
   database.prepare(`
     INSERT INTO app_metadata (key, value)
-    VALUES ('schema_version', '1')
+    VALUES ('schema_version', '2')
     ON CONFLICT(key) DO UPDATE SET value = excluded.value
   `).run()
 }
@@ -300,4 +427,52 @@ export function getDatabasePath(): string {
 export function closeLocalDb(): void {
   database?.close()
   database = null
+}
+
+export async function backupLocalDb(destinationPath: string): Promise<void> {
+  if (!database) {
+    throw new Error('La base de datos local no esta inicializada.')
+  }
+  if (path.resolve(destinationPath) === path.resolve(databasePath)) {
+    throw new Error('El respaldo debe guardarse en un archivo distinto.')
+  }
+  await database.backup(destinationPath)
+  fs.chmodSync(destinationPath, 0o600)
+}
+
+export function restoreLocalDb(sourcePath: string): void {
+  if (!databasePath || !fs.existsSync(sourcePath)) {
+    throw new Error('El respaldo seleccionado no existe.')
+  }
+  const candidate = new Database(sourcePath, { readonly: true, fileMustExist: true })
+  try {
+    const integrity = candidate.pragma('integrity_check', { simple: true })
+    const metadata = candidate.prepare(`
+      SELECT value FROM app_metadata WHERE key = 'schema_version'
+    `).get() as { value: string } | undefined
+    if (integrity !== 'ok' || !metadata) {
+      throw new Error('El archivo no es un respaldo valido de Finanzas Lit.')
+    }
+  } finally {
+    candidate.close()
+  }
+  const targetPath = databasePath
+  if (fs.realpathSync.native(sourcePath) === fs.realpathSync.native(targetPath)) {
+    throw new Error('Selecciona un respaldo distinto de la base activa.')
+  }
+  const safetyPath = `${targetPath}.before-restore-${new Date().toISOString().replaceAll(':', '-')}`
+  closeLocalDb()
+  fs.copyFileSync(targetPath, safetyPath)
+  fs.chmodSync(safetyPath, 0o600)
+  try {
+    fs.copyFileSync(sourcePath, targetPath)
+    fs.chmodSync(targetPath, 0o600)
+    initializeLocalDb(targetPath)
+  } catch {
+    closeLocalDb()
+    fs.copyFileSync(safetyPath, targetPath)
+    fs.chmodSync(targetPath, 0o600)
+    initializeLocalDb(targetPath)
+    throw new Error('No se pudo restaurar el respaldo seleccionado.')
+  }
 }

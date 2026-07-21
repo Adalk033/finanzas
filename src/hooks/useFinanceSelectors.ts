@@ -35,7 +35,9 @@ export function useFinanceSelectors({
   }, [banksById, instruments])
 
   const expenseCategoryOptions = useMemo(() => {
-    return categories.filter((category) => category.type === 'expense' || category.type === 'both')
+    return categories.filter(
+      (category) => category.isActive && (category.type === 'expense' || category.type === 'both'),
+    )
   }, [categories])
 
   return {

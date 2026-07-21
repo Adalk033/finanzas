@@ -27,7 +27,7 @@ export function useLoansController({ instruments }: UseLoansControllerParams) {
   const [loanPaymentRegister, setLoanPaymentRegister] = useState<LoanPaymentRegisterInput>(EMPTY_LOAN_PAYMENT_REGISTER)
 
   const loanPaymentInstruments = useMemo(() => {
-    return instruments.filter((instrument) => instrument.type !== 'credit_card')
+    return instruments.filter((instrument) => instrument.type !== 'credit_card' && instrument.isActive)
   }, [instruments])
 
   const selectedLoan = useMemo(() => {
@@ -204,6 +204,20 @@ export function useLoansController({ instruments }: UseLoansControllerParams) {
     await loadLoanPayments(selectedLoanId)
   }
 
+  const handleUndoInstallment = async (installmentNum: number): Promise<void> => {
+    if (!selectedLoanId) return
+    setLoanError('')
+    setLoanMessage('')
+    const result = await apiClient.undoLoanInstallment(selectedLoanId, installmentNum)
+    if (!result.success) {
+      setLoanError(result.error ?? 'No se pudo revertir el pago de la cuota.')
+      return
+    }
+    setLoanMessage(`Pago de la cuota ${installmentNum} revertido correctamente.`)
+    await loadLoans()
+    await loadLoanPayments(selectedLoanId)
+  }
+
   return {
     loans,
     isLoansLoading,
@@ -226,5 +240,6 @@ export function useLoansController({ instruments }: UseLoansControllerParams) {
     handleLoanSubmit,
     handleLoanDelete,
     handlePayInstallment,
+    handleUndoInstallment,
   }
 }

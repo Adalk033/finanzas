@@ -2,8 +2,17 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import assert from 'node:assert/strict'
-import { closeLocalDb, initializeLocalDb } from '../electron/local-db.js'
-import { handleLocalRequest } from '../electron/local-service.js'
+import {
+  backupLocalDb,
+  closeLocalDb,
+  initializeLocalDb,
+  restoreLocalDb,
+} from '../electron/local-db.js'
+import {
+  exportTransactionsCsv,
+  handleLocalRequest,
+  importTransactionsCsv,
+} from '../electron/local-service.js'
 
 const tempDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'finanzas-lit-'))
 const databasePath = path.join(tempDirectory, 'smoke.sqlite')
@@ -14,7 +23,7 @@ function request<T>(pathValue: string, method = 'GET', body?: Record<string, unk
     method,
     body: body ? JSON.stringify(body) : undefined,
   })
-  assert.equal(response.success, true, response.error)
+  assert.equal(response.success, true, `${method} ${pathValue}: ${response.error ?? ''}`)
   return response.data as T
 }
 
@@ -64,6 +73,17 @@ try {
     annualRate: 40,
     isActive: true,
   })
+  const openingCredit = request<{ id: number }>('/instruments', 'POST', {
+    bankId: bank.id,
+    name: 'Tarjeta con saldo inicial',
+    type: 'credit_card',
+    currencyId: 1,
+    creditLimit: 5000,
+    currentBalance: 500,
+    cutOffDay: 15,
+    paymentDueDay: 5,
+    isActive: true,
+  })
   const category = request<{ id: number }>('/categories', 'POST', {
     name: 'Alimentos',
     type: 'expense',
@@ -71,6 +91,27 @@ try {
     iconName: 'Utensils',
     isActive: true,
   })
+  const openingTransactions = request<Array<{
+    id: number
+    instrumentId: number
+    sourceType: string | null
+  }>>('/transactions')
+  const debitOpening = openingTransactions.find(
+    (item) => item.instrumentId === debit.id && item.sourceType === 'opening_balance',
+  )
+  assert.ok(debitOpening)
+  const openingDeleteError = requestFailure(
+    `/transactions/${debitOpening.id}`,
+    'DELETE',
+    {},
+  )
+  assert.match(openingDeleteError, /asiento protegido/)
+  const zeroOpeningStatement = request<{ totalAmount: number }>('/statements', 'POST', {
+    instrumentId: openingCredit.id,
+    cutOffDate: '2026-07-31',
+  })
+  assert.equal(zeroOpeningStatement.totalAmount, 0)
+  request(`/instruments/${openingCredit.id}`, 'DELETE')
 
   request('/transactions', 'POST', {
     instrumentId: debit.id,
@@ -211,6 +252,18 @@ try {
     paymentDay: 1,
     isActive: true,
   })
+  const fixedPayment = request<{ id: number }>(`/fixed-expenses/${fixedExpense.id}/payments`, 'POST', {
+    amount: 5000,
+    periodMonth: 7,
+    periodYear: 2026,
+    paymentDate: '2026-07-01',
+    isPaid: true,
+  })
+  instruments = request('/instruments')
+  assert.equal(instruments.find((item) => item.id === debit.id)?.currentAmount, 4774.55)
+  request(`/fixed-expenses/${fixedExpense.id}/payments/${fixedPayment.id}`, 'DELETE')
+  instruments = request('/instruments')
+  assert.equal(instruments.find((item) => item.id === debit.id)?.currentAmount, 9774.55)
   request(`/fixed-expenses/${fixedExpense.id}/payments`, 'POST', {
     amount: 5000,
     periodMonth: 7,
@@ -264,7 +317,194 @@ try {
   assert.equal(typeof simulation.isFavorable, 'boolean')
 
   const info = request<{ schemaVersion: string }>('/database/info')
-  assert.equal(info.schemaVersion, '1')
+  assert.equal(info.schemaVersion, '2')
+
+  const cardBeforeHistorical = request<Array<{
+    id: number
+    currentBalance: number
+  }>>('/instruments').find((item) => item.id === credit.id)
+  const historical = request<{ id: number; sourceType: string | null }>('/transactions', 'POST', {
+    instrumentId: credit.id,
+    categoryId: category.id,
+    currencyId: 1,
+    type: 'expense',
+    amount: 75,
+    description: 'Historico ya incluido',
+    transactionDate: '2026-06-10',
+    isMsi: false,
+    affectsBalance: false,
+    sourceType: 'opening_balance',
+  })
+  assert.equal(historical.sourceType, null)
+  const cardAfterHistorical = request<Array<{
+    id: number
+    currentBalance: number
+  }>>('/instruments').find((item) => item.id === credit.id)
+  assert.equal(cardAfterHistorical?.currentBalance, cardBeforeHistorical?.currentBalance)
+  request(`/transactions/${historical.id}`, 'DELETE')
+
+  const reconciliationAccount = request<{ id: number }>('/instruments', 'POST', {
+    bankId: bank.id,
+    name: 'Cuenta para conciliacion',
+    type: 'account',
+    currencyId: 1,
+    currentAmount: 100,
+    isActive: true,
+  })
+  const reconciliationExpense = request<{ id: number }>('/transactions', 'POST', {
+    instrumentId: reconciliationAccount.id,
+    categoryId: category.id,
+    currencyId: 1,
+    type: 'expense',
+    amount: 10,
+    transactionDate: '2026-07-18',
+    isMsi: false,
+    affectsBalance: true,
+  })
+  request(`/instruments/${reconciliationAccount.id}/reconcile`, 'POST', {
+    actualBalance: 95,
+    reconciliationDate: '2026-07-18',
+    notes: 'Prueba',
+  })
+  let reconciled = request<Array<{ id: number; currentAmount: number }>>('/instruments')
+    .find((item) => item.id === reconciliationAccount.id)
+  assert.equal(reconciled?.currentAmount, 95)
+  request(`/instruments/${reconciliationAccount.id}`, 'DELETE')
+  request(`/transactions/${reconciliationExpense.id}`, 'DELETE')
+  reconciled = request<Array<{ id: number; currentAmount: number }>>('/instruments')
+    .find((item) => item.id === reconciliationAccount.id)
+  assert.equal(reconciled?.currentAmount, 105)
+
+  const availableBeforeLinkedCard = request<{ totalAvailable: number }>('/dashboard/summary').totalAvailable
+  request('/instruments', 'POST', {
+    bankId: bank.id,
+    name: 'Tarjeta vinculada',
+    type: 'debit_card',
+    currencyId: 1,
+    currentAmount: 0,
+    linkedAccountId: debit.id,
+    isActive: true,
+  })
+  const availableAfterLinkedCard = request<{ totalAvailable: number }>('/dashboard/summary').totalAvailable
+  assert.equal(availableAfterLinkedCard, availableBeforeLinkedCard)
+
+  request('/recurring-incomes', 'POST', {
+    name: 'Nomina automatica',
+    instrumentId: debit.id,
+    currencyId: 1,
+    amount: 250,
+    frequency: 'monthly',
+    paymentDay: 18,
+    nextPayment: '2026-07-18',
+    isActive: true,
+  })
+  const recurringTransactions = request<Array<{ description: string | null }>>('/transactions')
+  assert.equal(
+    recurringTransactions.some((item) => item.description === 'Ingreso automatico: Nomina automatica'),
+    true,
+  )
+
+  const goal = request<{ id: number; progressPercent: number }>('/savings-goals', 'POST', {
+    name: 'Fondo de emergencia',
+    targetAmount: 30000,
+    currentAmount: 7500,
+    instrumentId: debit.id,
+    isActive: true,
+  })
+  assert.equal(goal.progressPercent, 25)
+
+  const splitCard = request<{ id: number }>('/instruments', 'POST', {
+    bankId: bank.id,
+    name: 'Tarjeta pagos divididos',
+    type: 'credit_card',
+    currencyId: 1,
+    creditLimit: 5000,
+    currentBalance: 0,
+    cutOffDay: 10,
+    paymentDueDay: 20,
+    isActive: true,
+  })
+  request('/transactions', 'POST', {
+    instrumentId: splitCard.id,
+    categoryId: category.id,
+    currencyId: 1,
+    type: 'expense',
+    amount: 100,
+    transactionDate: '2026-01-05',
+    isMsi: false,
+    affectsBalance: true,
+  })
+  request('/transactions', 'POST', {
+    instrumentId: splitCard.id,
+    categoryId: category.id,
+    currencyId: 1,
+    type: 'expense',
+    amount: 150,
+    transactionDate: '2026-02-05',
+    isMsi: false,
+    affectsBalance: true,
+  })
+  let splitStatements = request<Array<{
+    id: number
+    cutOffDate: string
+    isPaid: boolean
+    outstandingAmount: number
+  }>>(`/statements?instrument_id=${splitCard.id}`)
+  const splitPayment = request<{ id: number }>('/transfers', 'POST', {
+    sourceInstrumentId: debit.id,
+    destinationInstrumentId: splitCard.id,
+    amount: 200,
+    currencyId: 1,
+    transferDate: '2026-03-01',
+    type: 'card_payment',
+  })
+  splitStatements = request(`/statements?instrument_id=${splitCard.id}`)
+  assert.equal(splitStatements.find((item) => item.cutOffDate === '2026-01-10')?.isPaid, true)
+  assert.equal(splitStatements.find((item) => item.cutOffDate === '2026-02-10')?.outstandingAmount, 50)
+  request(`/transfers/${splitPayment.id}`, 'DELETE')
+  splitStatements = request(`/statements?instrument_id=${splitCard.id}`)
+  assert.equal(splitStatements.find((item) => item.cutOffDate === '2026-01-10')?.outstandingAmount, 100)
+  assert.equal(splitStatements.find((item) => item.cutOffDate === '2026-02-10')?.outstandingAmount, 150)
+
+  const adjustableLoan = request<{ id: number }>('/loans', 'POST', {
+    name: 'Prestamo con abono extra',
+    currencyId: 1,
+    originalAmount: 1000,
+    annualRate: 12,
+    totalInstallments: 10,
+    paymentType: 'variable',
+    paymentDay: 18,
+    startDate: '2026-07-18',
+    instrumentId: debit.id,
+    isActive: true,
+  })
+  const adjustablePaid = request<{ loan: { remainingAmount: number } }>(
+    `/loans/${adjustableLoan.id}/payments/1/pay`,
+    'POST',
+    { paidDate: '2026-07-18', amount: 160 },
+  )
+  assert.equal(adjustablePaid.loan.remainingAmount, 850)
+  const adjustableUndone = request<{ loan: { remainingAmount: number } }>(
+    `/loans/${adjustableLoan.id}/payments/1/unpay`,
+    'POST',
+    {},
+  )
+  assert.equal(adjustableUndone.loan.remainingAmount, 1000)
+
+  const exportedCsv = exportTransactionsCsv()
+  const importedCsv = importTransactionsCsv(exportedCsv)
+  assert.equal(importedCsv.imported, 0)
+  assert.ok(importedCsv.skipped > 0)
+
+  const backupPath = path.join(tempDirectory, 'backup.sqlite')
+  await backupLocalDb(backupPath)
+  request('/banks', 'POST', {
+    name: 'Banco posterior al respaldo',
+    isActive: true,
+  })
+  restoreLocalDb(backupPath)
+  const restoredBanks = request<Array<{ name: string }>>('/banks')
+  assert.equal(restoredBanks.some((item) => item.name === 'Banco posterior al respaldo'), false)
 } finally {
   closeLocalDb()
   fs.rmSync(tempDirectory, { recursive: true, force: true })

@@ -42,6 +42,11 @@ import type {
   Transaction,
   TransactionFilters,
   TransactionInput,
+  ReconciliationInput,
+  RecurringIncome,
+  RecurringIncomeInput,
+  SavingsGoal,
+  SavingsGoalInput,
 } from '../types/domain'
 
 async function request<T>(
@@ -122,6 +127,7 @@ function sanitizeInstrumentPayload(payload: FinancialInstrumentInput): Record<st
     setIfNotNull(sanitized, 'annualRate', payload.annualRate)
   } else {
     setIfNotNull(sanitized, 'currentAmount', payload.currentAmount)
+    setIfNotNull(sanitized, 'linkedAccountId', payload.linkedAccountId)
   }
 
   return sanitized
@@ -160,6 +166,7 @@ function sanitizeTransactionPayload(payload: TransactionInput): Record<string, u
     amount: payload.amount,
     transactionDate: payload.transactionDate,
     isMsi: payload.isMsi,
+    affectsBalance: payload.affectsBalance,
   }
 
   if (payload.categoryId !== null && payload.categoryId > 0) {
@@ -351,6 +358,36 @@ function sanitizeReminderPayload(payload: ReminderInput): Record<string, unknown
   return sanitized
 }
 
+function sanitizeRecurringIncomePayload(payload: RecurringIncomeInput): Record<string, unknown> {
+  const sanitized: Record<string, unknown> = {
+    name: payload.name.trim(),
+    instrumentId: payload.instrumentId,
+    currencyId: payload.currencyId,
+    amount: payload.amount,
+    frequency: payload.frequency,
+    nextPayment: payload.nextPayment,
+    isActive: payload.isActive,
+  }
+  setIfNotNull(sanitized, 'categoryId', payload.categoryId)
+  setIfNotNull(sanitized, 'subcategoryId', payload.subcategoryId)
+  setIfNotNull(sanitized, 'paymentDay', payload.paymentDay)
+  setTrimmedIfPresent(sanitized, 'notes', payload.notes)
+  return sanitized
+}
+
+function sanitizeSavingsGoalPayload(payload: SavingsGoalInput): Record<string, unknown> {
+  const sanitized: Record<string, unknown> = {
+    name: payload.name.trim(),
+    targetAmount: payload.targetAmount,
+    currentAmount: payload.currentAmount,
+    isActive: payload.isActive,
+  }
+  setTrimmedIfPresent(sanitized, 'targetDate', payload.targetDate)
+  setIfNotNull(sanitized, 'instrumentId', payload.instrumentId)
+  setTrimmedIfPresent(sanitized, 'notes', payload.notes)
+  return sanitized
+}
+
 function buildTransactionQuery(filters: TransactionFilters): string {
   const params = new URLSearchParams()
 
@@ -461,6 +498,18 @@ export const apiClient = {
     request<{ id: number }>(`${ENDPOINTS.INSTRUMENTS}/${id}`, {
       method: 'DELETE',
     }),
+  reconcileInstrument: (id: number, payload: ReconciliationInput) =>
+    request<{ instrument: FinancialInstrument; transaction: Transaction }>(
+      `${ENDPOINTS.INSTRUMENTS}/${id}/reconcile`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          actualBalance: payload.actualBalance,
+          reconciliationDate: payload.reconciliationDate,
+          notes: payload.notes.trim(),
+        }),
+      },
+    ),
   getTransactions: (filters: TransactionFilters = {}) =>
     request<Transaction[]>(`${ENDPOINTS.TRANSACTIONS}${buildTransactionQuery(filters)}`, { method: 'GET' }),
   createTransaction: (payload: TransactionInput) =>
@@ -547,6 +596,11 @@ export const apiClient = {
       method: 'POST',
       body: JSON.stringify(sanitizeLoanPaymentRegisterPayload(payload)),
     }),
+  undoLoanInstallment: (loanId: number, installmentNum: number) =>
+    request<{ loan: Loan; payment: LoanPayment }>(
+      `${ENDPOINTS.LOANS}/${loanId}/payments/${installmentNum}/unpay`,
+      { method: 'POST', body: JSON.stringify({}) },
+    ),
   getSubscriptions: () => request<Subscription[]>(ENDPOINTS.SUBSCRIPTIONS, { method: 'GET' }),
   createSubscription: (payload: SubscriptionInput) =>
     request<Subscription>(ENDPOINTS.SUBSCRIPTIONS, {
@@ -562,6 +616,20 @@ export const apiClient = {
     request<{ id: number }>(`${ENDPOINTS.SUBSCRIPTIONS}/${id}`, {
       method: 'DELETE',
     }),
+  getRecurringIncomes: () =>
+    request<RecurringIncome[]>(ENDPOINTS.RECURRING_INCOMES, { method: 'GET' }),
+  createRecurringIncome: (payload: RecurringIncomeInput) =>
+    request<RecurringIncome>(ENDPOINTS.RECURRING_INCOMES, {
+      method: 'POST',
+      body: JSON.stringify(sanitizeRecurringIncomePayload(payload)),
+    }),
+  updateRecurringIncome: (id: number, payload: RecurringIncomeInput) =>
+    request<RecurringIncome>(`${ENDPOINTS.RECURRING_INCOMES}/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(sanitizeRecurringIncomePayload(payload)),
+    }),
+  deleteRecurringIncome: (id: number) =>
+    request<{ id: number }>(`${ENDPOINTS.RECURRING_INCOMES}/${id}`, { method: 'DELETE' }),
   getFixedExpenses: () => request<FixedExpense[]>(ENDPOINTS.FIXED_EXPENSES, { method: 'GET' }),
   createFixedExpense: (payload: FixedExpenseInput) =>
     request<FixedExpense>(ENDPOINTS.FIXED_EXPENSES, {
@@ -624,6 +692,20 @@ export const apiClient = {
     request<{ id: number }>(`${ENDPOINTS.BUDGETS}/${id}`, {
       method: 'DELETE',
     }),
+  getSavingsGoals: () =>
+    request<SavingsGoal[]>(ENDPOINTS.SAVINGS_GOALS, { method: 'GET' }),
+  createSavingsGoal: (payload: SavingsGoalInput) =>
+    request<SavingsGoal>(ENDPOINTS.SAVINGS_GOALS, {
+      method: 'POST',
+      body: JSON.stringify(sanitizeSavingsGoalPayload(payload)),
+    }),
+  updateSavingsGoal: (id: number, payload: SavingsGoalInput) =>
+    request<SavingsGoal>(`${ENDPOINTS.SAVINGS_GOALS}/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(sanitizeSavingsGoalPayload(payload)),
+    }),
+  deleteSavingsGoal: (id: number) =>
+    request<{ id: number }>(`${ENDPOINTS.SAVINGS_GOALS}/${id}`, { method: 'DELETE' }),
   getSimulations: () => request<Simulation[]>(ENDPOINTS.SIMULATIONS, { method: 'GET' }),
   createSimulation: (payload: SimulationInput) =>
     request<Simulation>(ENDPOINTS.SIMULATIONS, {

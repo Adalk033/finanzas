@@ -7,6 +7,7 @@ export type SubscriptionBillingCycle = 'monthly' | 'yearly' | 'weekly'
 export type BudgetStatus = 'under' | 'warning' | 'exceeded'
 export type SimulationScenarioType = 'direct_purchase' | 'msi' | 'loan'
 export type ReminderType = 'payment' | 'cutoff' | 'subscription' | 'loan' | 'custom'
+export type RecurringIncomeFrequency = 'weekly' | 'biweekly' | 'monthly' | 'yearly'
 
 export interface Bank {
   id: number
@@ -42,6 +43,8 @@ export interface FinancialInstrument {
   paymentDueDay: number | null
   annualRate: number | null
   currentAmount: number | null
+  linkedAccountId: number | null
+  linkedAccountName: string | null
   notes: string | null
   isActive: boolean
   createdAt: string
@@ -61,6 +64,7 @@ export interface FinancialInstrumentInput {
   paymentDueDay: number | null
   annualRate: number | null
   currentAmount: number | null
+  linkedAccountId: number | null
   notes: string
   isActive: boolean
 }
@@ -125,6 +129,9 @@ export interface Transaction {
   msiMonthlyAmount: number | null
   msiStartDate: string | null
   msiRemaining: number | null
+  affectsBalance: boolean
+  sourceType: string | null
+  sourceId: number | null
   createdAt: string
   updatedAt: string
 }
@@ -141,6 +148,7 @@ export interface TransactionInput {
   notes: string
   isMsi: boolean
   msiMonths: number | null
+  affectsBalance: boolean
 }
 
 export interface TransactionFilters {
@@ -270,6 +278,7 @@ export interface LoanPayment {
   isPaid: boolean
   paidDate: string | null
   notes: string | null
+  transactionId: number | null
   createdAt: string
   updatedAt: string
 }
@@ -355,6 +364,7 @@ export interface FixedExpensePayment {
   paymentDate: string | null
   isPaid: boolean
   notes: string | null
+  transactionId: number | null
   createdAt: string
   updatedAt: string
 }
@@ -433,6 +443,8 @@ export interface DashboardCashFlowPoint {
   month: string
   income: number
   expense: number
+  debtPayments: number
+  netCashFlow: number
 }
 
 export interface DashboardBalanceSeries {
@@ -455,6 +467,7 @@ export interface DashboardFutureExpensePoint {
   subscriptions: number
   fixedExpenses: number
   loanPayments: number
+  creditCardInstallments: number
   total: number
 }
 
@@ -481,4 +494,69 @@ export interface ReminderInput {
   referenceType: string
   isRead: boolean
   isDismissed: boolean
+}
+
+export interface ReconciliationInput {
+  actualBalance: number
+  reconciliationDate: string
+  notes: string
+}
+
+export interface RecurringIncome {
+  id: number
+  name: string
+  instrumentId: number
+  instrumentName: string | null
+  categoryId: number | null
+  categoryName: string | null
+  subcategoryId: number | null
+  subcategoryName: string | null
+  currencyId: number
+  amount: number
+  frequency: RecurringIncomeFrequency
+  paymentDay: number | null
+  nextPayment: string
+  isActive: boolean
+  notes: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface RecurringIncomeInput {
+  name: string
+  instrumentId: number
+  categoryId: number | null
+  subcategoryId: number | null
+  currencyId: number
+  amount: number
+  frequency: RecurringIncomeFrequency
+  paymentDay: number | null
+  nextPayment: string
+  isActive: boolean
+  notes: string
+}
+
+export interface SavingsGoal {
+  id: number
+  name: string
+  targetAmount: number
+  currentAmount: number
+  targetDate: string | null
+  instrumentId: number | null
+  instrumentName: string | null
+  progressPercent: number
+  notes: string | null
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SavingsGoalInput {
+  name: string
+  targetAmount: number
+  currentAmount: number
+  targetDate: string
+  instrumentId: number | null
+  notes: string
+  isActive: boolean
 }

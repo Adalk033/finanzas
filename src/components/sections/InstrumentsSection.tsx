@@ -1,6 +1,7 @@
 import { useState, type SyntheticEvent } from 'react'
 import { formatCurrency } from '../../app/appHelpers'
 import type { Bank, FinancialInstrument, FinancialInstrumentInput, InstrumentType } from '../../types/domain'
+import type { ReconciliationInput } from '../../types/domain'
 
 type InstrumentGroup = {
   bank: Bank | undefined
@@ -24,6 +25,7 @@ type InstrumentsSectionProps = {
   onReload: () => void
   onEdit: (instrument: FinancialInstrument) => void
   onDelete: (instrumentId: number) => void
+  onReconcile: (instrumentId: number, payload: ReconciliationInput) => void
 }
 
 export function InstrumentsSection({
@@ -43,9 +45,38 @@ export function InstrumentsSection({
   onReload,
   onEdit,
   onDelete,
+  onReconcile,
 }: InstrumentsSectionProps) {
   const [isFormOpen, setIsFormOpen] = useState(editingInstrumentId !== null)
   const isFormVisible = isFormOpen || editingInstrumentId !== null
+  const accountOptions = groupedInstruments
+    .flatMap((group) => group.instruments)
+    .filter((instrument) => instrument.type === 'account' && instrument.isActive)
+
+  const startReconciliation = (instrument: FinancialInstrument): void => {
+    const raw = window.prompt(
+      `Saldo real de ${instrument.name}`,
+      String(
+        instrument.type === 'credit_card'
+          ? (instrument.currentBalance ?? 0)
+          : (instrument.currentAmount ?? 0),
+      ),
+    )
+    if (raw === null) return
+    const actualBalance = Number(raw)
+    if (!Number.isFinite(actualBalance) || actualBalance < 0) return
+    const now = new Date()
+    const reconciliationDate = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, '0'),
+      String(now.getDate()).padStart(2, '0'),
+    ].join('-')
+    onReconcile(instrument.id, {
+      actualBalance,
+      reconciliationDate,
+      notes: 'Conciliacion manual',
+    })
+  }
 
   return (
     <section className="card">
@@ -83,7 +114,7 @@ export function InstrumentsSection({
               required
             >
               <option value={0}>Selecciona banco</option>
-              {banks.map((bank) => (
+              {banks.filter((bank) => bank.isActive).map((bank) => (
                 <option key={bank.id} value={bank.id}>{bank.name}</option>
               ))}
             </select>
@@ -178,9 +209,29 @@ export function InstrumentsSection({
                   type="number"
                   step="0.01"
                   value={instrumentForm.currentAmount ?? 0}
+                  disabled={instrumentForm.type === 'debit_card' && instrumentForm.linkedAccountId !== null}
                   onChange={(event) => onInstrumentFormChange({ ...instrumentForm, currentAmount: Number(event.target.value) })}
                   required
                 />
+                {instrumentForm.type === 'debit_card' ? (
+                  <>
+                    <label className="form-grid__field" htmlFor="linkedAccount">Cuenta vinculada</label>
+                    <select
+                      id="linkedAccount"
+                      className="form-grid__input"
+                      value={instrumentForm.linkedAccountId ?? ''}
+                      onChange={(event) => onInstrumentFormChange({
+                        ...instrumentForm,
+                        linkedAccountId: event.target.value ? Number(event.target.value) : null,
+                      })}
+                    >
+                      <option value="">Saldo independiente</option>
+                      {accountOptions.map((account) => (
+                        <option key={account.id} value={account.id}>{account.name}</option>
+                      ))}
+                    </select>
+                  </>
+                ) : null}
               </>
             )}
 
@@ -232,20 +283,25 @@ export function InstrumentsSection({
                   <tbody>
                     {group.instruments.map((instrument) => (
                       <tr key={instrument.id}>
-                        <td>{instrument.name}</td>
+                        <td>{instrument.name}{instrument.isActive ? '' : ' · Archivado'}</td>
                         <td>{instrument.type}</td>
                         <td>
                           {instrument.type === 'credit_card'
                             ? `Corte ${instrument.cutOffDay ?? '-'} / Pago ${instrument.paymentDueDay ?? '-'} / Limite ${formatCurrency(instrument.creditLimit)} / Saldo ${formatCurrency(instrument.currentBalance)}`
-                            : `Saldo ${formatCurrency(instrument.currentAmount)}`}
+                            : `Saldo ${formatCurrency(instrument.currentAmount)}${instrument.linkedAccountName ? ` / Vinculada a ${instrument.linkedAccountName}` : ''}`}
                         </td>
                         <td>
                           <div className="table__actions">
                             <button className="button button--secondary" type="button" onClick={() => onEdit(instrument)}>
                               Editar
                             </button>
+                            {instrument.isActive ? (
+                              <button className="button button--secondary" type="button" onClick={() => startReconciliation(instrument)}>
+                                Conciliar
+                              </button>
+                            ) : null}
                             <button className="button button--danger" type="button" onClick={() => onDelete(instrument.id)}>
-                              Eliminar
+                              Archivar
                             </button>
                           </div>
                         </td>

@@ -53,6 +53,26 @@ El archivo `finanzas.sqlite` se crea en el directorio de datos de Electron. Los
 montos se guardan como centavos enteros y las operaciones que afectan saldos son
 atomicas. La pantalla Settings muestra la ruta exacta del archivo en cada equipo.
 
+La aplicacion mantiene un historial auditable:
+
+- los saldos con movimientos se corrigen mediante conciliaciones;
+- los pagos de tarjeta se distribuyen entre estados pendientes;
+- los pagos de prestamos separan capital e interes y pueden revertirse;
+- los gastos fijos pagados generan su movimiento financiero relacionado;
+- las tarjetas de debito pueden vincularse a una cuenta para no duplicar dinero;
+- suscripciones e ingresos recurrentes generan movimientos con un origen identificable.
+
+## Respaldo e intercambio
+
+Desde Configuracion se puede:
+
+- crear un respaldo SQLite;
+- restaurar un respaldo validado, conservando antes una copia automatica;
+- exportar movimientos a CSV;
+- importar el mismo formato CSV con deteccion de duplicados.
+
+El esquema usa migraciones compatibles y actualmente reporta la version `2`.
+
 ## Empaquetado desktop
 
 Genera instaladores en `release/`:

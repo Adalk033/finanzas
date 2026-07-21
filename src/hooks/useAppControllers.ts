@@ -13,6 +13,8 @@ import { useSimulatorController } from './useSimulatorController'
 import { useRemindersController } from './useRemindersController'
 import { useSectionDataLoader } from './useSectionDataLoader'
 import { useFinanceSelectors } from './useFinanceSelectors'
+import { useRecurringIncomesController } from './useRecurringIncomesController'
+import { useSavingsGoalsController } from './useSavingsGoalsController'
 
 export function useAppControllers() {
   const databaseController = useLocalDatabase()
@@ -43,6 +45,11 @@ export function useAppControllers() {
   const budgetsController = useBudgetsController()
   const simulatorController = useSimulatorController({ instruments: instrumentsController.instruments })
   const remindersController = useRemindersController()
+  const recurringIncomesController = useRecurringIncomesController({
+    instruments: instrumentsController.instruments,
+    categories: categoriesController.categories,
+  })
+  const savingsGoalsController = useSavingsGoalsController(instrumentsController.instruments)
 
   const selectors = useFinanceSelectors({
     banks: banksController.banks,
@@ -65,9 +72,11 @@ export function useAppControllers() {
     loadStatements: creditCardsController.loadStatements,
     loadTransfers: creditCardsController.loadTransfers,
     loadSubscriptions: subscriptionsController.loadSubscriptions,
+    loadRecurringIncomes: recurringIncomesController.loadRecurringIncomes,
     loadFixedExpenses: fixedExpensesController.loadFixedExpenses,
     loadLoans: loansController.loadLoans,
     loadBudgets: budgetsController.loadBudgets,
+    loadSavingsGoals: savingsGoalsController.loadSavingsGoals,
     loadReminders: remindersController.loadReminders,
     loadSimulations: simulatorController.loadSimulations,
   })
@@ -91,5 +100,7 @@ export function useAppControllers() {
     remindersController,
     selectors,
     transactionsController,
+    recurringIncomesController,
+    savingsGoalsController,
   }
 }

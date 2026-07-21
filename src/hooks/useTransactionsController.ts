@@ -128,7 +128,7 @@ export function useTransactionsController({
 
   const startTransactionEdit = (transaction: Transaction): void => {
     setEditingTransactionId(transaction.id)
-    setExcludeFromBalance(isExcludedByNotes(transaction.notes))
+    setExcludeFromBalance(!transaction.affectsBalance || isExcludedByNotes(transaction.notes))
     setTransactionForm({
       instrumentId: transaction.instrumentId,
       categoryId: transaction.categoryId,
@@ -141,6 +141,7 @@ export function useTransactionsController({
       notes: stripNoBalancePrefix(transaction.notes ?? ''),
       isMsi: transaction.isMsi,
       msiMonths: transaction.msiMonths,
+      affectsBalance: transaction.affectsBalance,
     })
   }
 
@@ -148,6 +149,8 @@ export function useTransactionsController({
     setTransactionForm((previous) => ({
       ...previous,
       type: nextType,
+      categoryId: null,
+      subcategoryId: null,
       isMsi: nextType === 'expense' ? previous.isMsi : false,
       msiMonths: nextType === 'expense' ? previous.msiMonths : null,
     }))
@@ -170,7 +173,8 @@ export function useTransactionsController({
       categoryId: selectedTransactionCategoryId,
       subcategoryId: transactionForm.subcategoryId,
       description: transactionForm.description.trim(),
-      notes: buildNotesWithBalanceFlag(transactionForm.notes, canExcludeFromBalance && excludeFromBalance),
+      notes: buildNotesWithBalanceFlag(transactionForm.notes, false),
+      affectsBalance: !(canExcludeFromBalance && excludeFromBalance),
       isMsi: transactionForm.type === 'expense' ? transactionForm.isMsi : false,
       msiMonths: transactionForm.type === 'expense' && transactionForm.isMsi ? transactionForm.msiMonths : null,
     }

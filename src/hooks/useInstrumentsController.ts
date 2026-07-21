@@ -2,6 +2,7 @@ import { useMemo, useState, type SyntheticEvent } from 'react'
 import { apiClient } from '../api/client'
 import { EMPTY_INSTRUMENT_FORM, toEditableInstrument } from '../app/appHelpers'
 import type { Bank, FinancialInstrument, FinancialInstrumentInput, InstrumentType } from '../types/domain'
+import type { ReconciliationInput } from '../types/domain'
 
 export function useInstrumentsController() {
   const [instruments, setInstruments] = useState<FinancialInstrument[]>([])
@@ -40,6 +41,7 @@ export function useInstrumentsController() {
       paymentDueDay: nextType === 'credit_card' ? previous.paymentDueDay ?? 1 : null,
       annualRate: nextType === 'credit_card' ? previous.annualRate : null,
       currentAmount: nextType === 'credit_card' ? null : previous.currentAmount ?? 0,
+      linkedAccountId: nextType === 'debit_card' ? previous.linkedAccountId : null,
     }))
   }
 
@@ -151,6 +153,21 @@ export function useInstrumentsController() {
     await loadInstruments()
   }
 
+  const handleInstrumentReconcile = async (
+    id: number,
+    payload: ReconciliationInput,
+  ): Promise<void> => {
+    setInstrumentError('')
+    setInstrumentMessage('')
+    const result = await apiClient.reconcileInstrument(id, payload)
+    if (!result.success) {
+      setInstrumentError(result.error ?? 'No se pudo conciliar el saldo.')
+      return
+    }
+    setInstrumentMessage('Saldo conciliado mediante un ajuste auditable.')
+    await loadInstruments()
+  }
+
   const banksById = useMemo(() => {
     return (banks: Bank[]) => new Map(banks.map((bank) => [bank.id, bank]))
   }, [])
@@ -191,6 +208,7 @@ export function useInstrumentsController() {
     startInstrumentEdit,
     handleInstrumentSubmit,
     handleInstrumentDelete,
+    handleInstrumentReconcile,
     groupedInstrumentsByBank,
   }
 }
