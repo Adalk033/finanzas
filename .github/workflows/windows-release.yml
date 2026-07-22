@@ -39,7 +39,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build desktop package
-        run: pnpm run electron:build -- --${{ matrix.platform }} --x64 --publish never
+        run: pnpm run electron:build --${{ matrix.platform }} --x64
 
       - name: Upload package artifacts
         uses: actions/upload-artifact@v4

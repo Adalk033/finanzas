@@ -2,6 +2,7 @@ appId: com.finanzaslit.desktop
 productName: Finanzas Lit
 directories:
   output: release
+publish: null
 files:
   - dist
   - dist-electron
