@@ -17,7 +17,7 @@
     "test:local": "node scripts/run-local-smoke.mjs",
     "check": "pnpm run lint && pnpm run build && pnpm run test:local",
     "preview": "vite preview",
-    "electron:build": "pnpm run build && electron-builder --config electron-builder.yml"
+    "electron:build": "pnpm run build && electron-builder --config electron-builder.yml --publish never"
   },
   "dependencies": {
     "better-sqlite3": "^12.8.0",
