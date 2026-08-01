@@ -103,8 +103,6 @@ function sanitizeBankPayload(payload: BankInput): Record<string, unknown> {
   }
 
   setTrimmedIfPresent(sanitized, 'shortName', payload.shortName)
-  setTrimmedIfPresent(sanitized, 'color', payload.color)
-  setTrimmedIfPresent(sanitized, 'iconName', payload.iconName)
 
   return sanitized
 }

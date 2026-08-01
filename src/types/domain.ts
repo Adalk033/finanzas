@@ -14,8 +14,6 @@ export interface Bank {
   id: number
   name: string
   shortName: string | null
-  color: string | null
-  iconName: string | null
   isActive: boolean
   createdAt: string
   updatedAt: string
@@ -24,8 +22,6 @@ export interface Bank {
 export interface BankInput {
   name: string
   shortName: string
-  color: string
-  iconName: string
   isActive: boolean
 }
 

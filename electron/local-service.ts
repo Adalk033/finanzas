@@ -205,8 +205,6 @@ function mapBank(row: DbRow): Record<string, unknown> {
     id: toNumber(row.id),
     name: row.name,
     shortName: row.short_name ?? null,
-    color: row.color ?? null,
-    iconName: row.icon_name ?? null,
     isActive: toBoolean(row.is_active),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -689,28 +687,20 @@ function listBanks(db: Database.Database): Record<string, unknown>[] {
 function saveBank(db: Database.Database, body: Input, id?: number): Record<string, unknown> {
   const name = requiredString(body, 'name', 100)
   const shortName = optionalString(body, 'shortName', 20)
-  const color = optionalString(body, 'color', 7)
-  const iconName = optionalString(body, 'iconName', 50)
   const isActive = requiredBoolean(body, 'isActive', true)
-  if (color && !HEX_COLOR.test(color)) {
-    throw new ValidationError('color debe usar el formato #RRGGBB.')
-  }
-  if (iconName && !ICON_NAME.test(iconName)) {
-    throw new ValidationError('iconName solo admite letras y numeros.')
-  }
 
   if (id) {
     requireEntity(db, 'banks', id)
     db.prepare(`
       UPDATE banks
-      SET name = ?, short_name = ?, color = ?, icon_name = ?, is_active = ?, updated_at = datetime('now')
+      SET name = ?, short_name = ?, is_active = ?, updated_at = datetime('now')
       WHERE id = ?
-    `).run(name, shortName, color, iconName, Number(isActive), id)
+    `).run(name, shortName, Number(isActive), id)
   } else {
     const result = db.prepare(`
-      INSERT INTO banks (name, short_name, color, icon_name, is_active)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(name, shortName, color, iconName, Number(isActive))
+      INSERT INTO banks (name, short_name, is_active)
+      VALUES (?, ?, ?)
+    `).run(name, shortName, Number(isActive))
     id = Number(result.lastInsertRowid)
   }
   return mapBank(asRow(db.prepare('SELECT * FROM banks WHERE id = ?').get(id)))

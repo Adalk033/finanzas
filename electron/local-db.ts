@@ -27,8 +27,6 @@ const SCHEMA = `
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 100),
     short_name TEXT CHECK (short_name IS NULL OR length(short_name) <= 20),
-    color TEXT,
-    icon_name TEXT,
     is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -321,6 +319,7 @@ function hasColumn(table: string, column: string): boolean {
     return false
   }
   const allowedTables = new Set([
+    'banks',
     'financial_instruments',
     'transactions',
     'loan_payments',
@@ -334,6 +333,22 @@ function hasColumn(table: string, column: string): boolean {
   }
   const columns = database.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
   return columns.some((item) => item.name === column)
+}
+
+function removeDeprecatedBankColumns(): void {
+  if (!database) {
+    return
+  }
+  const db = database
+
+  db.transaction(() => {
+    if (hasColumn('banks', 'color')) {
+      db.exec('ALTER TABLE banks DROP COLUMN color')
+    }
+    if (hasColumn('banks', 'icon_name')) {
+      db.exec('ALTER TABLE banks DROP COLUMN icon_name')
+    }
+  })()
 }
 
 function addColumn(table: string, definition: string, column: string): void {
@@ -374,6 +389,7 @@ function addColumn(table: string, definition: string, column: string): void {
 }
 
 function migrateSchema(): void {
+  removeDeprecatedBankColumns()
   addColumn(
     'financial_instruments',
     'linked_account_id INTEGER REFERENCES financial_instruments(id)',
@@ -459,7 +475,7 @@ export function initializeLocalDb(dbPath: string): void {
 
   database.prepare(`
     INSERT INTO app_metadata (key, value)
-    VALUES ('schema_version', '4')
+    VALUES ('schema_version', '5')
     ON CONFLICT(key) DO UPDATE SET value = excluded.value
   `).run()
 }

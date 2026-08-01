@@ -2,9 +2,11 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import assert from 'node:assert/strict'
+import Database from 'better-sqlite3'
 import {
   backupLocalDb,
   closeLocalDb,
+  getDatabase,
   initializeLocalDb,
   restoreLocalDb,
 } from '../electron/local-db.js'
@@ -16,6 +18,52 @@ import {
 
 const tempDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'finanzas-lit-'))
 const databasePath = path.join(tempDirectory, 'smoke.sqlite')
+
+function verifyDeprecatedBankColumnsMigration(): void {
+  const legacyPath = path.join(tempDirectory, 'legacy.sqlite')
+  const legacyDb = new Database(legacyPath)
+  legacyDb.exec(`
+    PRAGMA foreign_keys = ON;
+    CREATE TABLE banks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      short_name TEXT,
+      color TEXT,
+      icon_name TEXT,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    INSERT INTO banks (name, short_name, color, icon_name)
+    VALUES ('Banco legado', 'Legado', '#123456', 'Landmark');
+    CREATE TABLE financial_instruments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      bank_id INTEGER NOT NULL REFERENCES banks(id),
+      name TEXT NOT NULL
+    );
+    INSERT INTO financial_instruments (bank_id, name)
+    VALUES (1, 'Cuenta legada');
+  `)
+  legacyDb.close()
+
+  initializeLocalDb(legacyPath)
+  const columns = new Set(
+    (getDatabase().prepare('PRAGMA table_info(banks)')
+      .all() as Array<{ name: string }>).map((column) => column.name),
+  )
+  const migratedBank = request<Array<{ name: string; shortName: string }>>('/banks')[0]
+  const migratedInstrument = getDatabase()
+    .prepare('SELECT bank_id FROM financial_instruments WHERE name = ?')
+    .get('Cuenta legada') as { bank_id: number }
+  const foreignKeyErrors = getDatabase().prepare('PRAGMA foreign_key_check').all()
+  assert.equal(columns.has('color'), false)
+  assert.equal(columns.has('icon_name'), false)
+  assert.equal(migratedBank?.name, 'Banco legado')
+  assert.equal(migratedBank?.shortName, 'Legado')
+  assert.equal(migratedInstrument.bank_id, 1)
+  assert.deepEqual(foreignKeyErrors, [])
+  closeLocalDb()
+}
 
 function request<T>(pathValue: string, method = 'GET', body?: Record<string, unknown>): T {
   const response = handleLocalRequest({
@@ -42,6 +90,7 @@ function requestFailure(
 }
 
 try {
+  verifyDeprecatedBankColumnsMigration()
   initializeLocalDb(databasePath)
 
   const defaultDashboardPreferences = request<{ expensePeriod: string }>('/dashboard/preferences')
@@ -60,8 +109,6 @@ try {
   const bank = request<{ id: number }>('/banks', 'POST', {
     name: 'Banco local',
     shortName: 'Local',
-    color: '#3366FF',
-    iconName: 'Landmark',
     isActive: true,
   })
   const debit = request<{ id: number; currentAmount: number }>('/instruments', 'POST', {
@@ -393,7 +440,7 @@ try {
   assert.equal(typeof simulation.isFavorable, 'boolean')
 
   const info = request<{ schemaVersion: string }>('/database/info')
-  assert.equal(info.schemaVersion, '4')
+  assert.equal(info.schemaVersion, '5')
 
   const cardBeforeHistorical = request<Array<{
     id: number
