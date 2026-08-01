@@ -29,11 +29,14 @@ const CATEGORY_TYPES = new Set(['expense', 'income', 'both'])
 const TRANSACTION_TYPES = new Set(['expense', 'income'])
 const TRANSFER_TYPES = new Set(['card_payment', 'inter_account', 'other'])
 const PAYMENT_TYPES = new Set(['fixed', 'variable'])
+const LOAN_PAYMENT_FREQUENCIES = new Set(['weekly', 'biweekly', 'monthly'])
 const BILLING_CYCLES = new Set(['monthly', 'yearly', 'weekly'])
 const SIMULATION_TYPES = new Set(['direct_purchase', 'msi', 'loan'])
 const REMINDER_TYPES = new Set(['payment', 'cutoff', 'subscription', 'loan', 'custom'])
 const RECURRING_INCOME_FREQUENCIES = new Set(['weekly', 'biweekly', 'monthly', 'yearly'])
 const MSI_MONTHS = new Set([3, 6, 9, 12, 18, 24])
+const DASHBOARD_EXPENSE_PERIODS = new Set(['current_month', 'previous_month', 'last_3_months', 'last_year'])
+const DASHBOARD_EXPENSE_PERIOD_DEFAULT = 'current_month'
 
 class ValidationError extends Error {}
 class NotFoundError extends Error {}
@@ -335,10 +338,12 @@ function mapLoan(row: DbRow): Record<string, unknown> {
     paymentType: row.payment_type,
     fixedPayment: fromCents(row.fixed_payment_cents),
     paymentDay: toNullableNumber(row.payment_day),
+    paymentFrequency: row.payment_frequency ?? 'monthly',
     startDate: row.start_date,
     endDate: row.end_date ?? null,
     instrumentId: toNullableNumber(row.instrument_id),
     instrumentName: row.instrument_name ?? null,
+    affectsInstrumentBalance: toBoolean(row.affects_instrument_balance),
     notes: row.notes ?? null,
     isActive: toBoolean(row.is_active),
     createdAt: row.created_at,
@@ -359,6 +364,7 @@ function mapLoanPayment(row: DbRow): Record<string, unknown> {
     paidDate: row.paid_date ?? null,
     notes: row.notes ?? null,
     transactionId: toNullableNumber(row.transaction_id),
+    affectsInstrumentBalance: toBoolean(row.affects_instrument_balance),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -434,6 +440,7 @@ function mapReminder(row: DbRow): Record<string, unknown> {
     referenceType: row.reference_type ?? null,
     isRead: toBoolean(row.is_read),
     isDismissed: toBoolean(row.is_dismissed),
+    isAutomatic: toBoolean(row.is_automatic),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -1844,13 +1851,18 @@ function validateLoan(db: Database.Database, body: Input): {
   paymentType: string
   fixedPaymentCents: number | null
   paymentDay: number | null
+  paymentFrequency: string
   startDate: string
   endDate: string | null
   instrumentId: number | null
+  affectsInstrumentBalance: boolean
   notes: string | null
   isActive: boolean
 } {
   const paymentType = requiredEnum(body, 'paymentType', PAYMENT_TYPES)
+  const paymentFrequency = body.paymentFrequency === undefined
+    ? 'monthly'
+    : requiredEnum(body, 'paymentFrequency', LOAN_PAYMENT_FREQUENCIES)
   const fixedPaymentCents = optionalMoneyToCents(body, 'fixedPayment')
   const annualRate = optionalRate(body, 'annualRate')
   if (paymentType === 'fixed' && fixedPaymentCents === null) {
@@ -1879,13 +1891,32 @@ function validateLoan(db: Database.Database, body: Input): {
     totalInstallments: requiredInteger(body, 'totalInstallments', 1, 600),
     paymentType,
     fixedPaymentCents,
-    paymentDay: optionalInteger(body, 'paymentDay', 1, 31),
+    paymentDay: paymentFrequency === 'monthly' ? optionalInteger(body, 'paymentDay', 1, 31) : null,
+    paymentFrequency,
     startDate: requiredDate(body, 'startDate'),
     endDate: optionalDate(body, 'endDate'),
     instrumentId,
+    affectsInstrumentBalance: requiredBoolean(body, 'affectsInstrumentBalance', true),
     notes: optionalString(body, 'notes', 2000),
     isActive: requiredBoolean(body, 'isActive', true),
   }
+}
+
+function loanPaymentsPerYear(paymentFrequency: string): number {
+  if (paymentFrequency === 'weekly') return 52
+  if (paymentFrequency === 'biweekly') return 26
+  return 12
+}
+
+function loanPaymentDate(
+  startDate: string,
+  installment: number,
+  paymentFrequency: string,
+  paymentDay: number | null,
+): string {
+  if (paymentFrequency === 'weekly') return addDays(startDate, (installment - 1) * 7)
+  if (paymentFrequency === 'biweekly') return addDays(startDate, (installment - 1) * 14)
+  return addMonths(startDate, installment - 1, paymentDay)
 }
 
 function rebuildLoanSchedule(
@@ -1898,9 +1929,10 @@ function rebuildLoanSchedule(
   fixedPaymentCents: number | null,
   startDate: string,
   paymentDay: number | null,
+  paymentFrequency: string,
 ): void {
   db.prepare('DELETE FROM loan_payments WHERE loan_id = ?').run(loanId)
-  const monthlyRate = (annualRate ?? 0) / 100 / 12
+  const periodRate = (annualRate ?? 0) / 100 / loanPaymentsPerYear(paymentFrequency)
   const variablePayment = Math.round(originalAmountCents / totalInstallments)
   let remaining = originalAmountCents
   const insert = db.prepare(`
@@ -1909,12 +1941,12 @@ function rebuildLoanSchedule(
     ) VALUES (?, ?, ?, ?, ?, ?)
   `)
   for (let installment = 1; installment <= totalInstallments; installment += 1) {
-    const interest = Math.round(remaining * monthlyRate)
+    const interest = Math.round(remaining * periodRate)
     const requestedPayment = paymentType === 'fixed'
       ? (fixedPaymentCents ?? 0)
       : variablePayment
     if (paymentType === 'fixed' && requestedPayment <= interest) {
-      throw new ValidationError('El pago fijo debe ser mayor al interes mensual inicial.')
+      throw new ValidationError('El pago fijo debe ser mayor al interes inicial del periodo.')
     }
     const equalPrincipal = Math.round(originalAmountCents / totalInstallments)
     const principal = installment === totalInstallments
@@ -1929,7 +1961,7 @@ function rebuildLoanSchedule(
       amount,
       principal,
       interest,
-      addMonths(startDate, installment - 1, paymentDay),
+      loanPaymentDate(startDate, installment, paymentFrequency, paymentDay),
     )
     remaining -= principal
   }
@@ -1943,7 +1975,8 @@ function rebuildRemainingLoanSchedule(db: Database.Database, loanId: number): vo
     ORDER BY installment_num
   `).all(loanId) as Array<{ id: number }>
   if (pending.length === 0) return
-  const monthlyRate = (toNumber(loan.annual_rate) || 0) / 100 / 12
+  const paymentFrequency = String(loan.payment_frequency ?? 'monthly')
+  const periodRate = (toNumber(loan.annual_rate) || 0) / 100 / loanPaymentsPerYear(paymentFrequency)
   const paymentType = String(loan.payment_type)
   const fixedPayment = toNullableNumber(loan.fixed_payment_cents) ?? 0
   let remaining = toNumber(loan.remaining_amount_cents)
@@ -1954,9 +1987,9 @@ function rebuildRemainingLoanSchedule(db: Database.Database, loanId: number): vo
     WHERE id = ?
   `)
   pending.forEach((payment, index) => {
-    const interest = Math.round(remaining * monthlyRate)
+    const interest = Math.round(remaining * periodRate)
     if (paymentType === 'fixed' && fixedPayment <= interest) {
-      throw new ValidationError('El pago fijo ya no cubre el interes del saldo pendiente.')
+      throw new ValidationError('El pago fijo ya no cubre el interes del saldo pendiente del periodo.')
     }
     const principal = index === pending.length - 1
       ? remaining
@@ -1983,17 +2016,18 @@ function saveLoan(db: Database.Database, body: Input, id?: number): Record<strin
           toNumber(previous.original_amount_cents) !== input.originalAmountCents
           || toNumber(previous.total_installments) !== input.totalInstallments
           || previous.payment_type !== input.paymentType
+          || previous.payment_frequency !== input.paymentFrequency
         ) {
           throw new ValidationError('No se pueden cambiar los terminos de un prestamo con pagos registrados.')
         }
         db.prepare(`
           UPDATE loans
           SET name = ?, lender = ?, annual_rate = ?, fixed_payment_cents = ?, payment_day = ?,
-              end_date = ?, instrument_id = ?, notes = ?, is_active = ?, updated_at = datetime('now')
+              end_date = ?, instrument_id = ?, affects_instrument_balance = ?, notes = ?, is_active = ?, updated_at = datetime('now')
           WHERE id = ?
         `).run(
           input.name, input.lender, input.annualRate, input.fixedPaymentCents, input.paymentDay,
-          input.endDate, input.instrumentId, input.notes, Number(input.isActive), id,
+          input.endDate, input.instrumentId, Number(input.affectsInstrumentBalance), input.notes, Number(input.isActive), id,
         )
         rebuildRemainingLoanSchedule(db, id)
         return
@@ -2002,33 +2036,33 @@ function saveLoan(db: Database.Database, body: Input, id?: number): Record<strin
         UPDATE loans
         SET name = ?, lender = ?, currency_id = ?, original_amount_cents = ?,
             remaining_amount_cents = ?, annual_rate = ?, total_installments = ?,
-            payment_type = ?, fixed_payment_cents = ?, payment_day = ?, start_date = ?,
-            end_date = ?, instrument_id = ?, notes = ?, is_active = ?, updated_at = datetime('now')
+            payment_type = ?, fixed_payment_cents = ?, payment_day = ?, payment_frequency = ?, start_date = ?,
+            end_date = ?, instrument_id = ?, affects_instrument_balance = ?, notes = ?, is_active = ?, updated_at = datetime('now')
         WHERE id = ?
       `).run(
         input.name, input.lender, input.currencyId, input.originalAmountCents,
         input.originalAmountCents, input.annualRate, input.totalInstallments,
-        input.paymentType, input.fixedPaymentCents, input.paymentDay, input.startDate,
-        input.endDate, input.instrumentId, input.notes, Number(input.isActive), id,
+        input.paymentType, input.fixedPaymentCents, input.paymentDay, input.paymentFrequency, input.startDate,
+        input.endDate, input.instrumentId, Number(input.affectsInstrumentBalance), input.notes, Number(input.isActive), id,
       )
     } else {
       const result = db.prepare(`
         INSERT INTO loans (
           name, lender, currency_id, original_amount_cents, remaining_amount_cents,
           annual_rate, total_installments, payment_type, fixed_payment_cents,
-          payment_day, start_date, end_date, instrument_id, notes, is_active
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          payment_day, payment_frequency, start_date, end_date, instrument_id, affects_instrument_balance, notes, is_active
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         input.name, input.lender, input.currencyId, input.originalAmountCents,
         input.originalAmountCents, input.annualRate, input.totalInstallments,
-        input.paymentType, input.fixedPaymentCents, input.paymentDay, input.startDate,
-        input.endDate, input.instrumentId, input.notes, Number(input.isActive),
+        input.paymentType, input.fixedPaymentCents, input.paymentDay, input.paymentFrequency, input.startDate,
+        input.endDate, input.instrumentId, Number(input.affectsInstrumentBalance), input.notes, Number(input.isActive),
       )
       id = Number(result.lastInsertRowid)
     }
     rebuildLoanSchedule(
       db, id!, input.originalAmountCents, input.annualRate, input.totalInstallments,
-      input.paymentType, input.fixedPaymentCents, input.startDate, input.paymentDay,
+      input.paymentType, input.fixedPaymentCents, input.startDate, input.paymentDay, input.paymentFrequency,
     )
   })
   operation()
@@ -2061,10 +2095,10 @@ function payLoanInstallment(
       SELECT * FROM loan_payments WHERE loan_id = ? AND installment_num = ?
     `).get(loanId, installmentNum) as DbRow | undefined
     if (!payment) {
-      throw new NotFoundError('La mensualidad solicitada no existe.')
+      throw new NotFoundError('La cuota solicitada no existe.')
     }
     if (toBoolean(payment.is_paid)) {
-      throw new ValidationError('La mensualidad ya esta pagada.')
+      throw new ValidationError('La cuota ya esta pagada.')
     }
     const amountCents = body.amount === undefined
       ? toNumber(payment.amount_cents)
@@ -2078,7 +2112,8 @@ function payLoanInstallment(
       amountCents - interestCents,
     )
     const instrumentId = toNullableNumber(loan.instrument_id)
-    if (instrumentId !== null) {
+    const affectsInstrumentBalance = toBoolean(loan.affects_instrument_balance)
+    if (affectsInstrumentBalance && instrumentId !== null) {
       const instrument = getInstrument(db, instrumentId)
       if (instrument.type === 'credit_card') {
         throw new ValidationError('El pago del prestamo requiere una cuenta o tarjeta de debito.')
@@ -2091,7 +2126,7 @@ function payLoanInstallment(
       `).run(amountCents, balanceInstrument.id)
     }
     let transactionId: number | null = null
-    if (interestCents > 0 && instrumentId !== null) {
+    if (affectsInstrumentBalance && interestCents > 0 && instrumentId !== null) {
       const transaction = db.prepare(`
         INSERT INTO transactions (
           instrument_id, currency_id, type, amount_cents, description,
@@ -2111,9 +2146,12 @@ function payLoanInstallment(
     db.prepare(`
       UPDATE loan_payments
       SET amount_cents = ?, principal_cents = ?, interest_cents = ?, is_paid = 1,
-          paid_date = ?, notes = ?, transaction_id = ?, updated_at = datetime('now')
+          paid_date = ?, notes = ?, transaction_id = ?, affects_instrument_balance = ?, updated_at = datetime('now')
       WHERE id = ?
-    `).run(amountCents, principalCents, interestCents, paidDate, notes, transactionId, payment.id)
+    `).run(
+      amountCents, principalCents, interestCents, paidDate, notes, transactionId,
+      Number(affectsInstrumentBalance), payment.id,
+    )
     db.prepare(`
       UPDATE loans
       SET remaining_amount_cents = MAX(remaining_amount_cents - ?, 0),
@@ -2151,7 +2189,7 @@ function undoLoanInstallment(
       throw new ValidationError('La cuota no esta pagada.')
     }
     const instrumentId = toNullableNumber(loan.instrument_id)
-    if (instrumentId !== null) {
+    if (toBoolean(payment.affects_instrument_balance) && instrumentId !== null) {
       const instrument = getBalanceInstrument(db, getInstrument(db, instrumentId, false))
       db.prepare(`
         UPDATE financial_instruments
@@ -2163,6 +2201,7 @@ function undoLoanInstallment(
     db.prepare(`
       UPDATE loan_payments
       SET is_paid = 0, paid_date = NULL, notes = NULL, transaction_id = NULL,
+          affects_instrument_balance = 1,
           updated_at = datetime('now')
       WHERE id = ?
     `).run(payment.id)
@@ -3065,18 +3104,50 @@ function deleteReminder(db: Database.Database, id: number): { id: number } {
   return { id }
 }
 
+function deletePendingReminders(db: Database.Database): { deletedCount: number; dismissedCount: number } {
+  const operation = db.transaction(() => {
+    const dismissed = db.prepare(`
+      UPDATE reminders
+      SET is_dismissed = 1, updated_at = datetime('now')
+      WHERE is_read = 0 AND is_dismissed = 0 AND is_automatic = 1
+    `).run()
+    const deleted = db.prepare(`
+      DELETE FROM reminders
+      WHERE is_read = 0 AND is_dismissed = 0
+    `).run()
+    return { deletedCount: deleted.changes, dismissedCount: dismissed.changes }
+  })
+  return operation()
+}
+
+function deleteDismissedReminders(db: Database.Database): { deletedCount: number } {
+  const result = db.prepare(`
+    DELETE FROM reminders
+    WHERE is_dismissed = 1
+  `).run()
+  return { deletedCount: result.changes }
+}
+
+function dismissAllReminders(db: Database.Database): { dismissedCount: number } {
+  const result = db.prepare(`
+    UPDATE reminders
+    SET is_dismissed = 1, updated_at = datetime('now')
+    WHERE is_dismissed = 0
+  `).run()
+  return { dismissedCount: result.changes }
+}
+
 function ensureAutomaticReminders(db: Database.Database): void {
   const until = addDays(todayIso(), 7)
   const exists = db.prepare(`
     SELECT id FROM reminders
     WHERE type = ? AND reference_type = ? AND reference_id = ? AND reminder_date = ?
-      AND is_dismissed = 0
     LIMIT 1
   `)
   const insert = db.prepare(`
     INSERT INTO reminders (
-      title, description, reminder_date, type, reference_id, reference_type
-    ) VALUES (?, ?, ?, ?, ?, ?)
+      title, description, reminder_date, type, reference_id, reference_type, is_automatic
+    ) VALUES (?, ?, ?, ?, ?, ?, 1)
   `)
   const statements = db.prepare(`
     SELECT st.id, st.payment_due_date, i.name
@@ -3170,6 +3241,7 @@ function getDashboardUpcomingCommitments(db: Database.Database): Record<string, 
     amountCents: number
     type: 'subscription' | 'fixed_expense' | 'loan_payment' | 'card_payment'
     instrumentName: string | null
+    affectsAvailableBalance: boolean
   }
   const commitments: Commitment[] = []
 
@@ -3193,6 +3265,7 @@ function getDashboardUpcomingCommitments(db: Database.Database): Record<string, 
       amountCents: toNumber(subscription.amount_cents),
       type: 'subscription',
       instrumentName: subscription.instrument_name,
+      affectsAvailableBalance: true,
     })
   }
 
@@ -3218,12 +3291,14 @@ function getDashboardUpcomingCommitments(db: Database.Database): Record<string, 
         amountCents: toNumber(expense.estimated_amount_cents),
         type: 'fixed_expense',
         instrumentName: expense.instrument_name,
+        affectsAvailableBalance: true,
       })
     }
   }
 
   const loanPayments = db.prepare(`
-    SELECT p.id, l.name, p.payment_date, p.amount_cents, i.name AS instrument_name
+    SELECT p.id, l.name, p.payment_date, p.amount_cents, l.affects_instrument_balance,
+           i.name AS instrument_name
     FROM loan_payments p
     JOIN loans l ON l.id = p.loan_id
     LEFT JOIN financial_instruments i ON i.id = l.instrument_id
@@ -3233,6 +3308,7 @@ function getDashboardUpcomingCommitments(db: Database.Database): Record<string, 
     name: string
     payment_date: string
     amount_cents: number
+    affects_instrument_balance: number
     instrument_name: string | null
   }>
   for (const payment of loanPayments) {
@@ -3243,6 +3319,7 @@ function getDashboardUpcomingCommitments(db: Database.Database): Record<string, 
       amountCents: toNumber(payment.amount_cents),
       type: 'loan_payment',
       instrumentName: payment.instrument_name,
+      affectsAvailableBalance: toBoolean(payment.affects_instrument_balance),
     })
   }
 
@@ -3267,11 +3344,15 @@ function getDashboardUpcomingCommitments(db: Database.Database): Record<string, 
       amountCents: toNumber(payment.amount_cents),
       type: 'card_payment',
       instrumentName: payment.name,
+      affectsAvailableBalance: true,
     })
   }
 
   commitments.sort((first, second) => first.date.localeCompare(second.date) || first.name.localeCompare(second.name))
-  const totalCents = commitments.reduce((sum, commitment) => sum + commitment.amountCents, 0)
+  const totalCents = commitments.reduce(
+    (sum, commitment) => sum + (commitment.affectsAvailableBalance ? commitment.amountCents : 0),
+    0,
+  )
   const summary = getDashboardSummary(db)
   return {
     total: totalCents / 100,
@@ -3283,18 +3364,50 @@ function getDashboardUpcomingCommitments(db: Database.Database): Record<string, 
   }
 }
 
-function getDashboardExpensesByCategory(db: Database.Database): Record<string, unknown>[] {
+function getDashboardExpensePeriod(db: Database.Database): string {
+  const row = db.prepare(`
+    SELECT value FROM app_metadata WHERE key = 'dashboard_expense_period'
+  `).get() as { value: string } | undefined
+  return row && DASHBOARD_EXPENSE_PERIODS.has(row.value) ? row.value : DASHBOARD_EXPENSE_PERIOD_DEFAULT
+}
+
+function getDashboardPreferences(db: Database.Database): Record<string, unknown> {
+  return { expensePeriod: getDashboardExpensePeriod(db) }
+}
+
+function saveDashboardPreferences(db: Database.Database, body: Input): Record<string, unknown> {
+  const expensePeriod = requiredEnum(body, 'expensePeriod', DASHBOARD_EXPENSE_PERIODS)
+  db.prepare(`
+    INSERT INTO app_metadata (key, value)
+    VALUES ('dashboard_expense_period', ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `).run(expensePeriod)
+  return { expensePeriod }
+}
+
+function getDashboardExpensesByCategory(db: Database.Database, period: string): Record<string, unknown>[] {
+  if (!DASHBOARD_EXPENSE_PERIODS.has(period)) {
+    throw new ValidationError('El periodo de gastos no es valido.')
+  }
+  const currentMonth = `${todayIso().slice(0, 7)}-01`
+  const periods: Record<string, { start: string; end: string }> = {
+    current_month: { start: currentMonth, end: addMonths(currentMonth, 1) },
+    previous_month: { start: addMonths(currentMonth, -1), end: currentMonth },
+    last_3_months: { start: addMonths(currentMonth, -2), end: addMonths(currentMonth, 1) },
+    last_year: { start: addMonths(currentMonth, -11), end: addMonths(currentMonth, 1) },
+  }
+  const selectedPeriod = periods[period]
   const rows = db.prepare(`
     SELECT COALESCE(c.name, 'Sin categoria') AS category, SUM(t.amount_cents) AS total
     FROM transactions t
     LEFT JOIN categories c ON c.id = t.category_id
     WHERE t.type = 'expense'
       AND COALESCE(t.source_type, '') NOT IN ('reconciliation', 'opening_balance')
-      AND t.transaction_date >= date('now', 'localtime', 'start of month')
-      AND t.transaction_date < date('now', 'localtime', 'start of month', '+1 month')
+      AND t.transaction_date >= ?
+      AND t.transaction_date < ?
     GROUP BY COALESCE(c.name, 'Sin categoria')
     ORDER BY total DESC
-  `).all() as Array<{ category: string; total: number }>
+  `).all(selectedPeriod.start, selectedPeriod.end) as Array<{ category: string; total: number }>
   return rows.map((row) => ({ category: row.category, total: row.total / 100 }))
 }
 
@@ -3342,7 +3455,7 @@ function getDashboardCashFlow(db: Database.Database): Record<string, unknown>[] 
         (SELECT COALESCE(SUM(p.amount_cents), 0)
           FROM loan_payments p
           JOIN loans l ON l.id = p.loan_id
-          WHERE p.is_paid = 1 AND l.instrument_id IS NOT NULL
+          WHERE p.is_paid = 1 AND p.affects_instrument_balance = 1 AND l.instrument_id IS NOT NULL
             AND p.paid_date >= ? AND p.paid_date < ?) AS total
     `).get(start, end, start, end) as { total: number }
     const income = toNumber(row.income) / 100
@@ -3422,6 +3535,7 @@ function getDashboardBalanceEvolution(db: Database.Database): Record<string, unk
         JOIN loans l ON l.id = p.loan_id
         LEFT JOIN financial_instruments payment_instrument ON payment_instrument.id = l.instrument_id
         WHERE p.is_paid = 1 AND p.paid_date >= ?
+          AND p.affects_instrument_balance = 1
           AND (l.instrument_id = ? OR payment_instrument.linked_account_id = ?)
       `).get(end, instrument.id, instrument.id) as { net: number }
       point[`instrument_${instrument.id}`] = (
@@ -3453,7 +3567,7 @@ function getMonthlyObligationsCents(db: Database.Database): number {
     SELECT COALESCE(SUM(amount_cents), 0) AS total
     FROM loan_payments p
     JOIN loans l ON l.id = p.loan_id
-    WHERE p.is_paid = 0 AND l.is_active = 1
+    WHERE p.is_paid = 0 AND l.is_active = 1 AND l.affects_instrument_balance = 1
       AND p.installment_num = (
         SELECT MIN(next_payment.installment_num)
         FROM loan_payments next_payment
@@ -3481,8 +3595,9 @@ function getDashboardFutureExpenses(db: Database.Database): Record<string, unkno
     `).get() as { total: number }
     const loans = db.prepare(`
       SELECT COALESCE(SUM(p.amount_cents), 0) AS total
-      FROM loan_payments p JOIN loans l ON l.id = p.loan_id
-      WHERE p.is_paid = 0 AND l.is_active = 1 AND p.payment_date >= ? AND p.payment_date < ?
+    FROM loan_payments p JOIN loans l ON l.id = p.loan_id
+      WHERE p.is_paid = 0 AND l.is_active = 1 AND l.affects_instrument_balance = 1
+        AND p.payment_date >= ? AND p.payment_date < ?
     `).get(start, end) as { total: number }
     const msiRows = db.prepare(`
       SELECT amount_cents, msi_months, msi_monthly_amount_cents, msi_start_date
@@ -3578,7 +3693,11 @@ function routeRequest(
   if (path === '/health' && method === 'GET') return { status: 'ready' }
   if (path === '/database/info' && method === 'GET') return databaseInfo(db)
   if (path === '/dashboard/summary' && method === 'GET') return getDashboardSummary(db)
-  if (path === '/dashboard/charts/expenses-by-category' && method === 'GET') return getDashboardExpensesByCategory(db)
+  if (path === '/dashboard/charts/expenses-by-category' && method === 'GET') {
+    return getDashboardExpensesByCategory(db, url.searchParams.get('period') ?? DASHBOARD_EXPENSE_PERIOD_DEFAULT)
+  }
+  if (path === '/dashboard/preferences' && method === 'GET') return getDashboardPreferences(db)
+  if (path === '/dashboard/preferences' && method === 'PUT') return saveDashboardPreferences(db, input())
   if (path === '/dashboard/charts/cash-flow' && method === 'GET') return getDashboardCashFlow(db)
   if (path === '/dashboard/charts/balance-evolution' && method === 'GET') return getDashboardBalanceEvolution(db)
   if (path === '/dashboard/charts/future-expenses' && method === 'GET') return getDashboardFutureExpenses(db)
@@ -3757,6 +3876,9 @@ function routeRequest(
   if (simulation && method === 'DELETE') return deleteSimulation(db, requireId(simulation))
 
   if (path === '/reminders/pending' && method === 'GET') return listReminders(db, true)
+  if (path === '/reminders/pending' && method === 'DELETE') return deletePendingReminders(db)
+  if (path === '/reminders/dismissed' && method === 'DELETE') return deleteDismissedReminders(db)
+  if (path === '/reminders/dismiss-all' && method === 'PUT') return dismissAllReminders(db)
   const reminderResult = entityRoute(
     '/reminders',
     () => listReminders(db, false),

@@ -33,6 +33,8 @@ import type {
   DashboardBalanceEvolution,
   DashboardCashFlowPoint,
   DashboardExpenseByCategory,
+  DashboardExpensePeriod,
+  DashboardPreferences,
   DashboardFutureExpensePoint,
   DashboardUpcomingCommitments,
   DashboardSummary,
@@ -236,6 +238,8 @@ function sanitizeLoanPayload(payload: LoanInput): Record<string, unknown> {
     originalAmount: payload.originalAmount,
     totalInstallments: payload.totalInstallments,
     paymentType: payload.paymentType,
+    paymentFrequency: payload.paymentFrequency,
+    affectsInstrumentBalance: payload.affectsInstrumentBalance,
     startDate: payload.startDate,
     isActive: payload.isActive,
   }
@@ -424,7 +428,14 @@ function buildTransactionQuery(filters: TransactionFilters): string {
 export const apiClient = {
   health: () => request<{ status: string }>(ENDPOINTS.HEALTH, { method: 'GET' }),
   getDashboardSummary: () => request<DashboardSummary>(ENDPOINTS.DASHBOARD_SUMMARY, { method: 'GET' }),
-  getDashboardExpensesByCategory: () => request<DashboardExpenseByCategory[]>(ENDPOINTS.DASHBOARD_EXPENSES_BY_CATEGORY, { method: 'GET' }),
+  getDashboardPreferences: () => request<DashboardPreferences>(ENDPOINTS.DASHBOARD_PREFERENCES, { method: 'GET' }),
+  updateDashboardPreferences: (expensePeriod: DashboardExpensePeriod) =>
+    request<DashboardPreferences>(ENDPOINTS.DASHBOARD_PREFERENCES, {
+      method: 'PUT',
+      body: JSON.stringify({ expensePeriod }),
+    }),
+  getDashboardExpensesByCategory: (period: DashboardExpensePeriod) =>
+    request<DashboardExpenseByCategory[]>(`${ENDPOINTS.DASHBOARD_EXPENSES_BY_CATEGORY}?period=${period}`, { method: 'GET' }),
   getDashboardCashFlow: () => request<DashboardCashFlowPoint[]>(ENDPOINTS.DASHBOARD_CASH_FLOW, { method: 'GET' }),
   getDashboardBalanceEvolution: () => request<DashboardBalanceEvolution>(ENDPOINTS.DASHBOARD_BALANCE_EVOLUTION, { method: 'GET' }),
   getDashboardFutureExpenses: () => request<DashboardFutureExpensePoint[]>(ENDPOINTS.DASHBOARD_FUTURE_EXPENSES, { method: 'GET' }),
@@ -721,6 +732,9 @@ export const apiClient = {
     }),
   getReminders: () => request<Reminder[]>(ENDPOINTS.REMINDERS, { method: 'GET' }),
   getPendingReminders: () => request<Reminder[]>(ENDPOINTS.REMINDERS_PENDING, { method: 'GET' }),
+  deleteDismissedReminders: () => request<{ deletedCount: number }>(ENDPOINTS.REMINDERS_DISMISSED, { method: 'DELETE' }),
+  deletePendingReminders: () => request<{ deletedCount: number; dismissedCount: number }>(ENDPOINTS.REMINDERS_PENDING, { method: 'DELETE' }),
+  dismissAllReminders: () => request<{ dismissedCount: number }>(ENDPOINTS.REMINDERS_DISMISS_ALL, { method: 'PUT' }),
   createReminder: (payload: ReminderInput) =>
     request<Reminder>(ENDPOINTS.REMINDERS, {
       method: 'POST',

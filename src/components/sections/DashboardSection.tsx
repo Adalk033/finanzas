@@ -20,6 +20,7 @@ import type {
   DashboardBalanceEvolution,
   DashboardCashFlowPoint,
   DashboardExpenseByCategory,
+  DashboardExpensePeriod,
   DashboardFutureExpensePoint,
   DashboardSummary,
   DashboardUpcomingCommitment,
@@ -32,12 +33,21 @@ type DashboardSectionProps = {
   dashboardError: string
   dashboardSummary: DashboardSummary
   dashboardExpensesByCategory: DashboardExpenseByCategory[]
+  dashboardExpensePeriod: DashboardExpensePeriod
   dashboardCashFlow: DashboardCashFlowPoint[]
   dashboardBalanceEvolution: DashboardBalanceEvolution
   dashboardFutureExpenses: DashboardFutureExpensePoint[]
   dashboardUpcomingCommitments: DashboardUpcomingCommitments
   onReload: () => void
+  onDashboardExpensePeriodChange: (period: DashboardExpensePeriod) => Promise<void>
 }
+
+const DASHBOARD_EXPENSE_PERIOD_OPTIONS: Array<{ value: DashboardExpensePeriod; label: string }> = [
+  { value: 'current_month', label: 'Mes actual' },
+  { value: 'previous_month', label: 'Mes pasado' },
+  { value: 'last_3_months', label: 'Ultimos 3 meses' },
+  { value: 'last_year', label: 'Ultimo año' },
+]
 
 const COMMITMENT_TYPE_LABELS: Record<DashboardUpcomingCommitment['type'], string> = {
   subscription: 'Suscripcion',
@@ -60,11 +70,13 @@ export function DashboardSection({
   dashboardError,
   dashboardSummary,
   dashboardExpensesByCategory,
+  dashboardExpensePeriod,
   dashboardCashFlow,
   dashboardBalanceEvolution,
   dashboardFutureExpenses,
   dashboardUpcomingCommitments,
   onReload,
+  onDashboardExpensePeriodChange,
 }: DashboardSectionProps) {
   const nextMonthProjection = dashboardFutureExpenses[0]
 
@@ -146,6 +158,7 @@ export function DashboardSection({
                   <p className="dashboard-commitment__name">{commitment.name}</p>
                   <p className="dashboard-commitment__meta">
                     {COMMITMENT_TYPE_LABELS[commitment.type]}{commitment.instrumentName ? ` · ${commitment.instrumentName}` : ''}
+                    {!commitment.affectsAvailableBalance ? ' · Descontado del ingreso' : ''}
                   </p>
                 </div>
                 <strong className="dashboard-commitment__amount">{formatCurrency(commitment.amount)}</strong>
@@ -160,11 +173,27 @@ export function DashboardSection({
 
       <div className="dashboard-charts">
         <article className="mini-card">
-          <header className="mini-card__header">
+          <header className="mini-card__header dashboard-expenses-header">
             <h3 className="mini-card__title">Gasto por categoria</h3>
+            <nav className="dashboard-expense-periods" aria-label="Periodo de gasto por categoria">
+              {DASHBOARD_EXPENSE_PERIOD_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  className={dashboardExpensePeriod === option.value ? 'dashboard-expense-periods__item--active' : ''}
+                  type="button"
+                  disabled={isDashboardLoading}
+                  aria-pressed={dashboardExpensePeriod === option.value}
+                  onClick={() => {
+                    void onDashboardExpensePeriodChange(option.value)
+                  }}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </nav>
           </header>
           {dashboardExpensesByCategory.length === 0 ? (
-            <p className="card__subtitle">Sin datos para el mes actual.</p>
+            <p className="card__subtitle">Sin datos para el periodo seleccionado.</p>
           ) : (
             <div className="chart-box">
               <ResponsiveContainer width="100%" height="100%">

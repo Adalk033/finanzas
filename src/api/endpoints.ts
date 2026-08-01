@@ -2,6 +2,7 @@ export const ENDPOINTS = {
   HEALTH: '/health',
   DATABASE_INFO: '/database/info',
   DASHBOARD_SUMMARY: '/dashboard/summary',
+  DASHBOARD_PREFERENCES: '/dashboard/preferences',
   DASHBOARD_EXPENSES_BY_CATEGORY: '/dashboard/charts/expenses-by-category',
   DASHBOARD_CASH_FLOW: '/dashboard/charts/cash-flow',
   DASHBOARD_BALANCE_EVOLUTION: '/dashboard/charts/balance-evolution',
@@ -21,6 +22,8 @@ export const ENDPOINTS = {
   SIMULATIONS: '/simulations',
   REMINDERS: '/reminders',
   REMINDERS_PENDING: '/reminders/pending',
+  REMINDERS_DISMISSED: '/reminders/dismissed',
+  REMINDERS_DISMISS_ALL: '/reminders/dismiss-all',
   RECURRING_INCOMES: '/recurring-incomes',
   SAVINGS_GOALS: '/savings-goals',
 } as const

@@ -159,9 +159,11 @@ export const EMPTY_LOAN_FORM: LoanInput = {
   paymentType: 'fixed',
   fixedPayment: 0,
   paymentDay: 1,
+  paymentFrequency: 'monthly',
   startDate: TODAY_ISO,
   endDate: '',
   instrumentId: null,
+  affectsInstrumentBalance: true,
   notes: '',
   isActive: true,
 }

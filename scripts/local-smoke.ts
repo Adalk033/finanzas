@@ -44,6 +44,19 @@ function requestFailure(
 try {
   initializeLocalDb(databasePath)
 
+  const defaultDashboardPreferences = request<{ expensePeriod: string }>('/dashboard/preferences')
+  assert.equal(defaultDashboardPreferences.expensePeriod, 'current_month')
+  const savedDashboardPreferences = request<{ expensePeriod: string }>('/dashboard/preferences', 'PUT', {
+    expensePeriod: 'last_3_months',
+  })
+  assert.equal(savedDashboardPreferences.expensePeriod, 'last_3_months')
+  const restoredDashboardPreferences = request<{ expensePeriod: string }>('/dashboard/preferences')
+  assert.equal(restoredDashboardPreferences.expensePeriod, 'last_3_months')
+  const invalidDashboardPeriodError = requestFailure('/dashboard/preferences', 'PUT', {
+    expensePeriod: 'all_time',
+  })
+  assert.match(invalidDashboardPeriodError, /expensePeriod no contiene un valor permitido/)
+
   const bank = request<{ id: number }>('/banks', 'POST', {
     name: 'Banco local',
     shortName: 'Local',
@@ -308,6 +321,58 @@ try {
   })
   const payments = request<Array<{ installmentNum: number }>>(`/loans/${loan.id}/payments`)
   assert.equal(payments.length, 12)
+  const automaticLoanReminder = request<Array<{
+    referenceId: number | null
+    referenceType: string | null
+    type: string
+    isDismissed: boolean
+  }>>('/reminders').find((item) => (
+    item.type === 'loan' && item.referenceType === 'loan_payment' && !item.isDismissed
+  ))
+  assert.ok(automaticLoanReminder)
+  const dismissedReminders = request<{ dismissedCount: number }>('/reminders/dismiss-all', 'PUT')
+  assert.ok(dismissedReminders.dismissedCount > 0)
+  const remindersAfterDismissAll = request<Array<{
+    referenceId: number | null
+    referenceType: string | null
+    isDismissed: boolean
+  }>>('/reminders')
+  assert.equal(remindersAfterDismissAll.some((item) => (
+    item.referenceType === automaticLoanReminder.referenceType
+    && item.referenceId === automaticLoanReminder.referenceId
+    && !item.isDismissed
+  )), false)
+  const queuedReminder = request<{ id: number }>('/reminders', 'POST', {
+    title: 'Recordatorio pendiente para eliminar',
+    reminderDate: '2026-09-10',
+    type: 'custom',
+    isRead: false,
+    isDismissed: false,
+  })
+  const deletedPendingReminders = request<{ deletedCount: number; dismissedCount: number }>('/reminders/pending', 'DELETE')
+  assert.equal(deletedPendingReminders.deletedCount, 1)
+  assert.equal(deletedPendingReminders.dismissedCount, 0)
+  const remindersAfterPendingDeletion = request<Array<{ id: number }>>('/reminders')
+  assert.equal(remindersAfterPendingDeletion.some((item) => item.id === queuedReminder.id), false)
+  const dismissedManualReminder = request<{ id: number }>('/reminders', 'POST', {
+    title: 'Recordatorio descartado para eliminar',
+    reminderDate: '2026-09-11',
+    type: 'custom',
+    isRead: false,
+    isDismissed: true,
+  })
+  const deletedDismissedReminders = request<{ deletedCount: number }>('/reminders/dismissed', 'DELETE')
+  assert.ok(deletedDismissedReminders.deletedCount >= 1)
+  const remindersAfterDismissedDeletion = request<Array<{
+    id: number
+    referenceId: number | null
+    isAutomatic: boolean
+    isDismissed: boolean
+  }>>('/reminders')
+  assert.equal(remindersAfterDismissedDeletion.some((item) => item.id === dismissedManualReminder.id), false)
+  assert.equal(remindersAfterDismissedDeletion.some((item) => (
+    item.referenceId === automaticLoanReminder.referenceId && item.isAutomatic && !item.isDismissed
+  )), true)
   request(`/loans/${loan.id}/payments/1/pay`, 'POST', { paidDate: '2026-07-20' })
 
   const summary = request<{ totalAvailable: number; totalCreditDebt: number }>('/dashboard/summary')
@@ -328,7 +393,7 @@ try {
   assert.equal(typeof simulation.isFavorable, 'boolean')
 
   const info = request<{ schemaVersion: string }>('/database/info')
-  assert.equal(info.schemaVersion, '3')
+  assert.equal(info.schemaVersion, '4')
 
   const cardBeforeHistorical = request<Array<{
     id: number
@@ -523,6 +588,35 @@ try {
     {},
   )
   assert.equal(adjustableUndone.loan.remainingAmount, 1000)
+
+  const payrollLoan = request<{ id: number }>('/loans', 'POST', {
+    name: 'Prestamo descontado de nomina',
+    currencyId: 1,
+    originalAmount: 400,
+    annualRate: 12,
+    totalInstallments: 4,
+    paymentType: 'fixed',
+    fixedPayment: 110,
+    paymentFrequency: 'weekly',
+    startDate: '2099-01-01',
+    instrumentId: debit.id,
+    affectsInstrumentBalance: false,
+    isActive: true,
+  })
+  const payrollSchedule = request<Array<{ paymentDate: string }>>(`/loans/${payrollLoan.id}/payments`)
+  assert.equal(payrollSchedule[0]?.paymentDate, '2099-01-01')
+  assert.equal(payrollSchedule[1]?.paymentDate, '2099-01-08')
+  const balanceBeforePayrollPayment = request<Array<{ id: number; currentAmount: number }>>('/instruments')
+    .find((item) => item.id === debit.id)?.currentAmount
+  const payrollPayment = request<{
+    loan: { remainingAmount: number }
+    payment: { affectsInstrumentBalance: boolean }
+  }>(`/loans/${payrollLoan.id}/payments/1/pay`, 'POST', { paidDate: '2099-01-01' })
+  const balanceAfterPayrollPayment = request<Array<{ id: number; currentAmount: number }>>('/instruments')
+    .find((item) => item.id === debit.id)?.currentAmount
+  assert.equal(balanceAfterPayrollPayment, balanceBeforePayrollPayment)
+  assert.ok(payrollPayment.loan.remainingAmount < 400)
+  assert.equal(payrollPayment.payment.affectsInstrumentBalance, false)
 
   const exportedCsv = exportTransactionsCsv()
   const importedCsv = importTransactionsCsv(exportedCsv)
