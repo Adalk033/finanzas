@@ -25,7 +25,7 @@ type InstrumentsSectionProps = {
   onReload: () => void
   onEdit: (instrument: FinancialInstrument) => void
   onDelete: (instrumentId: number) => void
-  onReconcile: (instrumentId: number, payload: ReconciliationInput) => void
+  onReconcile: (instrumentId: number, payload: ReconciliationInput) => Promise<boolean>
 }
 
 export function InstrumentsSection({
@@ -48,34 +48,45 @@ export function InstrumentsSection({
   onReconcile,
 }: InstrumentsSectionProps) {
   const [isFormOpen, setIsFormOpen] = useState(editingInstrumentId !== null)
+  const [reconciliationInstrument, setReconciliationInstrument] = useState<FinancialInstrument | null>(null)
+  const [reconciliationBalance, setReconciliationBalance] = useState('')
+  const [reconciliationDate, setReconciliationDate] = useState('')
+  const [reconciliationNotes, setReconciliationNotes] = useState('Conciliacion manual')
   const isFormVisible = isFormOpen || editingInstrumentId !== null
   const accountOptions = groupedInstruments
     .flatMap((group) => group.instruments)
     .filter((instrument) => instrument.type === 'account' && instrument.isActive)
 
   const startReconciliation = (instrument: FinancialInstrument): void => {
-    const raw = window.prompt(
-      `Saldo real de ${instrument.name}`,
-      String(
-        instrument.type === 'credit_card'
-          ? (instrument.currentBalance ?? 0)
-          : (instrument.currentAmount ?? 0),
-      ),
-    )
-    if (raw === null) return
-    const actualBalance = Number(raw)
-    if (!Number.isFinite(actualBalance) || actualBalance < 0) return
     const now = new Date()
-    const reconciliationDate = [
+    const today = [
       now.getFullYear(),
       String(now.getMonth() + 1).padStart(2, '0'),
       String(now.getDate()).padStart(2, '0'),
     ].join('-')
-    onReconcile(instrument.id, {
+    setReconciliationInstrument(instrument)
+    setReconciliationBalance(String(
+      instrument.type === 'credit_card'
+        ? (instrument.currentBalance ?? 0)
+        : (instrument.currentAmount ?? 0),
+    ))
+    setReconciliationDate(today)
+    setReconciliationNotes('Conciliacion manual')
+  }
+
+  const submitReconciliation = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault()
+    if (reconciliationInstrument === null) return
+    const actualBalance = Number(reconciliationBalance)
+    if (!Number.isFinite(actualBalance) || actualBalance < 0) return
+    const reconciled = await onReconcile(reconciliationInstrument.id, {
       actualBalance,
       reconciliationDate,
-      notes: 'Conciliacion manual',
+      notes: reconciliationNotes,
     })
+    if (reconciled) {
+      setReconciliationInstrument(null)
+    }
   }
 
   return (
@@ -251,6 +262,53 @@ export function InstrumentsSection({
               </button>
               <button className="button button--secondary" type="button" onClick={onReset}>
                 Limpiar
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
+
+      {reconciliationInstrument !== null ? (
+        <div className="section-panel">
+          <h3 className="card__title">Conciliar {reconciliationInstrument.name}</h3>
+          <p className="card__subtitle">Registra el saldo real para crear un ajuste que conserve el historial.</p>
+          <form className="form-grid" onSubmit={(event) => { void submitReconciliation(event) }}>
+            <label className="form-grid__field" htmlFor="reconciliationBalance">Saldo real</label>
+            <input
+              id="reconciliationBalance"
+              className="form-grid__input"
+              type="number"
+              min="0"
+              step="0.01"
+              value={reconciliationBalance}
+              onChange={(event) => setReconciliationBalance(event.target.value)}
+              required
+            />
+
+            <label className="form-grid__field" htmlFor="reconciliationDate">Fecha de conciliacion</label>
+            <input
+              id="reconciliationDate"
+              className="form-grid__input"
+              type="date"
+              value={reconciliationDate}
+              onChange={(event) => setReconciliationDate(event.target.value)}
+              required
+            />
+
+            <label className="form-grid__field" htmlFor="reconciliationNotes">Notas</label>
+            <input
+              id="reconciliationNotes"
+              className="form-grid__input"
+              type="text"
+              maxLength={2000}
+              value={reconciliationNotes}
+              onChange={(event) => setReconciliationNotes(event.target.value)}
+            />
+
+            <div className="form-grid__actions">
+              <button className="button button--primary" type="submit">Aplicar conciliacion</button>
+              <button className="button button--secondary" type="button" onClick={() => setReconciliationInstrument(null)}>
+                Cancelar
               </button>
             </div>
           </form>

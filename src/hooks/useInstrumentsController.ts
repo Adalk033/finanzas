@@ -156,19 +156,20 @@ export function useInstrumentsController() {
   const handleInstrumentReconcile = async (
     id: number,
     payload: ReconciliationInput,
-  ): Promise<void> => {
+  ): Promise<boolean> => {
     setInstrumentError('')
     setInstrumentMessage('')
     const result = await apiClient.reconcileInstrument(id, payload)
     if (!result.success) {
       setInstrumentError(result.error ?? 'No se pudo conciliar el saldo.')
-      return
+      return false
     }
     if (editingInstrumentId === id && result.data) {
       setInstrumentForm(toEditableInstrument(result.data.instrument))
     }
     setInstrumentMessage('Saldo conciliado mediante un ajuste auditable.')
     await loadInstruments()
+    return true
   }
 
   const banksById = useMemo(() => {
