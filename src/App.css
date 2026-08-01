@@ -256,27 +256,69 @@
 
 .section-panel {
   margin-top: var(--space-2);
+  container-type: inline-size;
 }
 
 .form-grid {
   display: grid;
-  gap: var(--space-2);
+  grid-template-columns: minmax(120px, 0.32fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 12px var(--space-2);
+}
+
+.card,
+.mini-card,
+.credit-card-form-panel {
+  container-type: inline-size;
+}
+
+@container (min-width: 760px) {
+  .form-grid:not(.form-grid--inline) {
+    grid-template-columns:
+      minmax(88px, 0.32fr) minmax(120px, 1fr)
+      minmax(88px, 0.32fr) minmax(120px, 1fr);
+  }
 }
 
 .form-grid__field {
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-size: 14px;
   font-weight: 500;
+  line-height: 1.3;
 }
 
 .form-grid__input {
+  min-width: 0;
   width: 100%;
   border: 1px solid var(--color-border);
   border-radius: 12px;
   background: var(--color-input);
   color: var(--color-text);
-  font: 400 16px/1.25 var(--font-base);
-  padding: 12px 14px;
+  font: 400 15px/1.25 var(--font-base);
+  padding: 10px 12px;
   transition: box-shadow 140ms ease, border-color 140ms ease;
+}
+
+select.form-grid__input {
+  appearance: none;
+  padding-right: 40px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%23a9b3bf' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-position: right 14px center;
+  background-repeat: no-repeat;
+  background-size: 18px;
+}
+
+textarea.form-grid__input {
+  grid-column: 2 / -1;
+  min-height: 76px;
+  resize: vertical;
+}
+
+.form-grid > .form-grid__field:has(+ textarea.form-grid__input) {
+  grid-column: 1;
+  align-self: start;
+  padding-top: 10px;
 }
 
 .form-grid__input:focus-visible {
@@ -285,8 +327,34 @@
   box-shadow: 0 0 0 2px rgba(111, 134, 232, 0.24);
 }
 
+input[type='date'] {
+  color-scheme: dark;
+}
+
+input[type='date'].form-grid__input {
+  padding-right: var(--space-2);
+}
+
+input[type='date']::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  width: 20px;
+  height: 20px;
+  margin: 0 4px 0 var(--space-1);
+  border-radius: 4px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23f3f6fa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2-2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z'/%3E%3C/svg%3E") center / 20px no-repeat;
+  color: transparent;
+  opacity: 0.9;
+}
+
+input[type='date']::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
 .form-grid__actions {
+  grid-column: 1 / -1;
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: var(--space-2);
   margin-top: var(--space-1);
 }
@@ -322,7 +390,7 @@
 }
 
 .message {
-  margin: var(--space-2) 0 0;
+  margin: var(--space-2) 0 var(--space-3);
   font-size: 14px;
 }
 
@@ -364,6 +432,7 @@
 
 .table__actions {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-1);
 }
 
@@ -459,6 +528,7 @@
 
 .category-card__actions {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-1);
   margin-top: var(--space-2);
 }
@@ -680,6 +750,7 @@
 
 .credit-card-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
   margin: var(--space-3) 0;
 }
@@ -706,19 +777,18 @@
   font-size: 14px;
 }
 
-.credit-card-form-panel__form,
 .credit-card-statement-edit .form-grid {
   grid-template-columns: minmax(160px, 0.35fr) minmax(0, 1fr);
   align-items: center;
 }
 
 .credit-card-form-panel__form .form-grid__checkbox,
-.credit-card-form-panel__form .form-grid__actions,
 .credit-card-statement-edit .form-grid__actions {
   grid-column: 1 / -1;
 }
 
 .form-grid__checkbox {
+  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   gap: var(--space-1);
@@ -934,10 +1004,200 @@
   height: 280px;
 }
 
+.dashboard-expenses-header {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.dashboard-expense-periods {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-card);
+  padding: 4px;
+}
+
+.dashboard-expense-periods button {
+  min-width: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font: 500 12px/1.2 var(--font-base);
+  padding: 8px 6px;
+  transition: background-color 140ms ease, color 140ms ease, box-shadow 140ms ease;
+}
+
+.dashboard-expense-periods button:hover:not(:disabled) {
+  background: var(--color-input);
+  color: var(--color-text);
+}
+
+.dashboard-expense-periods .dashboard-expense-periods__item--active {
+  background: var(--color-primary);
+  box-shadow: 0 2px 6px rgba(111, 134, 232, 0.28);
+  color: #fff;
+}
+
+.dashboard-expense-periods button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.dashboard-expense-periods button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
 .phase8-layout {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-3);
+}
+
+.card > :where(
+  .phase8-layout,
+  .transaction-layout,
+  .category-layout,
+  .transfers__layout,
+  .reminders-layout,
+  .dashboard-charts
+) + .mini-card {
+  margin-top: var(--space-3);
+}
+
+.card > .table-wrap + .mini-card {
+  margin-top: var(--space-4);
+}
+
+.reminders-layout {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.85fr) minmax(0, 1.4fr);
+  gap: var(--space-3);
+  align-items: start;
+}
+
+.reminder-form-card {
+  position: sticky;
+  top: 0;
+}
+
+.reminder-form {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.reminder-form__row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.reminder-form__field {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.reminder-form__field small,
+.reminder-form__advanced summary span {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.reminder-form__advanced {
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-2);
+}
+
+.reminder-form__advanced summary {
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.reminder-form__advanced[open] summary {
+  margin-bottom: var(--space-2);
+}
+
+.reminders-list {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.reminders-list__empty {
+  border: 1px dashed var(--color-border);
+  border-radius: 12px;
+  padding: var(--space-3);
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.reminder-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: var(--space-2);
+  background: color-mix(in srgb, var(--color-card) 72%, transparent);
+}
+
+.reminder-item__content {
+  min-width: 0;
+}
+
+.reminder-item__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-bottom: 4px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.reminder-item__meta span::before {
+  content: '·';
+  margin-right: var(--space-1);
+}
+
+.reminder-item h4 {
+  overflow-wrap: anywhere;
+  font-size: 16px;
+}
+
+.reminder-item__content p {
+  margin-top: 4px;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.reminder-item__status {
+  align-self: start;
+}
+
+.reminder-item__actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  padding-top: var(--space-1);
+  border-top: 1px solid var(--color-border);
+}
+
+.reminder-item__actions .button {
+  padding: 9px 12px;
+  font-size: 13px;
 }
 
 .form-grid--inline {
@@ -1027,6 +1287,14 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .form-grid {
+    grid-template-columns: minmax(120px, 0.32fr) minmax(0, 1fr);
+  }
+
+  textarea.form-grid__input {
+    grid-column: 2;
+  }
+
 }
 
 @media (max-width: 1024px) {
@@ -1065,6 +1333,14 @@
 
   .app-shell__content {
     overflow-y: visible;
+  }
+
+  .reminders-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .reminder-form-card {
+    position: static;
   }
 }
 
@@ -1147,6 +1423,10 @@
     grid-template-columns: 1fr;
   }
 
+  .dashboard-expense-periods {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .dashboard-commitments__summary {
     grid-template-columns: 1fr;
   }
@@ -1172,8 +1452,42 @@
     grid-template-columns: 1fr;
   }
 
+  .reminder-form__row {
+    grid-template-columns: 1fr;
+  }
+
+  .reminder-item {
+    grid-template-columns: 1fr;
+  }
+
+  .reminder-item__status {
+    justify-self: start;
+  }
+
   .form-grid--inline {
     grid-template-columns: 1fr;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    gap: var(--space-1);
+  }
+
+  .form-grid > .form-grid__field,
+  .form-grid > .form-grid__field:has(+ textarea.form-grid__input),
+  textarea.form-grid__input,
+  .form-grid__checkbox,
+  .form-grid__actions {
+    grid-column: 1;
+  }
+
+  .form-grid > .form-grid__field:not(:first-child) {
+    margin-top: 4px;
+  }
+
+  .form-grid > .form-grid__field:has(+ textarea.form-grid__input) {
+    padding-top: 0;
   }
 
   .form-grid__actions,

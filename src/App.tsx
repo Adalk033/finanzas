@@ -72,6 +72,7 @@ export function App() {
               dashboardError={dashboardController.dashboardError}
               dashboardSummary={dashboardController.dashboardSummary}
               dashboardExpensesByCategory={dashboardController.dashboardExpensesByCategory}
+              dashboardExpensePeriod={dashboardController.dashboardExpensePeriod}
               dashboardCashFlow={dashboardController.dashboardCashFlow}
               dashboardBalanceEvolution={dashboardController.dashboardBalanceEvolution}
               dashboardFutureExpenses={dashboardController.dashboardFutureExpenses}
@@ -79,6 +80,7 @@ export function App() {
               onReload={() => {
                 void dashboardController.loadDashboard()
               }}
+              onDashboardExpensePeriodChange={dashboardController.setDashboardExpensePeriod}
             />
           ) : null}
 
@@ -542,6 +544,21 @@ export function App() {
               }}
               onDismiss={(reminder) => {
                 void remindersController.handleReminderDismiss(reminder)
+              }}
+              onDismissAll={() => {
+                if (window.confirm('¿Descartar todos los recordatorios activos?')) {
+                  void remindersController.handleDismissAllReminders()
+                }
+              }}
+              onDeletePending={() => {
+                if (window.confirm('¿Vaciar todos los recordatorios pendientes? Los automáticos se descartarán para que no se generen de nuevo.')) {
+                  void remindersController.handleDeletePendingReminders()
+                }
+              }}
+              onDeleteDismissed={() => {
+                if (window.confirm('¿Eliminar todos los recordatorios descartados? Esta acción no se puede deshacer.')) {
+                  void remindersController.handleDeleteDismissedReminders()
+                }
               }}
               onDelete={(reminderId) => {
                 if (window.confirm('¿Eliminar este recordatorio?')) {

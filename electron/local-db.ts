@@ -27,8 +27,6 @@ const SCHEMA = `
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 100),
     short_name TEXT CHECK (short_name IS NULL OR length(short_name) <= 20),
-    color TEXT,
-    icon_name TEXT,
     is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -130,9 +128,11 @@ const SCHEMA = `
     payment_type TEXT NOT NULL CHECK (payment_type IN ('fixed', 'variable')),
     fixed_payment_cents INTEGER,
     payment_day INTEGER CHECK (payment_day IS NULL OR payment_day BETWEEN 1 AND 31),
+    payment_frequency TEXT NOT NULL DEFAULT 'monthly' CHECK (payment_frequency IN ('weekly', 'biweekly', 'monthly')),
     start_date TEXT NOT NULL,
     end_date TEXT,
     instrument_id INTEGER REFERENCES financial_instruments(id),
+    affects_instrument_balance INTEGER NOT NULL DEFAULT 1 CHECK (affects_instrument_balance IN (0, 1)),
     notes TEXT,
     is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -151,6 +151,7 @@ const SCHEMA = `
     paid_date TEXT,
     notes TEXT,
     transaction_id INTEGER REFERENCES transactions(id),
+    affects_instrument_balance INTEGER NOT NULL DEFAULT 1 CHECK (affects_instrument_balance IN (0, 1)),
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(loan_id, installment_num)
@@ -259,6 +260,7 @@ const SCHEMA = `
     reference_type TEXT,
     is_read INTEGER NOT NULL DEFAULT 0 CHECK (is_read IN (0, 1)),
     is_dismissed INTEGER NOT NULL DEFAULT 0 CHECK (is_dismissed IN (0, 1)),
+    is_automatic INTEGER NOT NULL DEFAULT 0 CHECK (is_automatic IN (0, 1)),
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
@@ -317,17 +319,36 @@ function hasColumn(table: string, column: string): boolean {
     return false
   }
   const allowedTables = new Set([
+    'banks',
     'financial_instruments',
     'transactions',
     'loan_payments',
     'fixed_expense_payments',
     'recurring_incomes',
+    'loans',
+    'reminders',
   ])
   if (!allowedTables.has(table)) {
     throw new Error('Tabla de migracion no permitida.')
   }
   const columns = database.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
   return columns.some((item) => item.name === column)
+}
+
+function removeDeprecatedBankColumns(): void {
+  if (!database) {
+    return
+  }
+  const db = database
+
+  db.transaction(() => {
+    if (hasColumn('banks', 'color')) {
+      db.exec('ALTER TABLE banks DROP COLUMN color')
+    }
+    if (hasColumn('banks', 'icon_name')) {
+      db.exec('ALTER TABLE banks DROP COLUMN icon_name')
+    }
+  })()
 }
 
 function addColumn(table: string, definition: string, column: string): void {
@@ -343,14 +364,22 @@ function addColumn(table: string, definition: string, column: string): void {
       'source_type TEXT',
       'source_id INTEGER',
     ])],
-    ['loan_payments', new Set([
-      'transaction_id INTEGER REFERENCES transactions(id)',
-    ])],
     ['fixed_expense_payments', new Set([
       'transaction_id INTEGER REFERENCES transactions(id)',
     ])],
+    ['loans', new Set([
+      "payment_frequency TEXT NOT NULL DEFAULT 'monthly' CHECK (payment_frequency IN ('weekly', 'biweekly', 'monthly'))",
+      'affects_instrument_balance INTEGER NOT NULL DEFAULT 1 CHECK (affects_instrument_balance IN (0, 1))',
+    ])],
+    ['loan_payments', new Set([
+      'transaction_id INTEGER REFERENCES transactions(id)',
+      'affects_instrument_balance INTEGER NOT NULL DEFAULT 1 CHECK (affects_instrument_balance IN (0, 1))',
+    ])],
     ['recurring_incomes', new Set([
       'second_payment_day INTEGER CHECK (second_payment_day IS NULL OR second_payment_day BETWEEN 1 AND 31)',
+    ])],
+    ['reminders', new Set([
+      'is_automatic INTEGER NOT NULL DEFAULT 0 CHECK (is_automatic IN (0, 1))',
     ])],
   ])
   if (!allowedDefinitions.get(table)?.has(definition)) {
@@ -360,6 +389,7 @@ function addColumn(table: string, definition: string, column: string): void {
 }
 
 function migrateSchema(): void {
+  removeDeprecatedBankColumns()
   addColumn(
     'financial_instruments',
     'linked_account_id INTEGER REFERENCES financial_instruments(id)',
@@ -387,6 +417,26 @@ function migrateSchema(): void {
     'second_payment_day INTEGER CHECK (second_payment_day IS NULL OR second_payment_day BETWEEN 1 AND 31)',
     'second_payment_day',
   )
+  addColumn(
+    'loans',
+    "payment_frequency TEXT NOT NULL DEFAULT 'monthly' CHECK (payment_frequency IN ('weekly', 'biweekly', 'monthly'))",
+    'payment_frequency',
+  )
+  addColumn(
+    'loans',
+    'affects_instrument_balance INTEGER NOT NULL DEFAULT 1 CHECK (affects_instrument_balance IN (0, 1))',
+    'affects_instrument_balance',
+  )
+  addColumn(
+    'loan_payments',
+    'affects_instrument_balance INTEGER NOT NULL DEFAULT 1 CHECK (affects_instrument_balance IN (0, 1))',
+    'affects_instrument_balance',
+  )
+  addColumn(
+    'reminders',
+    'is_automatic INTEGER NOT NULL DEFAULT 0 CHECK (is_automatic IN (0, 1))',
+    'is_automatic',
+  )
   database?.exec(`
     CREATE INDEX IF NOT EXISTS idx_instruments_linked_account
       ON financial_instruments(linked_account_id);
@@ -396,6 +446,14 @@ function migrateSchema(): void {
     SELECT id, statement_id, amount_cents
     FROM transfers
     WHERE statement_id IS NOT NULL;
+    UPDATE reminders
+    SET is_automatic = 1
+    WHERE is_automatic = 0
+      AND (
+        (type = 'payment' AND reference_type = 'statement' AND description = 'Tienes un estado de cuenta pendiente.')
+        OR (type = 'loan' AND reference_type = 'loan_payment' AND description = 'Tienes una cuota de prestamo proxima.')
+        OR (type = 'subscription' AND reference_type = 'subscription' AND description = 'Se aproxima un cargo recurrente.')
+      );
   `)
 }
 
@@ -417,7 +475,7 @@ export function initializeLocalDb(dbPath: string): void {
 
   database.prepare(`
     INSERT INTO app_metadata (key, value)
-    VALUES ('schema_version', '3')
+    VALUES ('schema_version', '5')
     ON CONFLICT(key) DO UPDATE SET value = excluded.value
   `).run()
 }

@@ -159,6 +159,70 @@ export function useRemindersController() {
     await loadReminders()
   }
 
+  const handleDismissAllReminders = async (): Promise<void> => {
+    setReminderError('')
+    setReminderMessage('')
+
+    const result = await apiClient.dismissAllReminders()
+    if (!result.success) {
+      setReminderError(result.error ?? 'No se pudieron descartar los recordatorios.')
+      return
+    }
+
+    setReminderMessage(result.data?.dismissedCount === 1
+      ? '1 recordatorio descartado correctamente.'
+      : `${result.data?.dismissedCount ?? 0} recordatorios descartados correctamente.`)
+    await loadReminders()
+  }
+
+  const handleDeletePendingReminders = async (): Promise<void> => {
+    setReminderError('')
+    setReminderMessage('')
+    const wasEditingPending = reminders.some((reminder) => (
+      reminder.id === editingReminderId && !reminder.isRead && !reminder.isDismissed
+    ))
+
+    const result = await apiClient.deletePendingReminders()
+    if (!result.success) {
+      setReminderError(result.error ?? 'No se pudieron eliminar los recordatorios pendientes.')
+      return
+    }
+
+    if (wasEditingPending) resetReminderEditor()
+    const deletedCount = result.data?.deletedCount ?? 0
+    const dismissedCount = result.data?.dismissedCount ?? 0
+    const deletedMessage = deletedCount === 1
+      ? '1 recordatorio eliminado'
+      : `${deletedCount} recordatorios eliminados`
+    const dismissedMessage = dismissedCount === 1
+      ? '1 automático descartado'
+      : `${dismissedCount} automáticos descartados`
+    setReminderMessage(dismissedCount > 0
+      ? `${deletedMessage} y ${dismissedMessage}.`
+      : `${deletedMessage} correctamente.`)
+    await loadReminders()
+  }
+
+  const handleDeleteDismissedReminders = async (): Promise<void> => {
+    setReminderError('')
+    setReminderMessage('')
+    const wasEditingDismissedReminder = reminders.some((reminder) => (
+      reminder.id === editingReminderId && reminder.isDismissed
+    ))
+
+    const result = await apiClient.deleteDismissedReminders()
+    if (!result.success) {
+      setReminderError(result.error ?? 'No se pudieron eliminar los recordatorios descartados.')
+      return
+    }
+
+    if (wasEditingDismissedReminder) resetReminderEditor()
+    setReminderMessage(result.data?.deletedCount === 1
+      ? '1 recordatorio descartado eliminado correctamente.'
+      : `${result.data?.deletedCount ?? 0} recordatorios descartados eliminados correctamente.`)
+    await loadReminders()
+  }
+
   return {
     reminders,
     isRemindersLoading,
@@ -175,5 +239,8 @@ export function useRemindersController() {
     handleReminderDelete,
     handleReminderMarkAsRead,
     handleReminderDismiss,
+    handleDismissAllReminders,
+    handleDeletePendingReminders,
+    handleDeleteDismissedReminders,
   }
 }

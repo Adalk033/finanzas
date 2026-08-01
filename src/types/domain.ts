@@ -3,6 +3,7 @@ export type CategoryType = 'expense' | 'income' | 'both'
 export type TransactionType = 'expense' | 'income'
 export type TransferType = 'card_payment' | 'inter_account' | 'loan_payment' | 'other'
 export type LoanPaymentType = 'fixed' | 'variable'
+export type LoanPaymentFrequency = 'weekly' | 'biweekly' | 'monthly'
 export type SubscriptionBillingCycle = 'monthly' | 'yearly' | 'weekly'
 export type BudgetStatus = 'under' | 'warning' | 'exceeded'
 export type SimulationScenarioType = 'direct_purchase' | 'msi' | 'loan'
@@ -13,8 +14,6 @@ export interface Bank {
   id: number
   name: string
   shortName: string | null
-  color: string | null
-  iconName: string | null
   isActive: boolean
   createdAt: string
   updatedAt: string
@@ -23,8 +22,6 @@ export interface Bank {
 export interface BankInput {
   name: string
   shortName: string
-  color: string
-  iconName: string
   isActive: boolean
 }
 
@@ -240,10 +237,12 @@ export interface Loan {
   paymentType: LoanPaymentType
   fixedPayment: number | null
   paymentDay: number | null
+  paymentFrequency: LoanPaymentFrequency
   startDate: string
   endDate: string | null
   instrumentId: number | null
   instrumentName: string | null
+  affectsInstrumentBalance: boolean
   notes: string | null
   isActive: boolean
   createdAt: string
@@ -260,9 +259,11 @@ export interface LoanInput {
   paymentType: LoanPaymentType
   fixedPayment: number | null
   paymentDay: number | null
+  paymentFrequency: LoanPaymentFrequency
   startDate: string
   endDate: string
   instrumentId: number | null
+  affectsInstrumentBalance: boolean
   notes: string
   isActive: boolean
 }
@@ -279,6 +280,7 @@ export interface LoanPayment {
   paidDate: string | null
   notes: string | null
   transactionId: number | null
+  affectsInstrumentBalance: boolean
   createdAt: string
   updatedAt: string
 }
@@ -439,6 +441,12 @@ export interface DashboardExpenseByCategory {
   total: number
 }
 
+export type DashboardExpensePeriod = 'current_month' | 'previous_month' | 'last_3_months' | 'last_year'
+
+export interface DashboardPreferences {
+  expensePeriod: DashboardExpensePeriod
+}
+
 export interface DashboardCashFlowPoint {
   month: string
   income: number
@@ -480,6 +488,7 @@ export interface DashboardUpcomingCommitment {
   amount: number
   type: DashboardUpcomingCommitmentType
   instrumentName: string | null
+  affectsAvailableBalance: boolean
 }
 
 export interface DashboardUpcomingCommitments {
@@ -498,6 +507,7 @@ export interface Reminder {
   referenceType: string | null
   isRead: boolean
   isDismissed: boolean
+  isAutomatic: boolean
   createdAt: string
   updatedAt: string
 }

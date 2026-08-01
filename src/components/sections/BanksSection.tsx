@@ -83,26 +83,6 @@ export function BanksSection({
               placeholder="BBVA"
             />
 
-            <label className="form-grid__field" htmlFor="bankColor">Color Hex</label>
-            <input
-              id="bankColor"
-              className="form-grid__input"
-              type="text"
-              value={bankForm.color}
-              onChange={(event) => onBankFormChange({ ...bankForm, color: event.target.value })}
-              placeholder="#0057B8"
-            />
-
-            <label className="form-grid__field" htmlFor="bankIcon">Icono (Lucide)</label>
-            <input
-              id="bankIcon"
-              className="form-grid__input"
-              type="text"
-              value={bankForm.iconName}
-              onChange={(event) => onBankFormChange({ ...bankForm, iconName: event.target.value })}
-              placeholder="Landmark"
-            />
-
             <div className="form-grid__actions">
               <button className="button button--primary" type="submit" disabled={!hasConfig}>
                 {editingBankId === null ? 'Crear banco' : 'Guardar cambios'}
@@ -124,19 +104,18 @@ export function BanksSection({
             <tr>
               <th>Nombre</th>
               <th>Nombre corto</th>
-              <th>Color</th>
               <th>Acciones</th>
             </tr>
           </thead>
           <tbody>
             {isBanksLoading ? (
               <tr>
-                <td colSpan={4}>Cargando bancos...</td>
+                <td colSpan={3}>Cargando bancos...</td>
               </tr>
             ) : null}
             {!isBanksLoading && banks.length === 0 ? (
               <tr>
-                <td colSpan={4}>No hay bancos registrados.</td>
+                <td colSpan={3}>No hay bancos registrados.</td>
               </tr>
             ) : null}
             {!isBanksLoading
@@ -144,7 +123,6 @@ export function BanksSection({
                 <tr key={bank.id}>
                   <td>{bank.name}</td>
                   <td>{bank.shortName ?? '-'}</td>
-                  <td>{bank.color ?? '-'}</td>
                   <td>
                     <div className="table__actions">
                       <button className="button button--secondary" type="button" onClick={() => onEdit(bank)}>

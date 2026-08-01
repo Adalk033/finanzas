@@ -91,9 +91,11 @@ export function useLoansController({ instruments }: UseLoansControllerParams) {
       paymentType: loan.paymentType,
       fixedPayment: loan.fixedPayment,
       paymentDay: loan.paymentDay,
+      paymentFrequency: loan.paymentFrequency,
       startDate: loan.startDate,
       endDate: loan.endDate ?? '',
       instrumentId: loan.instrumentId,
+      affectsInstrumentBalance: loan.affectsInstrumentBalance,
       notes: loan.notes ?? '',
       isActive: loan.isActive,
     })

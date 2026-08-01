@@ -5,9 +5,16 @@ import type {
   Loan,
   LoanInput,
   LoanPayment,
+  LoanPaymentFrequency,
   LoanPaymentRegisterInput,
   LoanPaymentType,
 } from '../../types/domain'
+
+const LOAN_PAYMENT_FREQUENCY_LABELS: Record<LoanPaymentFrequency, string> = {
+  weekly: 'Semanal',
+  biweekly: 'Quincenal (cada 14 dias)',
+  monthly: 'Mensual',
+}
 
 type LoansSectionProps = {
   hasConfig: boolean
@@ -169,9 +176,28 @@ export function LoansSection({
                   <option value="variable">Variable</option>
                 </select>
 
+                <label className="form-grid__field" htmlFor="loanPaymentFrequency">Frecuencia de cuota</label>
+                <select
+                  id="loanPaymentFrequency"
+                  className="form-grid__input"
+                  value={loanForm.paymentFrequency}
+                  onChange={(event) => {
+                    const paymentFrequency = event.target.value as LoanPaymentFrequency
+                    onLoanFormChange({
+                      ...loanForm,
+                      paymentFrequency,
+                      paymentDay: paymentFrequency === 'monthly' ? (loanForm.paymentDay ?? 1) : null,
+                    })
+                  }}
+                >
+                  {Object.entries(LOAN_PAYMENT_FREQUENCY_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+
                 {loanForm.paymentType === 'fixed' ? (
                   <>
-                    <label className="form-grid__field" htmlFor="loanFixedPayment">Pago fijo mensual</label>
+                    <label className="form-grid__field" htmlFor="loanFixedPayment">Pago fijo por cuota</label>
                     <input
                       id="loanFixedPayment"
                       className="form-grid__input"
@@ -215,16 +241,35 @@ export function LoansSection({
                   </>
                 )}
 
-                <label className="form-grid__field" htmlFor="loanPaymentDay">Dia de pago</label>
-                <input
-                  id="loanPaymentDay"
-                  className="form-grid__input"
-                  type="number"
-                  min={1}
-                  max={31}
-                  value={loanForm.paymentDay ?? 1}
-                  onChange={(event) => onLoanFormChange({ ...loanForm, paymentDay: Number(event.target.value) })}
-                />
+                {loanForm.paymentFrequency === 'monthly' ? (
+                  <>
+                    <label className="form-grid__field" htmlFor="loanPaymentDay">Dia de pago</label>
+                    <input
+                      id="loanPaymentDay"
+                      className="form-grid__input"
+                      type="number"
+                      min={1}
+                      max={31}
+                      value={loanForm.paymentDay ?? 1}
+                      onChange={(event) => onLoanFormChange({ ...loanForm, paymentDay: Number(event.target.value) })}
+                    />
+                  </>
+                ) : (
+                  <p className="card__subtitle">Las fechas se calculan desde la fecha inicial, cada {loanForm.paymentFrequency === 'weekly' ? '7' : '14'} dias.</p>
+                )}
+
+                <label className="form-grid__checkbox" htmlFor="loanAffectsInstrumentBalance">
+                  <input
+                    id="loanAffectsInstrumentBalance"
+                    type="checkbox"
+                    checked={loanForm.affectsInstrumentBalance}
+                    onChange={(event) => onLoanFormChange({ ...loanForm, affectsInstrumentBalance: event.target.checked })}
+                  />
+                  Descontar cada cuota del saldo de la cuenta vinculada
+                </label>
+                {!loanForm.affectsInstrumentBalance ? (
+                  <p className="card__subtitle">Usa esta opcion si la cuota ya esta descontada del ingreso de nomina que registras; reducira la deuda sin volver a restar saldo de la cuenta.</p>
+                ) : null}
 
                 <label className="form-grid__field" htmlFor="loanStartDate">Fecha inicial</label>
                 <input
@@ -366,7 +411,10 @@ export function LoansSection({
                   ? loans.map((loan) => (
                     <tr key={loan.id}>
                       <td>{loan.name}</td>
-                      <td>{loan.paymentType === 'fixed' ? 'Fijo' : 'Variable'}</td>
+                      <td>
+                        {loan.paymentType === 'fixed' ? 'Fijo' : 'Variable'} · {LOAN_PAYMENT_FREQUENCY_LABELS[loan.paymentFrequency]}
+                        {loan.affectsInstrumentBalance ? '' : ' · Descontado del ingreso'}
+                      </td>
                       <td>{formatCurrency(loan.originalAmount)}</td>
                       <td>{formatCurrency(loan.remainingAmount)}</td>
                       <td>{loan.paidInstallments}/{loan.totalInstallments}</td>
@@ -397,7 +445,7 @@ export function LoansSection({
               <div>
                 <h3 className="category-card__title">Tabla de amortizacion · {selectedLoan.name}</h3>
                 <p className="category-card__meta">
-                  {selectedLoan.paymentType === 'fixed' ? 'Pago fijo' : 'Pago variable'} · Saldo pendiente {formatCurrency(selectedLoan.remainingAmount)}
+                  {selectedLoan.paymentType === 'fixed' ? 'Pago fijo' : 'Pago variable'} · {LOAN_PAYMENT_FREQUENCY_LABELS[selectedLoan.paymentFrequency]} · Saldo pendiente {formatCurrency(selectedLoan.remainingAmount)}
                 </p>
               </div>
             </header>
@@ -436,7 +484,7 @@ export function LoansSection({
                         <td>{formatCurrency(payment.amount)}</td>
                         <td>{formatCurrency(payment.principal)}</td>
                         <td>{formatCurrency(payment.interest)}</td>
-                        <td>{payment.isPaid ? `Pagada ${payment.paidDate ?? ''}` : 'Pendiente'}</td>
+                        <td>{payment.isPaid ? `Pagada ${payment.paidDate ?? ''}${payment.affectsInstrumentBalance ? '' : ' · Descontada del ingreso'}` : 'Pendiente'}</td>
                         <td>
                           <div className="table__actions">
                             <button
@@ -445,7 +493,7 @@ export function LoansSection({
                               disabled={payment.isPaid}
                               onClick={() => onPayInstallment(payment.installmentNum)}
                             >
-                              Pagar
+                              {selectedLoan.affectsInstrumentBalance ? 'Pagar' : 'Registrar descuento'}
                             </button>
                             {payment.isPaid ? (
                               <button

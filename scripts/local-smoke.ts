@@ -2,9 +2,11 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import assert from 'node:assert/strict'
+import Database from 'better-sqlite3'
 import {
   backupLocalDb,
   closeLocalDb,
+  getDatabase,
   initializeLocalDb,
   restoreLocalDb,
 } from '../electron/local-db.js'
@@ -16,6 +18,52 @@ import {
 
 const tempDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'finanzas-lit-'))
 const databasePath = path.join(tempDirectory, 'smoke.sqlite')
+
+function verifyDeprecatedBankColumnsMigration(): void {
+  const legacyPath = path.join(tempDirectory, 'legacy.sqlite')
+  const legacyDb = new Database(legacyPath)
+  legacyDb.exec(`
+    PRAGMA foreign_keys = ON;
+    CREATE TABLE banks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      short_name TEXT,
+      color TEXT,
+      icon_name TEXT,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    INSERT INTO banks (name, short_name, color, icon_name)
+    VALUES ('Banco legado', 'Legado', '#123456', 'Landmark');
+    CREATE TABLE financial_instruments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      bank_id INTEGER NOT NULL REFERENCES banks(id),
+      name TEXT NOT NULL
+    );
+    INSERT INTO financial_instruments (bank_id, name)
+    VALUES (1, 'Cuenta legada');
+  `)
+  legacyDb.close()
+
+  initializeLocalDb(legacyPath)
+  const columns = new Set(
+    (getDatabase().prepare('PRAGMA table_info(banks)')
+      .all() as Array<{ name: string }>).map((column) => column.name),
+  )
+  const migratedBank = request<Array<{ name: string; shortName: string }>>('/banks')[0]
+  const migratedInstrument = getDatabase()
+    .prepare('SELECT bank_id FROM financial_instruments WHERE name = ?')
+    .get('Cuenta legada') as { bank_id: number }
+  const foreignKeyErrors = getDatabase().prepare('PRAGMA foreign_key_check').all()
+  assert.equal(columns.has('color'), false)
+  assert.equal(columns.has('icon_name'), false)
+  assert.equal(migratedBank?.name, 'Banco legado')
+  assert.equal(migratedBank?.shortName, 'Legado')
+  assert.equal(migratedInstrument.bank_id, 1)
+  assert.deepEqual(foreignKeyErrors, [])
+  closeLocalDb()
+}
 
 function request<T>(pathValue: string, method = 'GET', body?: Record<string, unknown>): T {
   const response = handleLocalRequest({
@@ -42,13 +90,25 @@ function requestFailure(
 }
 
 try {
+  verifyDeprecatedBankColumnsMigration()
   initializeLocalDb(databasePath)
+
+  const defaultDashboardPreferences = request<{ expensePeriod: string }>('/dashboard/preferences')
+  assert.equal(defaultDashboardPreferences.expensePeriod, 'current_month')
+  const savedDashboardPreferences = request<{ expensePeriod: string }>('/dashboard/preferences', 'PUT', {
+    expensePeriod: 'last_3_months',
+  })
+  assert.equal(savedDashboardPreferences.expensePeriod, 'last_3_months')
+  const restoredDashboardPreferences = request<{ expensePeriod: string }>('/dashboard/preferences')
+  assert.equal(restoredDashboardPreferences.expensePeriod, 'last_3_months')
+  const invalidDashboardPeriodError = requestFailure('/dashboard/preferences', 'PUT', {
+    expensePeriod: 'all_time',
+  })
+  assert.match(invalidDashboardPeriodError, /expensePeriod no contiene un valor permitido/)
 
   const bank = request<{ id: number }>('/banks', 'POST', {
     name: 'Banco local',
     shortName: 'Local',
-    color: '#3366FF',
-    iconName: 'Landmark',
     isActive: true,
   })
   const debit = request<{ id: number; currentAmount: number }>('/instruments', 'POST', {
@@ -308,6 +368,58 @@ try {
   })
   const payments = request<Array<{ installmentNum: number }>>(`/loans/${loan.id}/payments`)
   assert.equal(payments.length, 12)
+  const automaticLoanReminder = request<Array<{
+    referenceId: number | null
+    referenceType: string | null
+    type: string
+    isDismissed: boolean
+  }>>('/reminders').find((item) => (
+    item.type === 'loan' && item.referenceType === 'loan_payment' && !item.isDismissed
+  ))
+  assert.ok(automaticLoanReminder)
+  const dismissedReminders = request<{ dismissedCount: number }>('/reminders/dismiss-all', 'PUT')
+  assert.ok(dismissedReminders.dismissedCount > 0)
+  const remindersAfterDismissAll = request<Array<{
+    referenceId: number | null
+    referenceType: string | null
+    isDismissed: boolean
+  }>>('/reminders')
+  assert.equal(remindersAfterDismissAll.some((item) => (
+    item.referenceType === automaticLoanReminder.referenceType
+    && item.referenceId === automaticLoanReminder.referenceId
+    && !item.isDismissed
+  )), false)
+  const queuedReminder = request<{ id: number }>('/reminders', 'POST', {
+    title: 'Recordatorio pendiente para eliminar',
+    reminderDate: '2026-09-10',
+    type: 'custom',
+    isRead: false,
+    isDismissed: false,
+  })
+  const deletedPendingReminders = request<{ deletedCount: number; dismissedCount: number }>('/reminders/pending', 'DELETE')
+  assert.equal(deletedPendingReminders.deletedCount, 1)
+  assert.equal(deletedPendingReminders.dismissedCount, 0)
+  const remindersAfterPendingDeletion = request<Array<{ id: number }>>('/reminders')
+  assert.equal(remindersAfterPendingDeletion.some((item) => item.id === queuedReminder.id), false)
+  const dismissedManualReminder = request<{ id: number }>('/reminders', 'POST', {
+    title: 'Recordatorio descartado para eliminar',
+    reminderDate: '2026-09-11',
+    type: 'custom',
+    isRead: false,
+    isDismissed: true,
+  })
+  const deletedDismissedReminders = request<{ deletedCount: number }>('/reminders/dismissed', 'DELETE')
+  assert.ok(deletedDismissedReminders.deletedCount >= 1)
+  const remindersAfterDismissedDeletion = request<Array<{
+    id: number
+    referenceId: number | null
+    isAutomatic: boolean
+    isDismissed: boolean
+  }>>('/reminders')
+  assert.equal(remindersAfterDismissedDeletion.some((item) => item.id === dismissedManualReminder.id), false)
+  assert.equal(remindersAfterDismissedDeletion.some((item) => (
+    item.referenceId === automaticLoanReminder.referenceId && item.isAutomatic && !item.isDismissed
+  )), true)
   request(`/loans/${loan.id}/payments/1/pay`, 'POST', { paidDate: '2026-07-20' })
 
   const summary = request<{ totalAvailable: number; totalCreditDebt: number }>('/dashboard/summary')
@@ -328,7 +440,7 @@ try {
   assert.equal(typeof simulation.isFavorable, 'boolean')
 
   const info = request<{ schemaVersion: string }>('/database/info')
-  assert.equal(info.schemaVersion, '3')
+  assert.equal(info.schemaVersion, '5')
 
   const cardBeforeHistorical = request<Array<{
     id: number
@@ -523,6 +635,35 @@ try {
     {},
   )
   assert.equal(adjustableUndone.loan.remainingAmount, 1000)
+
+  const payrollLoan = request<{ id: number }>('/loans', 'POST', {
+    name: 'Prestamo descontado de nomina',
+    currencyId: 1,
+    originalAmount: 400,
+    annualRate: 12,
+    totalInstallments: 4,
+    paymentType: 'fixed',
+    fixedPayment: 110,
+    paymentFrequency: 'weekly',
+    startDate: '2099-01-01',
+    instrumentId: debit.id,
+    affectsInstrumentBalance: false,
+    isActive: true,
+  })
+  const payrollSchedule = request<Array<{ paymentDate: string }>>(`/loans/${payrollLoan.id}/payments`)
+  assert.equal(payrollSchedule[0]?.paymentDate, '2099-01-01')
+  assert.equal(payrollSchedule[1]?.paymentDate, '2099-01-08')
+  const balanceBeforePayrollPayment = request<Array<{ id: number; currentAmount: number }>>('/instruments')
+    .find((item) => item.id === debit.id)?.currentAmount
+  const payrollPayment = request<{
+    loan: { remainingAmount: number }
+    payment: { affectsInstrumentBalance: boolean }
+  }>(`/loans/${payrollLoan.id}/payments/1/pay`, 'POST', { paidDate: '2099-01-01' })
+  const balanceAfterPayrollPayment = request<Array<{ id: number; currentAmount: number }>>('/instruments')
+    .find((item) => item.id === debit.id)?.currentAmount
+  assert.equal(balanceAfterPayrollPayment, balanceBeforePayrollPayment)
+  assert.ok(payrollPayment.loan.remainingAmount < 400)
+  assert.equal(payrollPayment.payment.affectsInstrumentBalance, false)
 
   const exportedCsv = exportTransactionsCsv()
   const importedCsv = importTransactionsCsv(exportedCsv)

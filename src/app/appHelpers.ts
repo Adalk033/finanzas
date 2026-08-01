@@ -57,8 +57,6 @@ const TODAY_ISO = [
 export const EMPTY_BANK_FORM: BankInput = {
   name: '',
   shortName: '',
-  color: '',
-  iconName: '',
   isActive: true,
 }
 
@@ -159,9 +157,11 @@ export const EMPTY_LOAN_FORM: LoanInput = {
   paymentType: 'fixed',
   fixedPayment: 0,
   paymentDay: 1,
+  paymentFrequency: 'monthly',
   startDate: TODAY_ISO,
   endDate: '',
   instrumentId: null,
+  affectsInstrumentBalance: true,
   notes: '',
   isActive: true,
 }
@@ -285,8 +285,6 @@ export function toEditableBank(bank: Bank): BankInput {
   return {
     name: bank.name,
     shortName: bank.shortName ?? '',
-    color: bank.color ?? '',
-    iconName: bank.iconName ?? '',
     isActive: bank.isActive,
   }
 }
