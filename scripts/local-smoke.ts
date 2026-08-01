@@ -271,6 +271,17 @@ try {
     paymentDate: '2026-07-01',
     isPaid: true,
   })
+  const upcomingCommitments = request<{
+    total: number
+    availableAfterCommitments: number
+    items: Array<{ name: string; amount: number }>
+  }>('/dashboard/upcoming-commitments')
+  assert.equal(upcomingCommitments.items.some((item) => item.name === 'Renta' && item.amount === 5000), true)
+  const availableBeforeCommitments = request<{ totalAvailable: number }>('/dashboard/summary').totalAvailable
+  assert.equal(
+    upcomingCommitments.availableAfterCommitments,
+    availableBeforeCommitments - upcomingCommitments.total,
+  )
   const reminder = request<{ id: number }>('/reminders', 'POST', {
     title: 'Pagar tarjeta',
     reminderDate: '2026-09-05',
@@ -317,7 +328,7 @@ try {
   assert.equal(typeof simulation.isFavorable, 'boolean')
 
   const info = request<{ schemaVersion: string }>('/database/info')
-  assert.equal(info.schemaVersion, '2')
+  assert.equal(info.schemaVersion, '3')
 
   const cardBeforeHistorical = request<Array<{
     id: number
@@ -412,6 +423,19 @@ try {
     recurringTransactions.some((item) => item.description === 'Ingreso automatico: Nomina automatica'),
     true,
   )
+  const biweeklyIncome = request<{ paymentDay: number | null; secondPaymentDay: number | null }>('/recurring-incomes', 'POST', {
+    name: 'Ingreso quincenal',
+    instrumentId: debit.id,
+    currencyId: 1,
+    amount: 250,
+    frequency: 'biweekly',
+    paymentDay: 15,
+    secondPaymentDay: 30,
+    nextPayment: '2099-08-15',
+    isActive: true,
+  })
+  assert.equal(biweeklyIncome.paymentDay, 15)
+  assert.equal(biweeklyIncome.secondPaymentDay, 30)
 
   const goal = request<{ id: number; progressPercent: number }>('/savings-goals', 'POST', {
     name: 'Fondo de emergencia',

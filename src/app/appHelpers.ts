@@ -249,6 +249,7 @@ export const EMPTY_RECURRING_INCOME_FORM: RecurringIncomeInput = {
   amount: 0,
   frequency: 'monthly',
   paymentDay: 1,
+  secondPaymentDay: null,
   nextPayment: TODAY_ISO,
   isActive: true,
   notes: '',
@@ -272,6 +273,12 @@ export const EMPTY_DASHBOARD_SUMMARY: DashboardSummary = {
   totalLoanDebt: 0,
   totalAvailableCredit: 0,
   netBalance: 0,
+}
+
+export const EMPTY_DASHBOARD_UPCOMING_COMMITMENTS = {
+  total: 0,
+  availableAfterCommitments: 0,
+  items: [],
 }
 
 export function toEditableBank(bank: Bank): BankInput {

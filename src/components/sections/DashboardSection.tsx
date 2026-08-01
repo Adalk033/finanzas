@@ -22,6 +22,8 @@ import type {
   DashboardExpenseByCategory,
   DashboardFutureExpensePoint,
   DashboardSummary,
+  DashboardUpcomingCommitment,
+  DashboardUpcomingCommitments,
 } from '../../types/domain'
 
 type DashboardSectionProps = {
@@ -33,7 +35,23 @@ type DashboardSectionProps = {
   dashboardCashFlow: DashboardCashFlowPoint[]
   dashboardBalanceEvolution: DashboardBalanceEvolution
   dashboardFutureExpenses: DashboardFutureExpensePoint[]
+  dashboardUpcomingCommitments: DashboardUpcomingCommitments
   onReload: () => void
+}
+
+const COMMITMENT_TYPE_LABELS: Record<DashboardUpcomingCommitment['type'], string> = {
+  subscription: 'Suscripcion',
+  fixed_expense: 'Gasto fijo',
+  loan_payment: 'Prestamo',
+  card_payment: 'Tarjeta',
+}
+
+function formatCommitmentDate(date: string): string {
+  return new Intl.DateTimeFormat('es-MX', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  }).format(new Date(`${date}T00:00:00Z`))
 }
 
 export function DashboardSection({
@@ -45,20 +63,22 @@ export function DashboardSection({
   dashboardCashFlow,
   dashboardBalanceEvolution,
   dashboardFutureExpenses,
+  dashboardUpcomingCommitments,
   onReload,
 }: DashboardSectionProps) {
+  const nextMonthProjection = dashboardFutureExpenses[0]
+
   return (
     <section className="card">
-      <header className="card__header">
-        <h2 className="card__title">Dashboard Principal</h2>
-        <p className="card__subtitle">Resumen financiero y tendencias clave de tus finanzas.</p>
-      </header>
-
-      <div className="form-grid__actions">
-        <button className="button button--secondary" type="button" disabled={!hasConfig || isDashboardLoading} onClick={onReload}>
-          {isDashboardLoading ? 'Cargando...' : 'Recargar dashboard'}
+      <header className="card__header dashboard-header">
+        <div>
+          <h2 className="card__title">Dashboard Principal</h2>
+          <p className="card__subtitle">Resumen financiero y tendencias clave de tus finanzas.</p>
+        </div>
+        <button className="button button--secondary dashboard-header__reload" type="button" disabled={!hasConfig || isDashboardLoading} onClick={onReload}>
+          {isDashboardLoading ? 'Cargando...' : 'Recargar'}
         </button>
-      </div>
+      </header>
 
       {!hasConfig ? <p className="message message--info">Abre la aplicacion de escritorio para acceder a tus datos locales.</p> : null}
       {isDashboardLoading ? <p className="message message--info">Cargando resumen y graficas del dashboard...</p> : null}
@@ -75,6 +95,12 @@ export function DashboardSection({
 
       <div className="dashboard-grid">
         <article className="summary-card">
+          <p className="summary-card__label">Balance neto</p>
+          <p className={`summary-card__value ${dashboardSummary.netBalance >= 0 ? 'summary-card__value--positive' : ''}`}>
+            {formatCurrency(dashboardSummary.netBalance)}
+          </p>
+        </article>
+        <article className="summary-card">
           <p className="summary-card__label">Dinero disponible total</p>
           <p className="summary-card__value summary-card__value--positive">{formatCurrency(dashboardSummary.totalAvailable)}</p>
         </article>
@@ -90,13 +116,47 @@ export function DashboardSection({
           <p className="summary-card__label">Credito disponible total</p>
           <p className="summary-card__value summary-card__value--positive">{formatCurrency(dashboardSummary.totalAvailableCredit)}</p>
         </article>
-        <article className="summary-card dashboard-grid__item--full">
-          <p className="summary-card__label">Balance neto</p>
-          <p className={`summary-card__value ${dashboardSummary.netBalance >= 0 ? 'summary-card__value--positive' : ''}`}>
-            {formatCurrency(dashboardSummary.netBalance)}
-          </p>
-        </article>
       </div>
+
+      <article className="dashboard-commitments">
+        <header className="mini-card__header">
+          <h3 className="mini-card__title">Proximos 30 dias</h3>
+          <p className="mini-card__subtitle">Pagos y cargos programados que conviene tener considerados.</p>
+        </header>
+        <div className="dashboard-commitments__summary">
+          <div>
+            <p className="summary-card__label">Compromisos estimados</p>
+            <p className="summary-card__value">{formatCurrency(dashboardUpcomingCommitments.total)}</p>
+          </div>
+          <div>
+            <p className="summary-card__label">Disponible despues de compromisos</p>
+            <p className={`summary-card__value ${dashboardUpcomingCommitments.availableAfterCommitments >= 0 ? 'summary-card__value--positive' : ''}`}>
+              {formatCurrency(dashboardUpcomingCommitments.availableAfterCommitments)}
+            </p>
+          </div>
+        </div>
+        {dashboardUpcomingCommitments.items.length === 0 ? (
+          <p className="card__subtitle">No hay pagos o cargos programados para los proximos 30 dias.</p>
+        ) : (
+          <div className="dashboard-commitments__list">
+            {dashboardUpcomingCommitments.items.slice(0, 6).map((commitment) => (
+              <div key={commitment.id} className="dashboard-commitment">
+                <time className="dashboard-commitment__date" dateTime={commitment.date}>{formatCommitmentDate(commitment.date)}</time>
+                <div className="dashboard-commitment__details">
+                  <p className="dashboard-commitment__name">{commitment.name}</p>
+                  <p className="dashboard-commitment__meta">
+                    {COMMITMENT_TYPE_LABELS[commitment.type]}{commitment.instrumentName ? ` · ${commitment.instrumentName}` : ''}
+                  </p>
+                </div>
+                <strong className="dashboard-commitment__amount">{formatCurrency(commitment.amount)}</strong>
+              </div>
+            ))}
+            {dashboardUpcomingCommitments.items.length > 6 ? (
+              <p className="card__subtitle">Y {dashboardUpcomingCommitments.items.length - 6} compromisos mas en los proximos 30 dias.</p>
+            ) : null}
+          </div>
+        )}
+      </article>
 
       <div className="dashboard-charts">
         <article className="mini-card">
@@ -181,6 +241,11 @@ export function DashboardSection({
         <article className="mini-card">
           <header className="mini-card__header">
             <h3 className="mini-card__title">Proyeccion de gastos futuros</h3>
+            {nextMonthProjection ? (
+              <p className="mini-card__subtitle">
+                Proximo mes: {nextMonthProjection.month} · {formatCurrency(nextMonthProjection.total)} estimados
+              </p>
+            ) : null}
           </header>
           {dashboardFutureExpenses.length === 0 ? (
             <p className="card__subtitle">No hay proyecciones disponibles por ahora.</p>

@@ -75,6 +75,7 @@ export function App() {
               dashboardCashFlow={dashboardController.dashboardCashFlow}
               dashboardBalanceEvolution={dashboardController.dashboardBalanceEvolution}
               dashboardFutureExpenses={dashboardController.dashboardFutureExpenses}
+              dashboardUpcomingCommitments={dashboardController.dashboardUpcomingCommitments}
               onReload={() => {
                 void dashboardController.loadDashboard()
               }}

@@ -42,6 +42,26 @@ type SubscriptionsSectionProps = {
   onRecurringIncomeDelete: (id: number) => void
 }
 
+const RECURRING_INCOME_FREQUENCY_LABELS: Record<RecurringIncomeInput['frequency'], string> = {
+  weekly: 'Semanal',
+  biweekly: 'Quincenal',
+  monthly: 'Mensual',
+  yearly: 'Anual',
+}
+
+function formatRecurringIncomeSchedule(income: RecurringIncome): string {
+  const label = RECURRING_INCOME_FREQUENCY_LABELS[income.frequency]
+  if (income.frequency === 'biweekly') {
+    return income.paymentDay !== null && income.secondPaymentDay !== null
+      ? `${label} · dias ${income.paymentDay} y ${income.secondPaymentDay}`
+      : `${label} · cada 14 dias`
+  }
+  if ((income.frequency === 'monthly' || income.frequency === 'yearly') && income.paymentDay !== null) {
+    return `${label} · dia ${income.paymentDay}`
+  }
+  return label
+}
+
 export function SubscriptionsSection({
   hasConfig,
   instruments,
@@ -377,16 +397,54 @@ export function SubscriptionsSection({
             id="recurringIncomeFrequency"
             className="form-grid__input"
             value={recurringIncomeForm.frequency}
-            onChange={(event) => onRecurringIncomeFormChange({
-              ...recurringIncomeForm,
-              frequency: event.target.value as RecurringIncomeInput['frequency'],
-            })}
+            onChange={(event) => {
+              const frequency = event.target.value as RecurringIncomeInput['frequency']
+              onRecurringIncomeFormChange({
+                ...recurringIncomeForm,
+                frequency,
+                paymentDay: frequency === 'biweekly' ? (recurringIncomeForm.paymentDay ?? 1) : recurringIncomeForm.paymentDay,
+                secondPaymentDay: frequency === 'biweekly' ? (recurringIncomeForm.secondPaymentDay ?? 15) : null,
+              })
+            }}
           >
             <option value="weekly">Semanal</option>
             <option value="biweekly">Quincenal</option>
             <option value="monthly">Mensual</option>
             <option value="yearly">Anual</option>
           </select>
+          {recurringIncomeForm.frequency === 'biweekly' ? (
+            <>
+              <label className="form-grid__field" htmlFor="recurringIncomeFirstPaymentDay">Primer dia de pago</label>
+              <input
+                id="recurringIncomeFirstPaymentDay"
+                className="form-grid__input"
+                type="number"
+                min={1}
+                max={31}
+                value={recurringIncomeForm.paymentDay ?? ''}
+                onChange={(event) => onRecurringIncomeFormChange({
+                  ...recurringIncomeForm,
+                  paymentDay: event.target.value ? Number(event.target.value) : null,
+                })}
+              />
+              <label className="form-grid__field" htmlFor="recurringIncomeSecondPaymentDay">Segundo dia de pago</label>
+              <input
+                id="recurringIncomeSecondPaymentDay"
+                className="form-grid__input"
+                type="number"
+                min={1}
+                max={31}
+                value={recurringIncomeForm.secondPaymentDay ?? ''}
+                onChange={(event) => onRecurringIncomeFormChange({
+                  ...recurringIncomeForm,
+                  secondPaymentDay: event.target.value ? Number(event.target.value) : null,
+                })}
+              />
+              {recurringIncomeForm.secondPaymentDay === null ? (
+                <p className="mini-card__subtitle">Este registro existente seguira repitiendose cada 14 dias hasta que definas ambos dias.</p>
+              ) : null}
+            </>
+          ) : null}
           <label className="form-grid__field" htmlFor="recurringIncomeNext">Proximo ingreso</label>
           <input
             id="recurringIncomeNext"
@@ -423,7 +481,7 @@ export function SubscriptionsSection({
                   <td>{income.name}{income.isActive ? '' : ' · Archivado'}</td>
                   <td>{income.instrumentName ?? '-'}</td>
                   <td>{formatCurrency(income.amount)}</td>
-                  <td>{income.frequency}</td>
+                  <td>{formatRecurringIncomeSchedule(income)}</td>
                   <td>{income.nextPayment}</td>
                   <td>
                     <div className="table__actions">

@@ -61,6 +61,7 @@ export function useRecurringIncomesController({ instruments, categories }: Param
       amount: income.amount,
       frequency: income.frequency,
       paymentDay: income.paymentDay,
+      secondPaymentDay: income.secondPaymentDay,
       nextPayment: income.nextPayment,
       isActive: income.isActive,
       notes: income.notes ?? '',
