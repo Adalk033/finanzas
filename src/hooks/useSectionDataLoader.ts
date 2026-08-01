@@ -17,6 +17,8 @@ type SectionLoaders = {
   loadSavingsGoals: () => Promise<void>
   loadReminders: () => Promise<void>
   loadSimulations: () => Promise<void>
+  loadFamilyDashboard: () => Promise<void>
+  loadFamilyExpenses: () => Promise<void>
 }
 
 export function useSectionDataLoader(hasConfig: boolean, loaders: SectionLoaders) {
@@ -96,6 +98,12 @@ export function useSectionDataLoader(hasConfig: boolean, loaders: SectionLoaders
     },
     simulator: async () => {
       await Promise.all([loaders.loadInstruments(), loaders.loadSimulations()])
+    },
+    familyDashboard: async () => {
+      await loaders.loadFamilyDashboard()
+    },
+    familyExpenses: async () => {
+      await Promise.all([loaders.loadCategories(), loaders.loadFamilyExpenses()])
     },
   }
 

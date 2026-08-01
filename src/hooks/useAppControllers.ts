@@ -15,6 +15,8 @@ import { useSectionDataLoader } from './useSectionDataLoader'
 import { useFinanceSelectors } from './useFinanceSelectors'
 import { useRecurringIncomesController } from './useRecurringIncomesController'
 import { useSavingsGoalsController } from './useSavingsGoalsController'
+import { useFamilyDashboardController } from './useFamilyDashboardController'
+import { useFamilyExpensesController } from './useFamilyExpensesController'
 
 export function useAppControllers() {
   const databaseController = useLocalDatabase()
@@ -23,6 +25,8 @@ export function useAppControllers() {
   const instrumentsController = useInstrumentsController()
   const banksController = useBanksController({ loadInstruments: instrumentsController.loadInstruments })
   const categoriesController = useCategoriesController()
+  const familyDashboardController = useFamilyDashboardController()
+  const familyExpensesController = useFamilyExpensesController(categoriesController.categories)
 
   const creditCardsController = useCreditCardsController({
     instruments: instrumentsController.instruments,
@@ -79,6 +83,8 @@ export function useAppControllers() {
     loadSavingsGoals: savingsGoalsController.loadSavingsGoals,
     loadReminders: remindersController.loadReminders,
     loadSimulations: simulatorController.loadSimulations,
+    loadFamilyDashboard: familyDashboardController.loadFamilyDashboard,
+    loadFamilyExpenses: familyExpensesController.loadFamilyExpenses,
   })
 
   return {
@@ -102,5 +108,7 @@ export function useAppControllers() {
     transactionsController,
     recurringIncomesController,
     savingsGoalsController,
+    familyDashboardController,
+    familyExpensesController,
   }
 }

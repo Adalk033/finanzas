@@ -97,6 +97,19 @@ const SCHEMA = `
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS family_expenses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    category_id INTEGER REFERENCES categories(id),
+    subcategory_id INTEGER REFERENCES subcategories(id),
+    currency_id INTEGER NOT NULL DEFAULT 1 REFERENCES currencies(id),
+    amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+    description TEXT NOT NULL CHECK (length(description) BETWEEN 1 AND 255),
+    expense_date TEXT NOT NULL,
+    notes TEXT CHECK (notes IS NULL OR length(notes) <= 2000),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
   CREATE TABLE IF NOT EXISTS credit_card_statements (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     instrument_id INTEGER NOT NULL REFERENCES financial_instruments(id),
@@ -307,6 +320,8 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_instruments_bank ON financial_instruments(bank_id);
   CREATE INDEX IF NOT EXISTS idx_transactions_instrument_date ON transactions(instrument_id, transaction_date);
   CREATE INDEX IF NOT EXISTS idx_transactions_category_date ON transactions(category_id, transaction_date);
+  CREATE INDEX IF NOT EXISTS idx_family_expenses_date ON family_expenses(expense_date);
+  CREATE INDEX IF NOT EXISTS idx_family_expenses_category_date ON family_expenses(category_id, expense_date);
   CREATE INDEX IF NOT EXISTS idx_transfers_instruments_date ON transfers(source_instrument_id, destination_instrument_id, transfer_date);
   CREATE INDEX IF NOT EXISTS idx_loan_payments_loan ON loan_payments(loan_id, installment_num);
   CREATE INDEX IF NOT EXISTS idx_reminders_pending ON reminders(is_dismissed, is_read, reminder_date);
@@ -498,7 +513,7 @@ export function initializeLocalDb(dbPath: string): void {
 
   database.prepare(`
     INSERT INTO app_metadata (key, value)
-    VALUES ('schema_version', '5')
+    VALUES ('schema_version', '6')
     ON CONFLICT(key) DO UPDATE SET value = excluded.value
   `).run()
 }

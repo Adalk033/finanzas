@@ -153,6 +153,54 @@ export interface TransactionFilters {
   search?: string
 }
 
+export interface FamilyExpense {
+  id: number
+  categoryId: number | null
+  categoryName: string | null
+  subcategoryId: number | null
+  subcategoryName: string | null
+  currencyId: number
+  amount: number
+  description: string
+  expenseDate: string
+  notes: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface FamilyExpenseInput {
+  categoryId: number | null
+  subcategoryId: number | null
+  amount: number
+  description: string
+  expenseDate: string
+  notes: string
+}
+
+export interface FamilyExpenseFilters {
+  month: string
+  categoryId?: number
+  search?: string
+}
+
+export interface FamilyDashboardSummary {
+  total: number
+  expenseCount: number
+  averageExpense: number
+}
+
+export interface FamilyMonthlyExpensePoint {
+  month: string
+  total: number
+}
+
+export interface FamilyDashboard {
+  month: string
+  summary: FamilyDashboardSummary
+  expensesByCategory: DashboardExpenseByCategory[]
+  monthlyTrend: FamilyMonthlyExpensePoint[]
+}
+
 export interface CreditCardStatement {
   id: number
   instrumentId: number

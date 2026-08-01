@@ -16,6 +16,10 @@ import type {
   CreditCardStatementUpdateInput,
   FinancialInstrument,
   FinancialInstrumentInput,
+  FamilyDashboard,
+  FamilyExpense,
+  FamilyExpenseFilters,
+  FamilyExpenseInput,
   Loan,
   LoanInput,
   LoanPayment,
@@ -390,6 +394,25 @@ function sanitizeSavingsGoalPayload(payload: SavingsGoalInput): Record<string, u
   return sanitized
 }
 
+function sanitizeFamilyExpensePayload(payload: FamilyExpenseInput): Record<string, unknown> {
+  const sanitized: Record<string, unknown> = {
+    amount: payload.amount,
+    description: payload.description.trim(),
+    expenseDate: payload.expenseDate,
+  }
+  setIfNotNull(sanitized, 'categoryId', payload.categoryId)
+  setIfNotNull(sanitized, 'subcategoryId', payload.subcategoryId)
+  setTrimmedIfPresent(sanitized, 'notes', payload.notes)
+  return sanitized
+}
+
+function buildFamilyExpenseQuery(filters: FamilyExpenseFilters): string {
+  const params = new URLSearchParams({ month: filters.month })
+  if (filters.categoryId) params.set('category_id', String(filters.categoryId))
+  if (filters.search?.trim()) params.set('search', filters.search.trim())
+  return `?${params.toString()}`
+}
+
 function buildTransactionQuery(filters: TransactionFilters): string {
   const params = new URLSearchParams()
 
@@ -436,6 +459,22 @@ export const apiClient = {
   getDashboardBalanceEvolution: () => request<DashboardBalanceEvolution>(ENDPOINTS.DASHBOARD_BALANCE_EVOLUTION, { method: 'GET' }),
   getDashboardFutureExpenses: () => request<DashboardFutureExpensePoint[]>(ENDPOINTS.DASHBOARD_FUTURE_EXPENSES, { method: 'GET' }),
   getDashboardUpcomingCommitments: () => request<DashboardUpcomingCommitments>(ENDPOINTS.DASHBOARD_UPCOMING_COMMITMENTS, { method: 'GET' }),
+  getFamilyDashboard: (month: string) =>
+    request<FamilyDashboard>(`${ENDPOINTS.FAMILY_DASHBOARD}?month=${encodeURIComponent(month)}`, { method: 'GET' }),
+  getFamilyExpenses: (filters: FamilyExpenseFilters) =>
+    request<FamilyExpense[]>(`${ENDPOINTS.FAMILY_EXPENSES}${buildFamilyExpenseQuery(filters)}`, { method: 'GET' }),
+  createFamilyExpense: (payload: FamilyExpenseInput) =>
+    request<FamilyExpense>(ENDPOINTS.FAMILY_EXPENSES, {
+      method: 'POST',
+      body: JSON.stringify(sanitizeFamilyExpensePayload(payload)),
+    }),
+  updateFamilyExpense: (id: number, payload: FamilyExpenseInput) =>
+    request<FamilyExpense>(`${ENDPOINTS.FAMILY_EXPENSES}/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(sanitizeFamilyExpensePayload(payload)),
+    }),
+  deleteFamilyExpense: (id: number) =>
+    request<{ id: number }>(`${ENDPOINTS.FAMILY_EXPENSES}/${id}`, { method: 'DELETE' }),
   getBanks: () => request<Bank[]>(ENDPOINTS.BANKS, { method: 'GET' }),
   createBank: (payload: BankInput) =>
     request<Bank>(ENDPOINTS.BANKS, {

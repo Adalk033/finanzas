@@ -194,6 +194,71 @@ try {
     isMsi: true,
     msiMonths: 6,
   })
+
+  const balancesBeforeFamilyExpenses = request<Array<{
+    id: number
+    currentAmount: number | null
+    currentBalance: number | null
+  }>>('/instruments')
+  const familyExpense = request<{
+    id: number
+    amount: number
+    categoryName: string
+    expenseDate: string
+  }>('/family-expenses', 'POST', {
+    categoryId: category.id,
+    amount: 850.25,
+    description: 'Despensa familiar',
+    expenseDate: '2026-07-20',
+    notes: 'Compra semanal',
+  })
+  assert.equal(familyExpense.amount, 850.25)
+  assert.equal(familyExpense.categoryName, 'Alimentos')
+  const familyExpensesForJuly = request<Array<{ id: number }>>('/family-expenses?month=2026-07')
+  assert.deepEqual(familyExpensesForJuly.map((expense) => expense.id), [familyExpense.id])
+  assert.equal(request<Array<{ id: number }>>('/family-expenses?month=2026-06').length, 0)
+  const familyDashboard = request<{
+    month: string
+    summary: { total: number; expenseCount: number; averageExpense: number }
+    expensesByCategory: Array<{ category: string; total: number }>
+  }>('/family/dashboard?month=2026-07')
+  assert.equal(familyDashboard.month, '2026-07')
+  assert.deepEqual(familyDashboard.summary, {
+    total: 850.25,
+    expenseCount: 1,
+    averageExpense: 850.25,
+  })
+  assert.deepEqual(familyDashboard.expensesByCategory, [{ category: 'Alimentos', total: 850.25 }])
+  const balancesAfterFamilyExpense = request<typeof balancesBeforeFamilyExpenses>('/instruments')
+  assert.deepEqual(balancesAfterFamilyExpense, balancesBeforeFamilyExpenses)
+  const personalCategoryExpenses = request<Array<{ category: string; total: number }>>(
+    '/dashboard/charts/expenses-by-category?period=last_3_months',
+  )
+  assert.equal(personalCategoryExpenses.find((item) => item.category === 'Alimentos')?.total, 1325.45)
+  request(`/family-expenses/${familyExpense.id}`, 'PUT', {
+    categoryId: category.id,
+    amount: 900,
+    description: 'Despensa familiar actualizada',
+    expenseDate: '2026-07-20',
+  })
+  assert.equal(request<{ summary: { total: number } }>('/family/dashboard?month=2026-07').summary.total, 900)
+  const incomeOnlyCategory = request<{ id: number }>('/categories', 'POST', {
+    name: 'Ingreso familiar no permitido',
+    type: 'income',
+    isActive: true,
+  })
+  const invalidFamilyCategoryError = requestFailure('/family-expenses', 'POST', {
+    categoryId: incomeOnlyCategory.id,
+    amount: 100,
+    description: 'Categoria incorrecta',
+    expenseDate: '2026-07-20',
+  })
+  assert.match(invalidFamilyCategoryError, /no corresponde a un gasto/)
+  const invalidFamilyMonthError = requestFailure('/family/dashboard?month=2026-13', 'GET', {})
+  assert.match(invalidFamilyMonthError, /month no es un mes valido/)
+  request(`/family-expenses/${familyExpense.id}`, 'DELETE')
+  assert.equal(request<Array<{ id: number }>>('/family-expenses?month=2026-07').length, 0)
+
   request('/transactions', 'POST', {
     instrumentId: credit.id,
     categoryId: category.id,
@@ -440,7 +505,7 @@ try {
   assert.equal(typeof simulation.isFavorable, 'boolean')
 
   const info = request<{ schemaVersion: string }>('/database/info')
-  assert.equal(info.schemaVersion, '5')
+  assert.equal(info.schemaVersion, '6')
 
   const cardBeforeHistorical = request<Array<{
     id: number

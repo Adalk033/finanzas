@@ -21,6 +21,7 @@ type InstrumentRow = DbRow & {
 }
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
+const ISO_MONTH = /^\d{4}-\d{2}$/
 const ICON_NAME = /^[A-Za-z][A-Za-z0-9]*$/
 const LAST_FOUR = /^\d{4}$/
 const INSTRUMENT_TYPES = new Set(['credit_card', 'debit_card', 'account'])
@@ -137,6 +138,17 @@ function optionalDate(input: Input, key: string): string | null {
   return requiredDate(input, key)
 }
 
+function requiredMonth(value: string): string {
+  if (!ISO_MONTH.test(value)) {
+    throw new ValidationError('month debe usar el formato AAAA-MM.')
+  }
+  const parsed = new Date(`${value}-01T00:00:00Z`)
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 7) !== value) {
+    throw new ValidationError('month no es un mes valido.')
+  }
+  return value
+}
+
 function moneyToCents(value: unknown, key: string, allowZero = false): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     throw new ValidationError(`${key} debe ser un monto valido.`)
@@ -188,6 +200,7 @@ function requireEntity(db: Database.Database, table: string, id: number): DbRow 
     'credit_card_statements', 'transfers', 'loans', 'subscriptions', 'fixed_expenses',
     'fixed_expense_payments', 'budgets', 'simulations', 'reminders',
     'recurring_incomes', 'savings_goals',
+    'family_expenses',
   ])
   if (!allowedTables.has(table)) {
     throw new Error('Tabla interna no permitida.')
@@ -272,6 +285,23 @@ function mapTransaction(row: DbRow): Record<string, unknown> {
     affectsBalance: row.affects_balance === undefined ? true : toBoolean(row.affects_balance),
     sourceType: row.source_type ?? null,
     sourceId: toNullableNumber(row.source_id),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
+}
+
+function mapFamilyExpense(row: DbRow): Record<string, unknown> {
+  return {
+    id: toNumber(row.id),
+    categoryId: toNullableNumber(row.category_id),
+    categoryName: row.category_name ?? null,
+    subcategoryId: toNullableNumber(row.subcategory_id),
+    subcategoryName: row.subcategory_name ?? null,
+    currencyId: toNumber(row.currency_id),
+    amount: fromCents(row.amount_cents),
+    description: row.description,
+    expenseDate: row.expense_date,
+    notes: row.notes ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -940,8 +970,9 @@ function categoryCanDelete(db: Database.Database, id: number): boolean {
     SELECT
       (SELECT COUNT(*) FROM transactions WHERE category_id = ?) +
       (SELECT COUNT(*) FROM subscriptions WHERE category_id = ?) +
-      (SELECT COUNT(*) FROM fixed_expenses WHERE category_id = ?) AS total
-  `).get(id, id, id) as { total: number }
+      (SELECT COUNT(*) FROM fixed_expenses WHERE category_id = ?) +
+      (SELECT COUNT(*) FROM family_expenses WHERE category_id = ?) AS total
+  `).get(id, id, id, id) as { total: number }
   return count.total === 0
 }
 
@@ -1052,8 +1083,9 @@ function deleteSubcategory(db: Database.Database, id: number): { id: number } {
     SELECT
       (SELECT COUNT(*) FROM transactions WHERE subcategory_id = ?) +
       (SELECT COUNT(*) FROM subscriptions WHERE subcategory_id = ?) +
-      (SELECT COUNT(*) FROM fixed_expenses WHERE subcategory_id = ?) AS total
-  `).get(id, id, id) as { total: number }
+      (SELECT COUNT(*) FROM fixed_expenses WHERE subcategory_id = ?) +
+      (SELECT COUNT(*) FROM family_expenses WHERE subcategory_id = ?) AS total
+  `).get(id, id, id, id) as { total: number }
   if (used.total > 0) {
     throw new ValidationError('La subcategoria tiene movimientos relacionados.')
   }
@@ -1257,6 +1289,154 @@ function deleteTransaction(db: Database.Database, id: number): { id: number } {
   })
   operation()
   return { id }
+}
+
+function familyExpenseSelect(where = ''): string {
+  return `
+    SELECT fe.*, c.name AS category_name, s.name AS subcategory_name
+    FROM family_expenses fe
+    LEFT JOIN categories c ON c.id = fe.category_id
+    LEFT JOIN subcategories s ON s.id = fe.subcategory_id
+    ${where}
+  `
+}
+
+function validateFamilyExpense(db: Database.Database, body: Input): {
+  categoryId: number | null
+  subcategoryId: number | null
+  amountCents: number
+  description: string
+  expenseDate: string
+  notes: string | null
+} {
+  const categoryId = optionalInteger(body, 'categoryId')
+  const subcategoryId = optionalInteger(body, 'subcategoryId')
+  validateCategoryLinks(db, categoryId, subcategoryId)
+  if (categoryId !== null) {
+    const category = db.prepare('SELECT type FROM categories WHERE id = ?').get(categoryId) as { type: string }
+    if (category.type !== 'expense' && category.type !== 'both') {
+      throw new ValidationError('La categoria seleccionada no corresponde a un gasto.')
+    }
+  }
+  return {
+    categoryId,
+    subcategoryId,
+    amountCents: moneyToCents(body.amount, 'amount'),
+    description: requiredString(body, 'description', 255),
+    expenseDate: requiredDate(body, 'expenseDate'),
+    notes: optionalString(body, 'notes', 2000),
+  }
+}
+
+function listFamilyExpenses(db: Database.Database, url: URL): Record<string, unknown>[] {
+  const clauses: string[] = []
+  const params: unknown[] = []
+  const add = (clause: string, value: unknown): void => {
+    clauses.push(clause)
+    params.push(value)
+  }
+  const month = url.searchParams.get('month') ?? todayIso().slice(0, 7)
+  const categoryIdValue = url.searchParams.get('category_id')
+  const search = url.searchParams.get('search')?.trim()
+  const start = `${requiredMonth(month)}-01`
+  add('fe.expense_date >= ?', start)
+  add('fe.expense_date < ?', addMonths(start, 1))
+  if (categoryIdValue) {
+    const categoryId = Number(categoryIdValue)
+    if (!Number.isInteger(categoryId) || categoryId < 1) {
+      throw new ValidationError('categoryId no es valido.')
+    }
+    add('fe.category_id = ?', categoryId)
+  }
+  if (search) {
+    if (search.length > 100) throw new ValidationError('La busqueda no puede exceder 100 caracteres.')
+    clauses.push('(fe.description LIKE ? OR fe.notes LIKE ?)')
+    params.push(`%${search}%`, `%${search}%`)
+  }
+  const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : ''
+  return (db.prepare(`${familyExpenseSelect(where)} ORDER BY fe.expense_date DESC, fe.id DESC`).all(...params) as DbRow[])
+    .map(mapFamilyExpense)
+}
+
+function saveFamilyExpense(db: Database.Database, body: Input, id?: number): Record<string, unknown> {
+  const input = validateFamilyExpense(db, body)
+  const operation = db.transaction(() => {
+    if (id) {
+      requireEntity(db, 'family_expenses', id)
+      db.prepare(`
+        UPDATE family_expenses
+        SET category_id = ?, subcategory_id = ?, amount_cents = ?, description = ?,
+            expense_date = ?, notes = ?, updated_at = datetime('now')
+        WHERE id = ?
+      `).run(
+        input.categoryId, input.subcategoryId, input.amountCents, input.description,
+        input.expenseDate, input.notes, id,
+      )
+    } else {
+      const result = db.prepare(`
+        INSERT INTO family_expenses (
+          category_id, subcategory_id, currency_id, amount_cents, description, expense_date, notes
+        ) VALUES (?, ?, 1, ?, ?, ?, ?)
+      `).run(
+        input.categoryId, input.subcategoryId, input.amountCents, input.description,
+        input.expenseDate, input.notes,
+      )
+      id = Number(result.lastInsertRowid)
+    }
+  })
+  operation()
+  return mapFamilyExpense(asRow(db.prepare(familyExpenseSelect('WHERE fe.id = ?')).get(id)))
+}
+
+function deleteFamilyExpense(db: Database.Database, id: number): { id: number } {
+  requireEntity(db, 'family_expenses', id)
+  db.prepare('DELETE FROM family_expenses WHERE id = ?').run(id)
+  return { id }
+}
+
+function getFamilyDashboard(db: Database.Database, month: string): Record<string, unknown> {
+  const start = `${requiredMonth(month)}-01`
+  const end = addMonths(start, 1)
+  const summary = db.prepare(`
+    SELECT COALESCE(SUM(amount_cents), 0) AS total, COUNT(*) AS expense_count
+    FROM family_expenses
+    WHERE expense_date >= ? AND expense_date < ?
+  `).get(start, end) as { total: number; expense_count: number }
+  const categories = db.prepare(`
+    SELECT COALESCE(c.name, 'Sin categoria') AS category, SUM(fe.amount_cents) AS total
+    FROM family_expenses fe
+    LEFT JOIN categories c ON c.id = fe.category_id
+    WHERE fe.expense_date >= ? AND fe.expense_date < ?
+    GROUP BY COALESCE(c.name, 'Sin categoria')
+    ORDER BY total DESC
+  `).all(start, end) as Array<{ category: string; total: number }>
+  const monthlyTrend = Array.from({ length: 6 }, (_, index) => {
+    const trendStart = addMonths(start, index - 5)
+    const date = new Date(`${trendStart}T00:00:00Z`)
+    const label = new Intl.DateTimeFormat('es-MX', {
+      month: 'short',
+      year: '2-digit',
+      timeZone: 'UTC',
+    }).format(date)
+    const row = db.prepare(`
+      SELECT COALESCE(SUM(amount_cents), 0) AS total
+      FROM family_expenses
+      WHERE expense_date >= ? AND expense_date < ?
+    `).get(trendStart, addMonths(trendStart, 1)) as { total: number }
+    return { month: label, total: toNumber(row.total) / 100 }
+  })
+  const total = toNumber(summary.total) / 100
+  const expenseCount = toNumber(summary.expense_count)
+  return {
+    month,
+    summary: {
+      total,
+      expenseCount,
+      averageExpense: expenseCount > 0 ? Math.round(toNumber(summary.total) / expenseCount) / 100 : 0,
+    },
+    expensesByCategory: categories.map((row) => ({ category: row.category, total: toNumber(row.total) / 100 })),
+    monthlyTrend,
+  }
 }
 
 function defaultPaymentDueDate(cutOffDate: string, paymentDueDay: number): string {
@@ -3717,6 +3897,9 @@ function routeRequest(
   if (path === '/dashboard/charts/balance-evolution' && method === 'GET') return getDashboardBalanceEvolution(db)
   if (path === '/dashboard/charts/future-expenses' && method === 'GET') return getDashboardFutureExpenses(db)
   if (path === '/dashboard/upcoming-commitments' && method === 'GET') return getDashboardUpcomingCommitments(db)
+  if (path === '/family/dashboard' && method === 'GET') {
+    return getFamilyDashboard(db, url.searchParams.get('month') ?? todayIso().slice(0, 7))
+  }
 
   const bankResult = entityRoute(
     '/banks',
@@ -3775,6 +3958,15 @@ function routeRequest(
     (id) => deleteTransaction(db, id),
   )
   if (transactionResult !== undefined) return transactionResult
+
+  const familyExpenseResult = entityRoute(
+    '/family-expenses',
+    () => listFamilyExpenses(db, url),
+    (value) => saveFamilyExpense(db, value),
+    (id, value) => saveFamilyExpense(db, value, id),
+    (id) => deleteFamilyExpense(db, id),
+  )
+  if (familyExpenseResult !== undefined) return familyExpenseResult
 
   const statementMovements = path.match(/^\/statements\/(\d+)\/movements$/)
   if (statementMovements && method === 'GET') {
