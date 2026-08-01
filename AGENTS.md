@@ -19,7 +19,8 @@ informacion en SQLite dentro del equipo.
 ## Stack y restricciones
 
 - pnpm es el unico gestor de paquetes permitido en este proyecto.
-- Usar siempre `pnpm install`, `pnpm run <script>` y `pnpm exec <comando>`.
+- Para comandos del proyecto usar solo `pnpm run <script>` y `pnpm exec <comando>`.
+- No ejecutar `pnpm install`; la instalacion o sincronizacion de dependencias queda siempre a cargo del usuario.
 - No ejecutar `npm`, `npx`, `yarn` ni generar archivos de bloqueo de otros
   gestores.
 - Mantener `ignoreScripts: true` en `pnpm-workspace.yaml`: ninguna dependencia

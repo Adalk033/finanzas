@@ -653,6 +653,42 @@ try {
   const payrollSchedule = request<Array<{ paymentDate: string }>>(`/loans/${payrollLoan.id}/payments`)
   assert.equal(payrollSchedule[0]?.paymentDate, '2099-01-01')
   assert.equal(payrollSchedule[1]?.paymentDate, '2099-01-08')
+
+  const scheduledBiweeklyLoan = request<{ id: number; paymentDay: number | null; secondPaymentDay: number | null }>('/loans', 'POST', {
+    name: 'Prestamo quincenal con dias fijos',
+    currencyId: 1,
+    originalAmount: 600,
+    annualRate: 12,
+    totalInstallments: 4,
+    paymentType: 'fixed',
+    fixedPayment: 160,
+    paymentFrequency: 'biweekly',
+    paymentDay: 14,
+    secondPaymentDay: 30,
+    startDate: '2028-02-01',
+    isActive: true,
+  })
+  assert.equal(scheduledBiweeklyLoan.paymentDay, 14)
+  assert.equal(scheduledBiweeklyLoan.secondPaymentDay, 30)
+  const scheduledBiweeklyPayments = request<Array<{ paymentDate: string }>>(`/loans/${scheduledBiweeklyLoan.id}/payments`)
+  assert.deepEqual(
+    scheduledBiweeklyPayments.map((payment) => payment.paymentDate),
+    ['2028-02-14', '2028-02-29', '2028-03-14', '2028-03-30'],
+  )
+  const invalidBiweeklyLoanError = requestFailure('/loans', 'POST', {
+    name: 'Prestamo quincenal invalido',
+    currencyId: 1,
+    originalAmount: 600,
+    totalInstallments: 4,
+    paymentType: 'fixed',
+    fixedPayment: 160,
+    paymentFrequency: 'biweekly',
+    paymentDay: 30,
+    secondPaymentDay: 14,
+    startDate: '2028-02-01',
+    isActive: true,
+  })
+  assert.match(invalidBiweeklyLoanError, /segundo dia de pago quincenal debe ser posterior/)
   const balanceBeforePayrollPayment = request<Array<{ id: number; currentAmount: number }>>('/instruments')
     .find((item) => item.id === debit.id)?.currentAmount
   const payrollPayment = request<{

@@ -91,6 +91,7 @@ export function useLoansController({ instruments }: UseLoansControllerParams) {
       paymentType: loan.paymentType,
       fixedPayment: loan.fixedPayment,
       paymentDay: loan.paymentDay,
+      secondPaymentDay: loan.secondPaymentDay,
       paymentFrequency: loan.paymentFrequency,
       startDate: loan.startDate,
       endDate: loan.endDate ?? '',

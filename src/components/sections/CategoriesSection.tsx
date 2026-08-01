@@ -128,26 +128,6 @@ export function CategoriesSection({
                   <option value="both">Ambos</option>
                 </select>
 
-                <label className="form-grid__field" htmlFor="categoryIcon">Icono (Lucide)</label>
-                <input
-                  id="categoryIcon"
-                  className="form-grid__input"
-                  type="text"
-                  value={categoryForm.iconName}
-                  onChange={(event) => onCategoryFormChange({ ...categoryForm, iconName: event.target.value })}
-                  placeholder="UtensilsCrossed"
-                />
-
-                <label className="form-grid__field" htmlFor="categoryColor">Color</label>
-                <input
-                  id="categoryColor"
-                  className="form-grid__input"
-                  type="text"
-                  value={categoryForm.color}
-                  onChange={(event) => onCategoryFormChange({ ...categoryForm, color: event.target.value })}
-                  placeholder="#6f86e8"
-                />
-
                 <div className="form-grid__actions">
                   <button className="button button--primary" type="submit" disabled={!hasConfig}>
                     {editingCategoryId === null ? 'Crear categoria' : 'Guardar cambios'}

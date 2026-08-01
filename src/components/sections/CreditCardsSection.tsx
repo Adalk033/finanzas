@@ -10,6 +10,7 @@ import type {
   Transfer,
   TransferInput,
 } from '../../types/domain'
+import { NumberInput } from '../NumberInput'
 
 type CardTab = 'summary' | 'movements' | 'msi' | 'statements'
 type ActionPanel = 'purchase' | 'payment' | null
@@ -301,14 +302,14 @@ export function CreditCardsSection({
                     />
 
                     <label className="form-grid__field" htmlFor="cardPurchaseAmount">Monto</label>
-                    <input
+                    <NumberInput
                       id="cardPurchaseAmount"
                       className="form-grid__input"
-                      type="number"
                       min={0.01}
                       step="0.01"
                       value={purchaseForm.amount}
-                      onChange={(event) => onPurchaseFormChange({ ...purchaseForm, amount: Number(event.target.value) })}
+                      emptyValue={0}
+                      onValueChange={(amount) => onPurchaseFormChange({ ...purchaseForm, amount })}
                       required
                     />
 
@@ -449,16 +450,16 @@ export function CreditCardsSection({
                     </select>
 
                     <label className="form-grid__field" htmlFor="cardPaymentAmount">Monto</label>
-                    <input
+                    <NumberInput
                       id="cardPaymentAmount"
                       className="form-grid__input"
-                      type="number"
                       min={0.01}
                       step="0.01"
                       value={cardPaymentForm.amount}
-                      onChange={(event) => onPaymentFormChange({
+                      emptyValue={0}
+                      onValueChange={(amount) => onPaymentFormChange({
                         ...cardPaymentForm,
-                        amount: Number(event.target.value),
+                        amount,
                       })}
                       required
                     />
@@ -658,29 +659,29 @@ export function CreditCardsSection({
                             })}
                           />
                           <label className="form-grid__field" htmlFor="statementMinimum">Pago minimo</label>
-                          <input
+                          <NumberInput
                             id="statementMinimum"
                             className="form-grid__input"
-                            type="number"
                             min={0}
                             step="0.01"
-                            value={statementUpdateForm.minimumPayment ?? ''}
-                            onChange={(event) => onStatementUpdateFormChange({
+                            value={statementUpdateForm.minimumPayment}
+                            emptyValue={null}
+                            onValueChange={(minimumPayment) => onStatementUpdateFormChange({
                               ...statementUpdateForm,
-                              minimumPayment: event.target.value ? Number(event.target.value) : null,
+                              minimumPayment,
                             })}
                           />
                           <label className="form-grid__field" htmlFor="statementNoInterest">Para no generar intereses</label>
-                          <input
+                          <NumberInput
                             id="statementNoInterest"
                             className="form-grid__input"
-                            type="number"
                             min={0}
                             step="0.01"
-                            value={statementUpdateForm.noInterestPayment ?? ''}
-                            onChange={(event) => onStatementUpdateFormChange({
+                            value={statementUpdateForm.noInterestPayment}
+                            emptyValue={null}
+                            onValueChange={(noInterestPayment) => onStatementUpdateFormChange({
                               ...statementUpdateForm,
-                              noInterestPayment: event.target.value ? Number(event.target.value) : null,
+                              noInterestPayment,
                             })}
                           />
                           <div className="form-grid__actions">

@@ -141,9 +141,6 @@ function sanitizeCategoryPayload(payload: CategoryInput): Record<string, unknown
     isActive: payload.isActive,
   }
 
-  setTrimmedIfPresent(sanitized, 'iconName', payload.iconName)
-  setTrimmedIfPresent(sanitized, 'color', payload.color)
-
   return sanitized
 }
 
@@ -245,6 +242,7 @@ function sanitizeLoanPayload(payload: LoanInput): Record<string, unknown> {
   setIfNotNull(sanitized, 'annualRate', payload.annualRate)
   setIfNotNull(sanitized, 'fixedPayment', payload.fixedPayment)
   setIfNotNull(sanitized, 'paymentDay', payload.paymentDay)
+  setIfNotNull(sanitized, 'secondPaymentDay', payload.secondPaymentDay)
   setIfNotNull(sanitized, 'instrumentId', payload.instrumentId)
   setTrimmedIfPresent(sanitized, 'lender', payload.lender)
   setTrimmedIfPresent(sanitized, 'endDate', payload.endDate)

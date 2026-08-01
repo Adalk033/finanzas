@@ -8,6 +8,7 @@ import type {
   TransactionInput,
   TransactionType,
 } from '../../types/domain'
+import { NumberInput } from '../NumberInput'
 
 const AUTO_ADJUSTMENT_NOTE_PREFIX = 'AUTO_ADJUSTMENT_TRANSFER:'
 const AUTO_ADJUSTMENT_DESCRIPTION = 'Otros (por ajuste)'
@@ -157,14 +158,14 @@ export function TransactionsSection({
             </select>
 
             <label className="form-grid__field" htmlFor="transactionAmount">Monto</label>
-            <input
+            <NumberInput
               id="transactionAmount"
               className="form-grid__input"
-              type="number"
               min={0.01}
               step="0.01"
               value={transactionForm.amount}
-              onChange={(event) => onTransactionFormChange({ ...transactionForm, amount: Number(event.target.value) })}
+              emptyValue={0}
+              onValueChange={(amount) => onTransactionFormChange({ ...transactionForm, amount })}
               required
             />
 

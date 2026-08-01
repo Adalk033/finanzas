@@ -80,8 +80,6 @@ export const EMPTY_INSTRUMENT_FORM: FinancialInstrumentInput = {
 
 export const EMPTY_CATEGORY_FORM: CategoryInput = {
   name: '',
-  iconName: '',
-  color: '',
   type: 'expense',
   isActive: true,
 }
@@ -157,6 +155,7 @@ export const EMPTY_LOAN_FORM: LoanInput = {
   paymentType: 'fixed',
   fixedPayment: 0,
   paymentDay: 1,
+  secondPaymentDay: null,
   paymentFrequency: 'monthly',
   startDate: TODAY_ISO,
   endDate: '',
@@ -312,8 +311,6 @@ export function toEditableInstrument(instrument: FinancialInstrument): Financial
 export function toEditableCategory(category: Category): CategoryInput {
   return {
     name: category.name,
-    iconName: category.iconName ?? '',
-    color: category.color ?? '',
     type: category.type,
     isActive: category.isActive,
   }

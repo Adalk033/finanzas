@@ -56,8 +56,6 @@ const SCHEMA = `
   CREATE TABLE IF NOT EXISTS categories (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 100),
-    icon_name TEXT,
-    color TEXT,
     type TEXT NOT NULL DEFAULT 'expense' CHECK (type IN ('expense', 'income', 'both')),
     is_system INTEGER NOT NULL DEFAULT 0 CHECK (is_system IN (0, 1)),
     is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
@@ -128,6 +126,7 @@ const SCHEMA = `
     payment_type TEXT NOT NULL CHECK (payment_type IN ('fixed', 'variable')),
     fixed_payment_cents INTEGER,
     payment_day INTEGER CHECK (payment_day IS NULL OR payment_day BETWEEN 1 AND 31),
+    second_payment_day INTEGER CHECK (second_payment_day IS NULL OR second_payment_day BETWEEN 1 AND 31),
     payment_frequency TEXT NOT NULL DEFAULT 'monthly' CHECK (payment_frequency IN ('weekly', 'biweekly', 'monthly')),
     start_date TEXT NOT NULL,
     end_date TEXT,
@@ -320,6 +319,7 @@ function hasColumn(table: string, column: string): boolean {
   }
   const allowedTables = new Set([
     'banks',
+    'categories',
     'financial_instruments',
     'transactions',
     'loan_payments',
@@ -351,6 +351,22 @@ function removeDeprecatedBankColumns(): void {
   })()
 }
 
+function removeDeprecatedCategoryColumns(): void {
+  if (!database) {
+    return
+  }
+  const db = database
+
+  db.transaction(() => {
+    if (hasColumn('categories', 'color')) {
+      db.exec('ALTER TABLE categories DROP COLUMN color')
+    }
+    if (hasColumn('categories', 'icon_name')) {
+      db.exec('ALTER TABLE categories DROP COLUMN icon_name')
+    }
+  })()
+}
+
 function addColumn(table: string, definition: string, column: string): void {
   if (!database || hasColumn(table, column)) {
     return
@@ -369,6 +385,7 @@ function addColumn(table: string, definition: string, column: string): void {
     ])],
     ['loans', new Set([
       "payment_frequency TEXT NOT NULL DEFAULT 'monthly' CHECK (payment_frequency IN ('weekly', 'biweekly', 'monthly'))",
+      'second_payment_day INTEGER CHECK (second_payment_day IS NULL OR second_payment_day BETWEEN 1 AND 31)',
       'affects_instrument_balance INTEGER NOT NULL DEFAULT 1 CHECK (affects_instrument_balance IN (0, 1))',
     ])],
     ['loan_payments', new Set([
@@ -390,6 +407,7 @@ function addColumn(table: string, definition: string, column: string): void {
 
 function migrateSchema(): void {
   removeDeprecatedBankColumns()
+  removeDeprecatedCategoryColumns()
   addColumn(
     'financial_instruments',
     'linked_account_id INTEGER REFERENCES financial_instruments(id)',
@@ -421,6 +439,11 @@ function migrateSchema(): void {
     'loans',
     "payment_frequency TEXT NOT NULL DEFAULT 'monthly' CHECK (payment_frequency IN ('weekly', 'biweekly', 'monthly'))",
     'payment_frequency',
+  )
+  addColumn(
+    'loans',
+    'second_payment_day INTEGER CHECK (second_payment_day IS NULL OR second_payment_day BETWEEN 1 AND 31)',
+    'second_payment_day',
   )
   addColumn(
     'loans',

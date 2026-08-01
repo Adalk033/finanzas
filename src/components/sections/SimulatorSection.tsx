@@ -6,6 +6,7 @@ import type {
   SimulationInput,
   SimulationScenarioType,
 } from '../../types/domain'
+import { NumberInput } from '../NumberInput'
 
 type SimulatorSectionProps = {
   hasConfig: boolean
@@ -129,15 +130,15 @@ export function SimulatorSection({
             ) : null}
 
             <label className="form-grid__field" htmlFor="simulationAmount">Monto</label>
-            <input
+            <NumberInput
               id="simulationAmount"
               className="form-grid__input"
-              type="number"
               min={0}
               step="0.01"
               value={simulationForm.amount}
-              onChange={(event) => {
-                onSimulationFormChange({ ...simulationForm, amount: Number(event.target.value) })
+              emptyValue={0}
+              onValueChange={(amount) => {
+                onSimulationFormChange({ ...simulationForm, amount })
               }}
             />
 
@@ -162,29 +163,29 @@ export function SimulatorSection({
             {simulationForm.scenarioType === 'loan' ? (
               <>
                 <label className="form-grid__field" htmlFor="simulationLoanMonths">Plazo (meses)</label>
-                <input
+                <NumberInput
                   id="simulationLoanMonths"
                   className="form-grid__input"
-                  type="number"
                   min={1}
                   max={600}
                   value={simulationForm.loanMonths ?? 12}
-                  onChange={(event) => {
-                    onSimulationFormChange({ ...simulationForm, loanMonths: Number(event.target.value) })
+                  emptyValue={0}
+                  onValueChange={(loanMonths) => {
+                    onSimulationFormChange({ ...simulationForm, loanMonths })
                   }}
                 />
 
                 <label className="form-grid__field" htmlFor="simulationAnnualRate">Tasa anual (%)</label>
-                <input
+                <NumberInput
                   id="simulationAnnualRate"
                   className="form-grid__input"
-                  type="number"
                   min={0}
                   max={100}
                   step="0.01"
                   value={simulationForm.annualRate ?? 0}
-                  onChange={(event) => {
-                    onSimulationFormChange({ ...simulationForm, annualRate: Number(event.target.value) })
+                  emptyValue={0}
+                  onValueChange={(annualRate) => {
+                    onSimulationFormChange({ ...simulationForm, annualRate })
                   }}
                 />
               </>

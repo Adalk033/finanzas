@@ -21,7 +21,6 @@ type InstrumentRow = DbRow & {
 }
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
-const HEX_COLOR = /^#[0-9a-fA-F]{6}$/
 const ICON_NAME = /^[A-Za-z][A-Za-z0-9]*$/
 const LAST_FOUR = /^\d{4}$/
 const INSTRUMENT_TYPES = new Set(['credit_card', 'debit_card', 'account'])
@@ -336,6 +335,7 @@ function mapLoan(row: DbRow): Record<string, unknown> {
     paymentType: row.payment_type,
     fixedPayment: fromCents(row.fixed_payment_cents),
     paymentDay: toNullableNumber(row.payment_day),
+    secondPaymentDay: toNullableNumber(row.second_payment_day),
     paymentFrequency: row.payment_frequency ?? 'monthly',
     startDate: row.start_date,
     endDate: row.end_date ?? null,
@@ -962,8 +962,6 @@ function listCategories(db: Database.Database): Record<string, unknown>[] {
   return categories.map((row) => ({
     id: toNumber(row.id),
     name: row.name,
-    iconName: row.icon_name ?? null,
-    color: row.color ?? null,
     type: row.type,
     isSystem: toBoolean(row.is_system),
     isActive: toBoolean(row.is_active),
@@ -977,15 +975,7 @@ function listCategories(db: Database.Database): Record<string, unknown>[] {
 function saveCategory(db: Database.Database, body: Input, id?: number): Record<string, unknown> {
   const name = requiredString(body, 'name', 100)
   const type = requiredEnum(body, 'type', CATEGORY_TYPES)
-  const iconName = optionalString(body, 'iconName', 50)
-  const color = optionalString(body, 'color', 7)
   const isActive = requiredBoolean(body, 'isActive', true)
-  if (iconName && !ICON_NAME.test(iconName)) {
-    throw new ValidationError('iconName solo admite letras y numeros.')
-  }
-  if (color && !HEX_COLOR.test(color)) {
-    throw new ValidationError('color debe usar el formato #RRGGBB.')
-  }
   if (id) {
     const existing = requireEntity(db, 'categories', id)
     if (toBoolean(existing.is_system)) {
@@ -993,14 +983,14 @@ function saveCategory(db: Database.Database, body: Input, id?: number): Record<s
     }
     db.prepare(`
       UPDATE categories
-      SET name = ?, icon_name = ?, color = ?, type = ?, is_active = ?, updated_at = datetime('now')
+      SET name = ?, type = ?, is_active = ?, updated_at = datetime('now')
       WHERE id = ?
-    `).run(name, iconName, color, type, Number(isActive), id)
+    `).run(name, type, Number(isActive), id)
   } else {
     const result = db.prepare(`
-      INSERT INTO categories (name, icon_name, color, type, is_active)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(name, iconName, color, type, Number(isActive))
+      INSERT INTO categories (name, type, is_active)
+      VALUES (?, ?, ?)
+    `).run(name, type, Number(isActive))
     id = Number(result.lastInsertRowid)
   }
   return listCategories(db).find((category) => category.id === id) ?? {}
@@ -1841,6 +1831,7 @@ function validateLoan(db: Database.Database, body: Input): {
   paymentType: string
   fixedPaymentCents: number | null
   paymentDay: number | null
+  secondPaymentDay: number | null
   paymentFrequency: string
   startDate: string
   endDate: string | null
@@ -1860,6 +1851,16 @@ function validateLoan(db: Database.Database, body: Input): {
   }
   if (paymentType === 'variable' && annualRate === null) {
     throw new ValidationError('annualRate es obligatoria para prestamos de tasa variable.')
+  }
+  const paymentDay = paymentFrequency === 'weekly' ? null : optionalInteger(body, 'paymentDay', 1, 31)
+  const secondPaymentDay = paymentFrequency === 'biweekly'
+    ? optionalInteger(body, 'secondPaymentDay', 1, 31)
+    : null
+  if (paymentFrequency === 'biweekly' && (paymentDay === null) !== (secondPaymentDay === null)) {
+    throw new ValidationError('Un prestamo quincenal con dias fijos requiere ambos dias de pago.')
+  }
+  if (paymentDay !== null && secondPaymentDay !== null && paymentDay >= secondPaymentDay) {
+    throw new ValidationError('El segundo dia de pago quincenal debe ser posterior al primero.')
   }
   const instrumentId = optionalInteger(body, 'instrumentId')
   const currencyId = requiredInteger(body, 'currencyId')
@@ -1881,7 +1882,8 @@ function validateLoan(db: Database.Database, body: Input): {
     totalInstallments: requiredInteger(body, 'totalInstallments', 1, 600),
     paymentType,
     fixedPaymentCents,
-    paymentDay: paymentFrequency === 'monthly' ? optionalInteger(body, 'paymentDay', 1, 31) : null,
+    paymentDay,
+    secondPaymentDay,
     paymentFrequency,
     startDate: requiredDate(body, 'startDate'),
     endDate: optionalDate(body, 'endDate'),
@@ -1892,9 +1894,9 @@ function validateLoan(db: Database.Database, body: Input): {
   }
 }
 
-function loanPaymentsPerYear(paymentFrequency: string): number {
+function loanPaymentsPerYear(paymentFrequency: string, secondPaymentDay: number | null = null): number {
   if (paymentFrequency === 'weekly') return 52
-  if (paymentFrequency === 'biweekly') return 26
+  if (paymentFrequency === 'biweekly') return secondPaymentDay === null ? 26 : 24
   return 12
 }
 
@@ -1903,10 +1905,27 @@ function loanPaymentDate(
   installment: number,
   paymentFrequency: string,
   paymentDay: number | null,
+  secondPaymentDay: number | null,
 ): string {
   if (paymentFrequency === 'weekly') return addDays(startDate, (installment - 1) * 7)
-  if (paymentFrequency === 'biweekly') return addDays(startDate, (installment - 1) * 14)
+  if (paymentFrequency === 'biweekly') {
+    if (paymentDay === null || secondPaymentDay === null) return addDays(startDate, (installment - 1) * 14)
+    let paymentDate = nextBiweeklyDateOnOrAfter(startDate, paymentDay, secondPaymentDay)
+    for (let index = 1; index < installment; index += 1) {
+      paymentDate = nextBiweeklyDateOnOrAfter(addDays(paymentDate, 1), paymentDay, secondPaymentDay)
+    }
+    return paymentDate
+  }
   return addMonths(startDate, installment - 1, paymentDay)
+}
+
+function nextBiweeklyDateOnOrAfter(dateValue: string, paymentDay: number, secondPaymentDay: number): string {
+  const monthStart = `${dateValue.slice(0, 7)}-01`
+  const firstPayment = addMonths(monthStart, 0, paymentDay)
+  const secondPayment = addMonths(monthStart, 0, secondPaymentDay)
+  if (firstPayment >= dateValue) return firstPayment
+  if (secondPayment >= dateValue) return secondPayment
+  return addMonths(monthStart, 1, paymentDay)
 }
 
 function rebuildLoanSchedule(
@@ -1919,10 +1938,11 @@ function rebuildLoanSchedule(
   fixedPaymentCents: number | null,
   startDate: string,
   paymentDay: number | null,
+  secondPaymentDay: number | null,
   paymentFrequency: string,
 ): void {
   db.prepare('DELETE FROM loan_payments WHERE loan_id = ?').run(loanId)
-  const periodRate = (annualRate ?? 0) / 100 / loanPaymentsPerYear(paymentFrequency)
+  const periodRate = (annualRate ?? 0) / 100 / loanPaymentsPerYear(paymentFrequency, secondPaymentDay)
   const variablePayment = Math.round(originalAmountCents / totalInstallments)
   let remaining = originalAmountCents
   const insert = db.prepare(`
@@ -1951,7 +1971,7 @@ function rebuildLoanSchedule(
       amount,
       principal,
       interest,
-      loanPaymentDate(startDate, installment, paymentFrequency, paymentDay),
+      loanPaymentDate(startDate, installment, paymentFrequency, paymentDay, secondPaymentDay),
     )
     remaining -= principal
   }
@@ -1966,7 +1986,10 @@ function rebuildRemainingLoanSchedule(db: Database.Database, loanId: number): vo
   `).all(loanId) as Array<{ id: number }>
   if (pending.length === 0) return
   const paymentFrequency = String(loan.payment_frequency ?? 'monthly')
-  const periodRate = (toNumber(loan.annual_rate) || 0) / 100 / loanPaymentsPerYear(paymentFrequency)
+  const periodRate = (toNumber(loan.annual_rate) || 0) / 100 / loanPaymentsPerYear(
+    paymentFrequency,
+    toNullableNumber(loan.second_payment_day),
+  )
   const paymentType = String(loan.payment_type)
   const fixedPayment = toNullableNumber(loan.fixed_payment_cents) ?? 0
   let remaining = toNumber(loan.remaining_amount_cents)
@@ -2007,16 +2030,18 @@ function saveLoan(db: Database.Database, body: Input, id?: number): Record<strin
           || toNumber(previous.total_installments) !== input.totalInstallments
           || previous.payment_type !== input.paymentType
           || previous.payment_frequency !== input.paymentFrequency
+          || toNullableNumber(previous.payment_day) !== input.paymentDay
+          || toNullableNumber(previous.second_payment_day) !== input.secondPaymentDay
         ) {
           throw new ValidationError('No se pueden cambiar los terminos de un prestamo con pagos registrados.')
         }
         db.prepare(`
           UPDATE loans
-          SET name = ?, lender = ?, annual_rate = ?, fixed_payment_cents = ?, payment_day = ?,
+          SET name = ?, lender = ?, annual_rate = ?, fixed_payment_cents = ?, payment_day = ?, second_payment_day = ?,
               end_date = ?, instrument_id = ?, affects_instrument_balance = ?, notes = ?, is_active = ?, updated_at = datetime('now')
           WHERE id = ?
         `).run(
-          input.name, input.lender, input.annualRate, input.fixedPaymentCents, input.paymentDay,
+          input.name, input.lender, input.annualRate, input.fixedPaymentCents, input.paymentDay, input.secondPaymentDay,
           input.endDate, input.instrumentId, Number(input.affectsInstrumentBalance), input.notes, Number(input.isActive), id,
         )
         rebuildRemainingLoanSchedule(db, id)
@@ -2026,13 +2051,13 @@ function saveLoan(db: Database.Database, body: Input, id?: number): Record<strin
         UPDATE loans
         SET name = ?, lender = ?, currency_id = ?, original_amount_cents = ?,
             remaining_amount_cents = ?, annual_rate = ?, total_installments = ?,
-            payment_type = ?, fixed_payment_cents = ?, payment_day = ?, payment_frequency = ?, start_date = ?,
+            payment_type = ?, fixed_payment_cents = ?, payment_day = ?, second_payment_day = ?, payment_frequency = ?, start_date = ?,
             end_date = ?, instrument_id = ?, affects_instrument_balance = ?, notes = ?, is_active = ?, updated_at = datetime('now')
         WHERE id = ?
       `).run(
         input.name, input.lender, input.currencyId, input.originalAmountCents,
         input.originalAmountCents, input.annualRate, input.totalInstallments,
-        input.paymentType, input.fixedPaymentCents, input.paymentDay, input.paymentFrequency, input.startDate,
+        input.paymentType, input.fixedPaymentCents, input.paymentDay, input.secondPaymentDay, input.paymentFrequency, input.startDate,
         input.endDate, input.instrumentId, Number(input.affectsInstrumentBalance), input.notes, Number(input.isActive), id,
       )
     } else {
@@ -2040,19 +2065,19 @@ function saveLoan(db: Database.Database, body: Input, id?: number): Record<strin
         INSERT INTO loans (
           name, lender, currency_id, original_amount_cents, remaining_amount_cents,
           annual_rate, total_installments, payment_type, fixed_payment_cents,
-          payment_day, payment_frequency, start_date, end_date, instrument_id, affects_instrument_balance, notes, is_active
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          payment_day, second_payment_day, payment_frequency, start_date, end_date, instrument_id, affects_instrument_balance, notes, is_active
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         input.name, input.lender, input.currencyId, input.originalAmountCents,
         input.originalAmountCents, input.annualRate, input.totalInstallments,
-        input.paymentType, input.fixedPaymentCents, input.paymentDay, input.paymentFrequency, input.startDate,
+        input.paymentType, input.fixedPaymentCents, input.paymentDay, input.secondPaymentDay, input.paymentFrequency, input.startDate,
         input.endDate, input.instrumentId, Number(input.affectsInstrumentBalance), input.notes, Number(input.isActive),
       )
       id = Number(result.lastInsertRowid)
     }
     rebuildLoanSchedule(
       db, id!, input.originalAmountCents, input.annualRate, input.totalInstallments,
-      input.paymentType, input.fixedPaymentCents, input.startDate, input.paymentDay, input.paymentFrequency,
+      input.paymentType, input.fixedPaymentCents, input.startDate, input.paymentDay, input.secondPaymentDay, input.paymentFrequency,
     )
   })
   operation()

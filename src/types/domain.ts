@@ -80,8 +80,6 @@ export interface Subcategory {
 export interface Category {
   id: number
   name: string
-  iconName: string | null
-  color: string | null
   type: CategoryType
   isSystem: boolean
   isActive: boolean
@@ -93,8 +91,6 @@ export interface Category {
 
 export interface CategoryInput {
   name: string
-  iconName: string
-  color: string
   type: CategoryType
   isActive: boolean
 }
@@ -237,6 +233,7 @@ export interface Loan {
   paymentType: LoanPaymentType
   fixedPayment: number | null
   paymentDay: number | null
+  secondPaymentDay: number | null
   paymentFrequency: LoanPaymentFrequency
   startDate: string
   endDate: string | null
@@ -259,6 +256,7 @@ export interface LoanInput {
   paymentType: LoanPaymentType
   fixedPayment: number | null
   paymentDay: number | null
+  secondPaymentDay: number | null
   paymentFrequency: LoanPaymentFrequency
   startDate: string
   endDate: string

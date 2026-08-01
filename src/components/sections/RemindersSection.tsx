@@ -1,6 +1,7 @@
 import { type SyntheticEvent } from 'react'
 import { getReminderTypeLabel } from '../../app/appHelpers'
 import type { Reminder, ReminderInput, ReminderType } from '../../types/domain'
+import { NumberInput } from '../NumberInput'
 
 type RemindersSectionProps = {
   hasConfig: boolean
@@ -100,9 +101,8 @@ export function RemindersSection({
               <div className="reminder-form__row">
                 <label className="reminder-form__field" htmlFor="reminderReferenceId">
                   <span>ID de referencia</span>
-                  <input id="reminderReferenceId" className="form-grid__input" type="number" min={1} value={reminderForm.referenceId ?? ''} onChange={(event) => {
-                    const value = event.target.value
-                    onReminderFormChange({ ...reminderForm, referenceId: value ? Number.parseInt(value, 10) : null })
+                  <NumberInput id="reminderReferenceId" className="form-grid__input" min={1} value={reminderForm.referenceId} emptyValue={null} onValueChange={(referenceId) => {
+                    onReminderFormChange({ ...reminderForm, referenceId })
                   }} />
                 </label>
                 <label className="reminder-form__field" htmlFor="reminderReferenceType">
