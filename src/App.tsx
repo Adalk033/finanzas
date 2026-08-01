@@ -145,7 +145,7 @@ export function App() {
                 }
               }}
               onReconcile={(instrumentId, payload) => {
-                void instrumentsController.handleInstrumentReconcile(instrumentId, payload)
+                return instrumentsController.handleInstrumentReconcile(instrumentId, payload)
               }}
             />
           ) : null}
