@@ -164,6 +164,9 @@ export function useInstrumentsController() {
       setInstrumentError(result.error ?? 'No se pudo conciliar el saldo.')
       return
     }
+    if (editingInstrumentId === id && result.data) {
+      setInstrumentForm(toEditableInstrument(result.data.instrument))
+    }
     setInstrumentMessage('Saldo conciliado mediante un ajuste auditable.')
     await loadInstruments()
   }
