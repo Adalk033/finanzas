@@ -471,6 +471,23 @@ export interface DashboardFutureExpensePoint {
   total: number
 }
 
+export type DashboardUpcomingCommitmentType = 'subscription' | 'fixed_expense' | 'loan_payment' | 'card_payment'
+
+export interface DashboardUpcomingCommitment {
+  id: string
+  name: string
+  date: string
+  amount: number
+  type: DashboardUpcomingCommitmentType
+  instrumentName: string | null
+}
+
+export interface DashboardUpcomingCommitments {
+  total: number
+  availableAfterCommitments: number
+  items: DashboardUpcomingCommitment[]
+}
+
 export interface Reminder {
   id: number
   title: string
@@ -515,6 +532,7 @@ export interface RecurringIncome {
   amount: number
   frequency: RecurringIncomeFrequency
   paymentDay: number | null
+  secondPaymentDay: number | null
   nextPayment: string
   isActive: boolean
   notes: string | null
@@ -531,6 +549,7 @@ export interface RecurringIncomeInput {
   amount: number
   frequency: RecurringIncomeFrequency
   paymentDay: number | null
+  secondPaymentDay: number | null
   nextPayment: string
   isActive: boolean
   notes: string

@@ -243,7 +243,9 @@ void app.whenReady().then(() => {
       createMainWindow()
     }
   })
-}).catch(() => {
+}).catch((error: unknown) => {
+  const details = error instanceof Error ? error.message : 'Error desconocido al iniciar la base de datos local.'
+  console.error(`No se pudo iniciar la base de datos local: ${details}`)
   dialog.showErrorBox(
     'Finanzas Lit no pudo iniciar',
     'No se pudo abrir o actualizar la base de datos local. Tus archivos no fueron eliminados.',

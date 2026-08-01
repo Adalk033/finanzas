@@ -282,6 +282,7 @@ const SCHEMA = `
     amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
     frequency TEXT NOT NULL CHECK (frequency IN ('weekly', 'biweekly', 'monthly', 'yearly')),
     payment_day INTEGER CHECK (payment_day IS NULL OR payment_day BETWEEN 1 AND 31),
+    second_payment_day INTEGER CHECK (second_payment_day IS NULL OR second_payment_day BETWEEN 1 AND 31),
     next_payment TEXT NOT NULL,
     is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
     notes TEXT,
@@ -320,6 +321,7 @@ function hasColumn(table: string, column: string): boolean {
     'transactions',
     'loan_payments',
     'fixed_expense_payments',
+    'recurring_incomes',
   ])
   if (!allowedTables.has(table)) {
     throw new Error('Tabla de migracion no permitida.')
@@ -346,6 +348,9 @@ function addColumn(table: string, definition: string, column: string): void {
     ])],
     ['fixed_expense_payments', new Set([
       'transaction_id INTEGER REFERENCES transactions(id)',
+    ])],
+    ['recurring_incomes', new Set([
+      'second_payment_day INTEGER CHECK (second_payment_day IS NULL OR second_payment_day BETWEEN 1 AND 31)',
     ])],
   ])
   if (!allowedDefinitions.get(table)?.has(definition)) {
@@ -377,6 +382,11 @@ function migrateSchema(): void {
     'transaction_id INTEGER REFERENCES transactions(id)',
     'transaction_id',
   )
+  addColumn(
+    'recurring_incomes',
+    'second_payment_day INTEGER CHECK (second_payment_day IS NULL OR second_payment_day BETWEEN 1 AND 31)',
+    'second_payment_day',
+  )
   database?.exec(`
     CREATE INDEX IF NOT EXISTS idx_instruments_linked_account
       ON financial_instruments(linked_account_id);
@@ -407,7 +417,7 @@ export function initializeLocalDb(dbPath: string): void {
 
   database.prepare(`
     INSERT INTO app_metadata (key, value)
-    VALUES ('schema_version', '2')
+    VALUES ('schema_version', '3')
     ON CONFLICT(key) DO UPDATE SET value = excluded.value
   `).run()
 }

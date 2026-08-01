@@ -34,6 +34,7 @@ import type {
   DashboardCashFlowPoint,
   DashboardExpenseByCategory,
   DashboardFutureExpensePoint,
+  DashboardUpcomingCommitments,
   DashboardSummary,
   Reminder,
   ReminderInput,
@@ -371,6 +372,7 @@ function sanitizeRecurringIncomePayload(payload: RecurringIncomeInput): Record<s
   setIfNotNull(sanitized, 'categoryId', payload.categoryId)
   setIfNotNull(sanitized, 'subcategoryId', payload.subcategoryId)
   setIfNotNull(sanitized, 'paymentDay', payload.paymentDay)
+  setIfNotNull(sanitized, 'secondPaymentDay', payload.secondPaymentDay)
   setTrimmedIfPresent(sanitized, 'notes', payload.notes)
   return sanitized
 }
@@ -426,6 +428,7 @@ export const apiClient = {
   getDashboardCashFlow: () => request<DashboardCashFlowPoint[]>(ENDPOINTS.DASHBOARD_CASH_FLOW, { method: 'GET' }),
   getDashboardBalanceEvolution: () => request<DashboardBalanceEvolution>(ENDPOINTS.DASHBOARD_BALANCE_EVOLUTION, { method: 'GET' }),
   getDashboardFutureExpenses: () => request<DashboardFutureExpensePoint[]>(ENDPOINTS.DASHBOARD_FUTURE_EXPENSES, { method: 'GET' }),
+  getDashboardUpcomingCommitments: () => request<DashboardUpcomingCommitments>(ENDPOINTS.DASHBOARD_UPCOMING_COMMITMENTS, { method: 'GET' }),
   getBanks: () => request<Bank[]>(ENDPOINTS.BANKS, { method: 'GET' }),
   createBank: (payload: BankInput) =>
     request<Bank>(ENDPOINTS.BANKS, {

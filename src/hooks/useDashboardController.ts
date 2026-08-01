@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { apiClient } from '../api/client'
-import { EMPTY_DASHBOARD_SUMMARY } from '../app/appHelpers'
+import { EMPTY_DASHBOARD_SUMMARY, EMPTY_DASHBOARD_UPCOMING_COMMITMENTS } from '../app/appHelpers'
 import type {
   DashboardBalanceEvolution,
   DashboardCashFlowPoint,
   DashboardExpenseByCategory,
   DashboardFutureExpensePoint,
+  DashboardUpcomingCommitments,
   DashboardSummary,
 } from '../types/domain'
 
@@ -18,6 +19,9 @@ export function useDashboardController() {
     points: [],
   })
   const [dashboardFutureExpenses, setDashboardFutureExpenses] = useState<DashboardFutureExpensePoint[]>([])
+  const [dashboardUpcomingCommitments, setDashboardUpcomingCommitments] = useState<DashboardUpcomingCommitments>(
+    EMPTY_DASHBOARD_UPCOMING_COMMITMENTS,
+  )
   const [isDashboardLoading, setIsDashboardLoading] = useState(false)
   const [dashboardError, setDashboardError] = useState('')
 
@@ -31,12 +35,14 @@ export function useDashboardController() {
       cashFlowResult,
       balanceEvolutionResult,
       futureExpensesResult,
+      upcomingCommitmentsResult,
     ] = await Promise.all([
       apiClient.getDashboardSummary(),
       apiClient.getDashboardExpensesByCategory(),
       apiClient.getDashboardCashFlow(),
       apiClient.getDashboardBalanceEvolution(),
       apiClient.getDashboardFutureExpenses(),
+      apiClient.getDashboardUpcomingCommitments(),
     ])
 
     if (!summaryResult.success) {
@@ -69,11 +75,18 @@ export function useDashboardController() {
       return
     }
 
+    if (!upcomingCommitmentsResult.success) {
+      setDashboardError(upcomingCommitmentsResult.error ?? 'No se pudieron cargar los compromisos proximos.')
+      setIsDashboardLoading(false)
+      return
+    }
+
     setDashboardSummary(summaryResult.data ?? EMPTY_DASHBOARD_SUMMARY)
     setDashboardExpensesByCategory(expensesResult.data ?? [])
     setDashboardCashFlow(cashFlowResult.data ?? [])
     setDashboardBalanceEvolution(balanceEvolutionResult.data ?? { series: [], points: [] })
     setDashboardFutureExpenses(futureExpensesResult.data ?? [])
+    setDashboardUpcomingCommitments(upcomingCommitmentsResult.data ?? EMPTY_DASHBOARD_UPCOMING_COMMITMENTS)
     setIsDashboardLoading(false)
   }
 
@@ -83,6 +96,7 @@ export function useDashboardController() {
     dashboardCashFlow,
     dashboardBalanceEvolution,
     dashboardFutureExpenses,
+    dashboardUpcomingCommitments,
     isDashboardLoading,
     dashboardError,
     loadDashboard,

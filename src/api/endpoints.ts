@@ -6,6 +6,7 @@ export const ENDPOINTS = {
   DASHBOARD_CASH_FLOW: '/dashboard/charts/cash-flow',
   DASHBOARD_BALANCE_EVOLUTION: '/dashboard/charts/balance-evolution',
   DASHBOARD_FUTURE_EXPENSES: '/dashboard/charts/future-expenses',
+  DASHBOARD_UPCOMING_COMMITMENTS: '/dashboard/upcoming-commitments',
   CATEGORIES: '/categories',
   BANKS: '/banks',
   INSTRUMENTS: '/instruments',

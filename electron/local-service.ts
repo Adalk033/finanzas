@@ -453,6 +453,7 @@ function mapRecurringIncome(row: DbRow): Record<string, unknown> {
     amount: fromCents(row.amount_cents),
     frequency: row.frequency,
     paymentDay: toNullableNumber(row.payment_day),
+    secondPaymentDay: toNullableNumber(row.second_payment_day),
     nextPayment: row.next_payment,
     isActive: toBoolean(row.is_active),
     notes: row.notes ?? null,
@@ -615,6 +616,12 @@ function addDays(dateValue: string, count: number): string {
   const date = new Date(`${dateValue}T00:00:00Z`)
   date.setUTCDate(date.getUTCDate() + count)
   return date.toISOString().slice(0, 10)
+}
+
+function nextMonthlyDateOnOrAfter(dateValue: string, day: number): string {
+  const monthStart = `${dateValue.slice(0, 7)}-01`
+  const currentMonthDate = addMonths(monthStart, 0, day)
+  return currentMonthDate >= dateValue ? currentMonthDate : addMonths(monthStart, 1, day)
 }
 
 function todayIso(): string {
@@ -2356,9 +2363,18 @@ function nextRecurringIncomeDate(
   current: string,
   frequency: string,
   paymentDay: number | null,
+  secondPaymentDay: number | null,
 ): string {
   if (frequency === 'weekly') return addDays(current, 7)
-  if (frequency === 'biweekly') return addDays(current, 14)
+  if (frequency === 'biweekly') {
+    if (paymentDay === null || secondPaymentDay === null) return addDays(current, 14)
+    const monthStart = `${current.slice(0, 7)}-01`
+    const firstPayment = addMonths(monthStart, 0, paymentDay)
+    const secondPayment = addMonths(monthStart, 0, secondPaymentDay)
+    if (current < firstPayment) return firstPayment
+    if (current < secondPayment) return secondPayment
+    return addMonths(monthStart, 1, paymentDay)
+  }
   if (frequency === 'yearly') return addMonths(current, 12, paymentDay)
   return addMonths(current, 1, paymentDay)
 }
@@ -2393,6 +2409,20 @@ function saveRecurringIncome(
   if (currencyId !== toNumber(instrument.currency_id)) {
     throw new ValidationError('La moneda debe coincidir con la del instrumento.')
   }
+  const frequency = requiredEnum(body, 'frequency', RECURRING_INCOME_FREQUENCIES)
+  const paymentDay = optionalInteger(body, 'paymentDay', 1, 31)
+  const secondPaymentDay = frequency === 'biweekly'
+    ? optionalInteger(body, 'secondPaymentDay', 1, 31)
+    : null
+  if (frequency === 'biweekly' && (paymentDay === null) !== (secondPaymentDay === null)) {
+    throw new ValidationError('Un ingreso quincenal con dias fijos requiere ambos dias de pago.')
+  }
+  if (paymentDay !== null && secondPaymentDay !== null && paymentDay >= secondPaymentDay) {
+    throw new ValidationError('El segundo dia de pago quincenal debe ser posterior al primero.')
+  }
+  if (id === undefined && frequency === 'biweekly' && paymentDay === null && secondPaymentDay === null) {
+    throw new ValidationError('Define los dos dias de pago para un ingreso quincenal nuevo.')
+  }
   const values = {
     name: requiredString(body, 'name', 150),
     instrumentId,
@@ -2400,8 +2430,9 @@ function saveRecurringIncome(
     subcategoryId,
     currencyId,
     amountCents: moneyToCents(body.amount, 'amount'),
-    frequency: requiredEnum(body, 'frequency', RECURRING_INCOME_FREQUENCIES),
-    paymentDay: optionalInteger(body, 'paymentDay', 1, 31),
+    frequency,
+    paymentDay,
+    secondPaymentDay,
     nextPayment: requiredDate(body, 'nextPayment'),
     isActive: requiredBoolean(body, 'isActive', true),
     notes: optionalString(body, 'notes', 2000),
@@ -2411,23 +2442,23 @@ function saveRecurringIncome(
     db.prepare(`
       UPDATE recurring_incomes
       SET name = ?, instrument_id = ?, category_id = ?, subcategory_id = ?,
-          currency_id = ?, amount_cents = ?, frequency = ?, payment_day = ?,
+          currency_id = ?, amount_cents = ?, frequency = ?, payment_day = ?, second_payment_day = ?,
           next_payment = ?, is_active = ?, notes = ?, updated_at = datetime('now')
       WHERE id = ?
     `).run(
       values.name, values.instrumentId, values.categoryId, values.subcategoryId,
-      values.currencyId, values.amountCents, values.frequency, values.paymentDay,
+      values.currencyId, values.amountCents, values.frequency, values.paymentDay, values.secondPaymentDay,
       values.nextPayment, Number(values.isActive), values.notes, id,
     )
   } else {
     const result = db.prepare(`
       INSERT INTO recurring_incomes (
         name, instrument_id, category_id, subcategory_id, currency_id,
-        amount_cents, frequency, payment_day, next_payment, is_active, notes
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        amount_cents, frequency, payment_day, second_payment_day, next_payment, is_active, notes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       values.name, values.instrumentId, values.categoryId, values.subcategoryId,
-      values.currencyId, values.amountCents, values.frequency, values.paymentDay,
+      values.currencyId, values.amountCents, values.frequency, values.paymentDay, values.secondPaymentDay,
       values.nextPayment, Number(values.isActive), values.notes,
     )
     id = Number(result.lastInsertRowid)
@@ -2489,6 +2520,7 @@ function processDueRecurringIncomes(db: Database.Database): void {
           paymentDate,
           String(income.frequency),
           toNullableNumber(income.payment_day),
+          toNullableNumber(income.second_payment_day),
         )
         processed += 1
       }
@@ -3128,6 +3160,129 @@ function getDashboardSummary(db: Database.Database): Record<string, number> {
   }
 }
 
+function getDashboardUpcomingCommitments(db: Database.Database): Record<string, unknown> {
+  const startDate = todayIso()
+  const endDate = addDays(startDate, 30)
+  type Commitment = {
+    id: string
+    name: string
+    date: string
+    amountCents: number
+    type: 'subscription' | 'fixed_expense' | 'loan_payment' | 'card_payment'
+    instrumentName: string | null
+  }
+  const commitments: Commitment[] = []
+
+  const subscriptions = db.prepare(`
+    SELECT s.id, s.name, s.next_billing, s.amount_cents, i.name AS instrument_name
+    FROM subscriptions s
+    JOIN financial_instruments i ON i.id = s.instrument_id
+    WHERE s.is_active = 1 AND s.next_billing BETWEEN ? AND ?
+  `).all(startDate, endDate) as Array<{
+    id: number
+    name: string
+    next_billing: string
+    amount_cents: number
+    instrument_name: string | null
+  }>
+  for (const subscription of subscriptions) {
+    commitments.push({
+      id: `subscription-${subscription.id}`,
+      name: subscription.name,
+      date: subscription.next_billing,
+      amountCents: toNumber(subscription.amount_cents),
+      type: 'subscription',
+      instrumentName: subscription.instrument_name,
+    })
+  }
+
+  const fixedExpenses = db.prepare(`
+    SELECT f.id, f.name, f.payment_day, f.estimated_amount_cents, i.name AS instrument_name
+    FROM fixed_expenses f
+    LEFT JOIN financial_instruments i ON i.id = f.instrument_id
+    WHERE f.is_active = 1 AND f.payment_day IS NOT NULL
+  `).all() as Array<{
+    id: number
+    name: string
+    payment_day: number
+    estimated_amount_cents: number
+    instrument_name: string | null
+  }>
+  for (const expense of fixedExpenses) {
+    const paymentDate = nextMonthlyDateOnOrAfter(startDate, toNumber(expense.payment_day))
+    if (paymentDate <= endDate) {
+      commitments.push({
+        id: `fixed-expense-${expense.id}-${paymentDate}`,
+        name: expense.name,
+        date: paymentDate,
+        amountCents: toNumber(expense.estimated_amount_cents),
+        type: 'fixed_expense',
+        instrumentName: expense.instrument_name,
+      })
+    }
+  }
+
+  const loanPayments = db.prepare(`
+    SELECT p.id, l.name, p.payment_date, p.amount_cents, i.name AS instrument_name
+    FROM loan_payments p
+    JOIN loans l ON l.id = p.loan_id
+    LEFT JOIN financial_instruments i ON i.id = l.instrument_id
+    WHERE p.is_paid = 0 AND l.is_active = 1 AND p.payment_date BETWEEN ? AND ?
+  `).all(startDate, endDate) as Array<{
+    id: number
+    name: string
+    payment_date: string
+    amount_cents: number
+    instrument_name: string | null
+  }>
+  for (const payment of loanPayments) {
+    commitments.push({
+      id: `loan-payment-${payment.id}`,
+      name: payment.name,
+      date: payment.payment_date,
+      amountCents: toNumber(payment.amount_cents),
+      type: 'loan_payment',
+      instrumentName: payment.instrument_name,
+    })
+  }
+
+  const cardPayments = db.prepare(`
+    SELECT st.id, i.name, st.payment_due_date,
+           MAX(st.total_amount_cents - COALESCE(st.paid_amount_cents, 0), 0) AS amount_cents
+    FROM credit_card_statements st
+    JOIN financial_instruments i ON i.id = st.instrument_id
+    WHERE st.is_paid = 0 AND st.payment_due_date BETWEEN ? AND ?
+      AND st.total_amount_cents > COALESCE(st.paid_amount_cents, 0)
+  `).all(startDate, endDate) as Array<{
+    id: number
+    name: string
+    payment_due_date: string
+    amount_cents: number
+  }>
+  for (const payment of cardPayments) {
+    commitments.push({
+      id: `card-payment-${payment.id}`,
+      name: `Pago de tarjeta: ${payment.name}`,
+      date: payment.payment_due_date,
+      amountCents: toNumber(payment.amount_cents),
+      type: 'card_payment',
+      instrumentName: payment.name,
+    })
+  }
+
+  commitments.sort((first, second) => first.date.localeCompare(second.date) || first.name.localeCompare(second.name))
+  const totalCents = commitments.reduce((sum, commitment) => sum + commitment.amountCents, 0)
+  const summary = getDashboardSummary(db)
+  return {
+    total: totalCents / 100,
+    availableAfterCommitments: summary.totalAvailable - totalCents / 100,
+    items: commitments.map(({ amountCents, ...commitment }) => ({
+      ...commitment,
+      amount: amountCents / 100,
+    })),
+  }
+}
+
 function getDashboardExpensesByCategory(db: Database.Database): Record<string, unknown>[] {
   const rows = db.prepare(`
     SELECT COALESCE(c.name, 'Sin categoria') AS category, SUM(t.amount_cents) AS total
@@ -3427,6 +3582,7 @@ function routeRequest(
   if (path === '/dashboard/charts/cash-flow' && method === 'GET') return getDashboardCashFlow(db)
   if (path === '/dashboard/charts/balance-evolution' && method === 'GET') return getDashboardBalanceEvolution(db)
   if (path === '/dashboard/charts/future-expenses' && method === 'GET') return getDashboardFutureExpenses(db)
+  if (path === '/dashboard/upcoming-commitments' && method === 'GET') return getDashboardUpcomingCommitments(db)
 
   const bankResult = entityRoute(
     '/banks',
