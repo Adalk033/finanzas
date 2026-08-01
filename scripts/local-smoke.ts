@@ -194,6 +194,71 @@ try {
     isMsi: true,
     msiMonths: 6,
   })
+
+  const balancesBeforeFamilyExpenses = request<Array<{
+    id: number
+    currentAmount: number | null
+    currentBalance: number | null
+  }>>('/instruments')
+  const familyExpense = request<{
+    id: number
+    amount: number
+    categoryName: string
+    expenseDate: string
+  }>('/family-expenses', 'POST', {
+    categoryId: category.id,
+    amount: 850.25,
+    description: 'Despensa familiar',
+    expenseDate: '2026-07-20',
+    notes: 'Compra semanal',
+  })
+  assert.equal(familyExpense.amount, 850.25)
+  assert.equal(familyExpense.categoryName, 'Alimentos')
+  const familyExpensesForJuly = request<Array<{ id: number }>>('/family-expenses?month=2026-07')
+  assert.deepEqual(familyExpensesForJuly.map((expense) => expense.id), [familyExpense.id])
+  assert.equal(request<Array<{ id: number }>>('/family-expenses?month=2026-06').length, 0)
+  const familyDashboard = request<{
+    month: string
+    summary: { total: number; expenseCount: number; averageExpense: number }
+    expensesByCategory: Array<{ category: string; total: number }>
+  }>('/family/dashboard?month=2026-07')
+  assert.equal(familyDashboard.month, '2026-07')
+  assert.deepEqual(familyDashboard.summary, {
+    total: 850.25,
+    expenseCount: 1,
+    averageExpense: 850.25,
+  })
+  assert.deepEqual(familyDashboard.expensesByCategory, [{ category: 'Alimentos', total: 850.25 }])
+  const balancesAfterFamilyExpense = request<typeof balancesBeforeFamilyExpenses>('/instruments')
+  assert.deepEqual(balancesAfterFamilyExpense, balancesBeforeFamilyExpenses)
+  const personalCategoryExpenses = request<Array<{ category: string; total: number }>>(
+    '/dashboard/charts/expenses-by-category?period=last_3_months',
+  )
+  assert.equal(personalCategoryExpenses.find((item) => item.category === 'Alimentos')?.total, 1325.45)
+  request(`/family-expenses/${familyExpense.id}`, 'PUT', {
+    categoryId: category.id,
+    amount: 900,
+    description: 'Despensa familiar actualizada',
+    expenseDate: '2026-07-20',
+  })
+  assert.equal(request<{ summary: { total: number } }>('/family/dashboard?month=2026-07').summary.total, 900)
+  const incomeOnlyCategory = request<{ id: number }>('/categories', 'POST', {
+    name: 'Ingreso familiar no permitido',
+    type: 'income',
+    isActive: true,
+  })
+  const invalidFamilyCategoryError = requestFailure('/family-expenses', 'POST', {
+    categoryId: incomeOnlyCategory.id,
+    amount: 100,
+    description: 'Categoria incorrecta',
+    expenseDate: '2026-07-20',
+  })
+  assert.match(invalidFamilyCategoryError, /no corresponde a un gasto/)
+  const invalidFamilyMonthError = requestFailure('/family/dashboard?month=2026-13', 'GET', {})
+  assert.match(invalidFamilyMonthError, /month no es un mes valido/)
+  request(`/family-expenses/${familyExpense.id}`, 'DELETE')
+  assert.equal(request<Array<{ id: number }>>('/family-expenses?month=2026-07').length, 0)
+
   request('/transactions', 'POST', {
     instrumentId: credit.id,
     categoryId: category.id,
@@ -440,7 +505,7 @@ try {
   assert.equal(typeof simulation.isFavorable, 'boolean')
 
   const info = request<{ schemaVersion: string }>('/database/info')
-  assert.equal(info.schemaVersion, '5')
+  assert.equal(info.schemaVersion, '6')
 
   const cardBeforeHistorical = request<Array<{
     id: number
@@ -653,6 +718,42 @@ try {
   const payrollSchedule = request<Array<{ paymentDate: string }>>(`/loans/${payrollLoan.id}/payments`)
   assert.equal(payrollSchedule[0]?.paymentDate, '2099-01-01')
   assert.equal(payrollSchedule[1]?.paymentDate, '2099-01-08')
+
+  const scheduledBiweeklyLoan = request<{ id: number; paymentDay: number | null; secondPaymentDay: number | null }>('/loans', 'POST', {
+    name: 'Prestamo quincenal con dias fijos',
+    currencyId: 1,
+    originalAmount: 600,
+    annualRate: 12,
+    totalInstallments: 4,
+    paymentType: 'fixed',
+    fixedPayment: 160,
+    paymentFrequency: 'biweekly',
+    paymentDay: 14,
+    secondPaymentDay: 30,
+    startDate: '2028-02-01',
+    isActive: true,
+  })
+  assert.equal(scheduledBiweeklyLoan.paymentDay, 14)
+  assert.equal(scheduledBiweeklyLoan.secondPaymentDay, 30)
+  const scheduledBiweeklyPayments = request<Array<{ paymentDate: string }>>(`/loans/${scheduledBiweeklyLoan.id}/payments`)
+  assert.deepEqual(
+    scheduledBiweeklyPayments.map((payment) => payment.paymentDate),
+    ['2028-02-14', '2028-02-29', '2028-03-14', '2028-03-30'],
+  )
+  const invalidBiweeklyLoanError = requestFailure('/loans', 'POST', {
+    name: 'Prestamo quincenal invalido',
+    currencyId: 1,
+    originalAmount: 600,
+    totalInstallments: 4,
+    paymentType: 'fixed',
+    fixedPayment: 160,
+    paymentFrequency: 'biweekly',
+    paymentDay: 30,
+    secondPaymentDay: 14,
+    startDate: '2028-02-01',
+    isActive: true,
+  })
+  assert.match(invalidBiweeklyLoanError, /segundo dia de pago quincenal debe ser posterior/)
   const balanceBeforePayrollPayment = request<Array<{ id: number; currentAmount: number }>>('/instruments')
     .find((item) => item.id === debit.id)?.currentAmount
   const payrollPayment = request<{

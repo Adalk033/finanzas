@@ -9,6 +9,7 @@ import type {
   RecurringIncome,
   RecurringIncomeInput,
 } from '../../types/domain'
+import { NumberInput } from '../NumberInput'
 
 type SubscriptionsSectionProps = {
   hasConfig: boolean
@@ -156,14 +157,14 @@ export function SubscriptionsSection({
                 </select>
 
                 <label className="form-grid__field" htmlFor="subscriptionAmount">Monto</label>
-                <input
+                <NumberInput
                   id="subscriptionAmount"
                   className="form-grid__input"
-                  type="number"
                   min={0.01}
                   step="0.01"
                   value={subscriptionForm.amount}
-                  onChange={(event) => onSubscriptionFormChange({ ...subscriptionForm, amount: Number(event.target.value) })}
+                  emptyValue={0}
+                  onValueChange={(amount) => onSubscriptionFormChange({ ...subscriptionForm, amount })}
                   required
                 />
 
@@ -180,14 +181,14 @@ export function SubscriptionsSection({
                 </select>
 
                 <label className="form-grid__field" htmlFor="subscriptionBillingDay">Dia de cargo</label>
-                <input
+                <NumberInput
                   id="subscriptionBillingDay"
                   className="form-grid__input"
-                  type="number"
                   min={1}
                   max={31}
                   value={subscriptionForm.billingDay ?? 1}
-                  onChange={(event) => onSubscriptionFormChange({ ...subscriptionForm, billingDay: Number(event.target.value) })}
+                  emptyValue={0}
+                  onValueChange={(billingDay) => onSubscriptionFormChange({ ...subscriptionForm, billingDay })}
                 />
 
                 <label className="form-grid__field" htmlFor="subscriptionNextBilling">Proximo cargo</label>
@@ -379,16 +380,16 @@ export function SubscriptionsSection({
             ))}
           </select>
           <label className="form-grid__field" htmlFor="recurringIncomeAmount">Monto</label>
-          <input
+          <NumberInput
             id="recurringIncomeAmount"
             className="form-grid__input"
-            type="number"
             min={0.01}
             step="0.01"
             value={recurringIncomeForm.amount}
-            onChange={(event) => onRecurringIncomeFormChange({
+            emptyValue={0}
+            onValueChange={(amount) => onRecurringIncomeFormChange({
               ...recurringIncomeForm,
-              amount: Number(event.target.value),
+              amount,
             })}
             required
           />
@@ -415,29 +416,29 @@ export function SubscriptionsSection({
           {recurringIncomeForm.frequency === 'biweekly' ? (
             <>
               <label className="form-grid__field" htmlFor="recurringIncomeFirstPaymentDay">Primer dia de pago</label>
-              <input
+              <NumberInput
                 id="recurringIncomeFirstPaymentDay"
                 className="form-grid__input"
-                type="number"
                 min={1}
                 max={31}
-                value={recurringIncomeForm.paymentDay ?? ''}
-                onChange={(event) => onRecurringIncomeFormChange({
+                value={recurringIncomeForm.paymentDay}
+                emptyValue={null}
+                onValueChange={(paymentDay) => onRecurringIncomeFormChange({
                   ...recurringIncomeForm,
-                  paymentDay: event.target.value ? Number(event.target.value) : null,
+                  paymentDay,
                 })}
               />
               <label className="form-grid__field" htmlFor="recurringIncomeSecondPaymentDay">Segundo dia de pago</label>
-              <input
+              <NumberInput
                 id="recurringIncomeSecondPaymentDay"
                 className="form-grid__input"
-                type="number"
                 min={1}
                 max={31}
-                value={recurringIncomeForm.secondPaymentDay ?? ''}
-                onChange={(event) => onRecurringIncomeFormChange({
+                value={recurringIncomeForm.secondPaymentDay}
+                emptyValue={null}
+                onValueChange={(secondPaymentDay) => onRecurringIncomeFormChange({
                   ...recurringIncomeForm,
-                  secondPaymentDay: event.target.value ? Number(event.target.value) : null,
+                  secondPaymentDay,
                 })}
               />
               {recurringIncomeForm.secondPaymentDay === null ? (

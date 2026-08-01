@@ -8,6 +8,7 @@ import type {
   SavingsGoal,
   SavingsGoalInput,
 } from '../../types/domain'
+import { NumberInput } from '../NumberInput'
 
 type BudgetsSectionProps = {
   hasConfig: boolean
@@ -127,41 +128,41 @@ export function BudgetsSection({
             </select>
 
             <label className="form-grid__field" htmlFor="budgetAmount">Monto mensual</label>
-            <input
+            <NumberInput
               id="budgetAmount"
               className="form-grid__input"
-              type="number"
               min={0}
               step="0.01"
               value={budgetForm.amount}
-              onChange={(event) => {
-                onBudgetFormChange({ ...budgetForm, amount: Number(event.target.value) })
+              emptyValue={0}
+              onValueChange={(amount) => {
+                onBudgetFormChange({ ...budgetForm, amount })
               }}
             />
 
             <label className="form-grid__field" htmlFor="budgetMonth">Mes</label>
-            <input
+            <NumberInput
               id="budgetMonth"
               className="form-grid__input"
-              type="number"
               min={1}
               max={12}
               value={budgetForm.month}
-              onChange={(event) => {
-                onBudgetFormChange({ ...budgetForm, month: Number(event.target.value) })
+              emptyValue={0}
+              onValueChange={(month) => {
+                onBudgetFormChange({ ...budgetForm, month })
               }}
             />
 
             <label className="form-grid__field" htmlFor="budgetYear">Anio</label>
-            <input
+            <NumberInput
               id="budgetYear"
               className="form-grid__input"
-              type="number"
               min={2000}
               max={2200}
               value={budgetForm.year}
-              onChange={(event) => {
-                onBudgetFormChange({ ...budgetForm, year: Number(event.target.value) })
+              emptyValue={0}
+              onValueChange={(year) => {
+                onBudgetFormChange({ ...budgetForm, year })
               }}
             />
 
@@ -196,28 +197,28 @@ export function BudgetsSection({
 
           <div className="form-grid form-grid--inline">
             <label className="form-grid__field" htmlFor="budgetFilterMonth">Mes filtro</label>
-            <input
+            <NumberInput
               id="budgetFilterMonth"
               className="form-grid__input"
-              type="number"
               min={1}
               max={12}
               value={budgetFilterMonth}
-              onChange={(event) => {
-                onBudgetFilterMonthChange(Number(event.target.value))
+              emptyValue={0}
+              onValueChange={(month) => {
+                onBudgetFilterMonthChange(month)
               }}
             />
 
             <label className="form-grid__field" htmlFor="budgetFilterYear">Anio filtro</label>
-            <input
+            <NumberInput
               id="budgetFilterYear"
               className="form-grid__input"
-              type="number"
               min={2000}
               max={2200}
               value={budgetFilterYear}
-              onChange={(event) => {
-                onBudgetFilterYearChange(Number(event.target.value))
+              emptyValue={0}
+              onValueChange={(year) => {
+                onBudgetFilterYearChange(year)
               }}
             />
 
@@ -320,9 +321,9 @@ export function BudgetsSection({
           <label className="form-grid__field" htmlFor="goalName">Meta</label>
           <input id="goalName" className="form-grid__input" value={savingsGoalForm.name} onChange={(event) => onSavingsGoalFormChange({ ...savingsGoalForm, name: event.target.value })} required />
           <label className="form-grid__field" htmlFor="goalTarget">Monto objetivo</label>
-          <input id="goalTarget" className="form-grid__input" type="number" min={0.01} step="0.01" value={savingsGoalForm.targetAmount} onChange={(event) => onSavingsGoalFormChange({ ...savingsGoalForm, targetAmount: Number(event.target.value) })} required />
+          <NumberInput id="goalTarget" className="form-grid__input" min={0.01} step="0.01" value={savingsGoalForm.targetAmount} emptyValue={0} onValueChange={(targetAmount) => onSavingsGoalFormChange({ ...savingsGoalForm, targetAmount })} required />
           <label className="form-grid__field" htmlFor="goalCurrent">Ahorrado</label>
-          <input id="goalCurrent" className="form-grid__input" type="number" min={0} step="0.01" value={savingsGoalForm.currentAmount} onChange={(event) => onSavingsGoalFormChange({ ...savingsGoalForm, currentAmount: Number(event.target.value) })} />
+          <NumberInput id="goalCurrent" className="form-grid__input" min={0} step="0.01" value={savingsGoalForm.currentAmount} emptyValue={0} onValueChange={(currentAmount) => onSavingsGoalFormChange({ ...savingsGoalForm, currentAmount })} />
           <label className="form-grid__field" htmlFor="goalDate">Fecha objetivo</label>
           <input id="goalDate" className="form-grid__input" type="date" value={savingsGoalForm.targetDate} onChange={(event) => onSavingsGoalFormChange({ ...savingsGoalForm, targetDate: event.target.value })} />
           <label className="form-grid__field" htmlFor="goalInstrument">Cuenta vinculada</label>

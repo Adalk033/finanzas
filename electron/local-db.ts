@@ -56,8 +56,6 @@ const SCHEMA = `
   CREATE TABLE IF NOT EXISTS categories (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 100),
-    icon_name TEXT,
-    color TEXT,
     type TEXT NOT NULL DEFAULT 'expense' CHECK (type IN ('expense', 'income', 'both')),
     is_system INTEGER NOT NULL DEFAULT 0 CHECK (is_system IN (0, 1)),
     is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
@@ -99,6 +97,19 @@ const SCHEMA = `
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS family_expenses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    category_id INTEGER REFERENCES categories(id),
+    subcategory_id INTEGER REFERENCES subcategories(id),
+    currency_id INTEGER NOT NULL DEFAULT 1 REFERENCES currencies(id),
+    amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+    description TEXT NOT NULL CHECK (length(description) BETWEEN 1 AND 255),
+    expense_date TEXT NOT NULL,
+    notes TEXT CHECK (notes IS NULL OR length(notes) <= 2000),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
   CREATE TABLE IF NOT EXISTS credit_card_statements (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     instrument_id INTEGER NOT NULL REFERENCES financial_instruments(id),
@@ -128,6 +139,7 @@ const SCHEMA = `
     payment_type TEXT NOT NULL CHECK (payment_type IN ('fixed', 'variable')),
     fixed_payment_cents INTEGER,
     payment_day INTEGER CHECK (payment_day IS NULL OR payment_day BETWEEN 1 AND 31),
+    second_payment_day INTEGER CHECK (second_payment_day IS NULL OR second_payment_day BETWEEN 1 AND 31),
     payment_frequency TEXT NOT NULL DEFAULT 'monthly' CHECK (payment_frequency IN ('weekly', 'biweekly', 'monthly')),
     start_date TEXT NOT NULL,
     end_date TEXT,
@@ -308,6 +320,8 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_instruments_bank ON financial_instruments(bank_id);
   CREATE INDEX IF NOT EXISTS idx_transactions_instrument_date ON transactions(instrument_id, transaction_date);
   CREATE INDEX IF NOT EXISTS idx_transactions_category_date ON transactions(category_id, transaction_date);
+  CREATE INDEX IF NOT EXISTS idx_family_expenses_date ON family_expenses(expense_date);
+  CREATE INDEX IF NOT EXISTS idx_family_expenses_category_date ON family_expenses(category_id, expense_date);
   CREATE INDEX IF NOT EXISTS idx_transfers_instruments_date ON transfers(source_instrument_id, destination_instrument_id, transfer_date);
   CREATE INDEX IF NOT EXISTS idx_loan_payments_loan ON loan_payments(loan_id, installment_num);
   CREATE INDEX IF NOT EXISTS idx_reminders_pending ON reminders(is_dismissed, is_read, reminder_date);
@@ -320,6 +334,7 @@ function hasColumn(table: string, column: string): boolean {
   }
   const allowedTables = new Set([
     'banks',
+    'categories',
     'financial_instruments',
     'transactions',
     'loan_payments',
@@ -351,6 +366,22 @@ function removeDeprecatedBankColumns(): void {
   })()
 }
 
+function removeDeprecatedCategoryColumns(): void {
+  if (!database) {
+    return
+  }
+  const db = database
+
+  db.transaction(() => {
+    if (hasColumn('categories', 'color')) {
+      db.exec('ALTER TABLE categories DROP COLUMN color')
+    }
+    if (hasColumn('categories', 'icon_name')) {
+      db.exec('ALTER TABLE categories DROP COLUMN icon_name')
+    }
+  })()
+}
+
 function addColumn(table: string, definition: string, column: string): void {
   if (!database || hasColumn(table, column)) {
     return
@@ -369,6 +400,7 @@ function addColumn(table: string, definition: string, column: string): void {
     ])],
     ['loans', new Set([
       "payment_frequency TEXT NOT NULL DEFAULT 'monthly' CHECK (payment_frequency IN ('weekly', 'biweekly', 'monthly'))",
+      'second_payment_day INTEGER CHECK (second_payment_day IS NULL OR second_payment_day BETWEEN 1 AND 31)',
       'affects_instrument_balance INTEGER NOT NULL DEFAULT 1 CHECK (affects_instrument_balance IN (0, 1))',
     ])],
     ['loan_payments', new Set([
@@ -390,6 +422,7 @@ function addColumn(table: string, definition: string, column: string): void {
 
 function migrateSchema(): void {
   removeDeprecatedBankColumns()
+  removeDeprecatedCategoryColumns()
   addColumn(
     'financial_instruments',
     'linked_account_id INTEGER REFERENCES financial_instruments(id)',
@@ -421,6 +454,11 @@ function migrateSchema(): void {
     'loans',
     "payment_frequency TEXT NOT NULL DEFAULT 'monthly' CHECK (payment_frequency IN ('weekly', 'biweekly', 'monthly'))",
     'payment_frequency',
+  )
+  addColumn(
+    'loans',
+    'second_payment_day INTEGER CHECK (second_payment_day IS NULL OR second_payment_day BETWEEN 1 AND 31)',
+    'second_payment_day',
   )
   addColumn(
     'loans',
@@ -475,7 +513,7 @@ export function initializeLocalDb(dbPath: string): void {
 
   database.prepare(`
     INSERT INTO app_metadata (key, value)
-    VALUES ('schema_version', '5')
+    VALUES ('schema_version', '6')
     ON CONFLICT(key) DO UPDATE SET value = excluded.value
   `).run()
 }

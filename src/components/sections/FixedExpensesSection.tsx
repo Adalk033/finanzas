@@ -8,6 +8,7 @@ import type {
   FixedExpensePayment,
   FixedExpensePaymentInput,
 } from '../../types/domain'
+import { NumberInput } from '../NumberInput'
 
 type FixedExpensesSectionProps = {
   hasConfig: boolean
@@ -119,14 +120,14 @@ export function FixedExpensesSection({
                 />
 
                 <label className="form-grid__field" htmlFor="fixedExpenseAmount">Monto estimado</label>
-                <input
+                <NumberInput
                   id="fixedExpenseAmount"
                   className="form-grid__input"
-                  type="number"
                   min={0.01}
                   step="0.01"
                   value={fixedExpenseForm.estimatedAmount}
-                  onChange={(event) => onFixedExpenseFormChange({ ...fixedExpenseForm, estimatedAmount: Number(event.target.value) })}
+                  emptyValue={0}
+                  onValueChange={(estimatedAmount) => onFixedExpenseFormChange({ ...fixedExpenseForm, estimatedAmount })}
                   required
                 />
 
@@ -191,14 +192,14 @@ export function FixedExpensesSection({
                 </select>
 
                 <label className="form-grid__field" htmlFor="fixedExpensePaymentDay">Dia de pago</label>
-                <input
+                <NumberInput
                   id="fixedExpensePaymentDay"
                   className="form-grid__input"
-                  type="number"
                   min={1}
                   max={31}
                   value={fixedExpenseForm.paymentDay ?? 1}
-                  onChange={(event) => onFixedExpenseFormChange({ ...fixedExpenseForm, paymentDay: Number(event.target.value) })}
+                  emptyValue={0}
+                  onValueChange={(paymentDay) => onFixedExpenseFormChange({ ...fixedExpenseForm, paymentDay })}
                 />
 
                 <label className="form-grid__field" htmlFor="fixedExpenseNotes">Notas</label>
@@ -264,38 +265,38 @@ export function FixedExpensesSection({
                 </select>
 
                 <label className="form-grid__field" htmlFor="fixedExpensePaymentAmount">Monto pagado</label>
-                <input
+                <NumberInput
                   id="fixedExpensePaymentAmount"
                   className="form-grid__input"
-                  type="number"
                   min={0.01}
                   step="0.01"
                   value={fixedExpensePaymentForm.amount}
-                  onChange={(event) => onFixedExpensePaymentFormChange({ ...fixedExpensePaymentForm, amount: Number(event.target.value) })}
+                  emptyValue={0}
+                  onValueChange={(amount) => onFixedExpensePaymentFormChange({ ...fixedExpensePaymentForm, amount })}
                   required
                 />
 
                 <label className="form-grid__field" htmlFor="fixedExpensePaymentMonth">Mes</label>
-                <input
+                <NumberInput
                   id="fixedExpensePaymentMonth"
                   className="form-grid__input"
-                  type="number"
                   min={1}
                   max={12}
                   value={fixedExpensePaymentForm.periodMonth}
-                  onChange={(event) => onFixedExpensePaymentFormChange({ ...fixedExpensePaymentForm, periodMonth: Number(event.target.value) })}
+                  emptyValue={0}
+                  onValueChange={(periodMonth) => onFixedExpensePaymentFormChange({ ...fixedExpensePaymentForm, periodMonth })}
                   required
                 />
 
                 <label className="form-grid__field" htmlFor="fixedExpensePaymentYear">Anio</label>
-                <input
+                <NumberInput
                   id="fixedExpensePaymentYear"
                   className="form-grid__input"
-                  type="number"
                   min={2000}
                   max={2200}
                   value={fixedExpensePaymentForm.periodYear}
-                  onChange={(event) => onFixedExpensePaymentFormChange({ ...fixedExpensePaymentForm, periodYear: Number(event.target.value) })}
+                  emptyValue={0}
+                  onValueChange={(periodYear) => onFixedExpensePaymentFormChange({ ...fixedExpensePaymentForm, periodYear })}
                   required
                 />
 

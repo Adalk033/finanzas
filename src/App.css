@@ -327,11 +327,13 @@ textarea.form-grid__input {
   box-shadow: 0 0 0 2px rgba(111, 134, 232, 0.24);
 }
 
-input[type='date'] {
+input[type='date'],
+input[type='month'] {
   color-scheme: dark;
 }
 
-input[type='date'].form-grid__input {
+input[type='date'].form-grid__input,
+input[type='month'].form-grid__input {
   padding-right: var(--space-2);
 }
 
@@ -350,6 +352,10 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   opacity: 1;
 }
 
+input[type='month']::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+}
+
 .form-grid__actions {
   grid-column: 1 / -1;
   display: flex;
@@ -357,6 +363,10 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   justify-content: flex-end;
   gap: var(--space-2);
   margin-top: var(--space-1);
+}
+
+.form-grid__help {
+  grid-column: 1 / -1;
 }
 
 .button {
@@ -935,6 +945,18 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: var(--space-2);
   margin-top: var(--space-3);
+}
+
+.family-dashboard-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.family-month-filter {
+  display: grid;
+  grid-template-columns: auto minmax(160px, 220px);
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
 }
 
 .dashboard-charts {

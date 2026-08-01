@@ -80,8 +80,6 @@ export interface Subcategory {
 export interface Category {
   id: number
   name: string
-  iconName: string | null
-  color: string | null
   type: CategoryType
   isSystem: boolean
   isActive: boolean
@@ -93,8 +91,6 @@ export interface Category {
 
 export interface CategoryInput {
   name: string
-  iconName: string
-  color: string
   type: CategoryType
   isActive: boolean
 }
@@ -155,6 +151,54 @@ export interface TransactionFilters {
   instrumentId?: number
   type?: TransactionType
   search?: string
+}
+
+export interface FamilyExpense {
+  id: number
+  categoryId: number | null
+  categoryName: string | null
+  subcategoryId: number | null
+  subcategoryName: string | null
+  currencyId: number
+  amount: number
+  description: string
+  expenseDate: string
+  notes: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface FamilyExpenseInput {
+  categoryId: number | null
+  subcategoryId: number | null
+  amount: number
+  description: string
+  expenseDate: string
+  notes: string
+}
+
+export interface FamilyExpenseFilters {
+  month: string
+  categoryId?: number
+  search?: string
+}
+
+export interface FamilyDashboardSummary {
+  total: number
+  expenseCount: number
+  averageExpense: number
+}
+
+export interface FamilyMonthlyExpensePoint {
+  month: string
+  total: number
+}
+
+export interface FamilyDashboard {
+  month: string
+  summary: FamilyDashboardSummary
+  expensesByCategory: DashboardExpenseByCategory[]
+  monthlyTrend: FamilyMonthlyExpensePoint[]
 }
 
 export interface CreditCardStatement {
@@ -237,6 +281,7 @@ export interface Loan {
   paymentType: LoanPaymentType
   fixedPayment: number | null
   paymentDay: number | null
+  secondPaymentDay: number | null
   paymentFrequency: LoanPaymentFrequency
   startDate: string
   endDate: string | null
@@ -259,6 +304,7 @@ export interface LoanInput {
   paymentType: LoanPaymentType
   fixedPayment: number | null
   paymentDay: number | null
+  secondPaymentDay: number | null
   paymentFrequency: LoanPaymentFrequency
   startDate: string
   endDate: string

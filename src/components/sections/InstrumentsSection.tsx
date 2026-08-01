@@ -2,6 +2,7 @@ import { useState, type SyntheticEvent } from 'react'
 import { formatCurrency } from '../../app/appHelpers'
 import type { Bank, FinancialInstrument, FinancialInstrumentInput, InstrumentType } from '../../types/domain'
 import type { ReconciliationInput } from '../../types/domain'
+import { NumberInput } from '../NumberInput'
 
 type InstrumentGroup = {
   bank: Bank | undefined
@@ -167,61 +168,61 @@ export function InstrumentsSection({
             {instrumentForm.type === 'credit_card' ? (
               <>
                 <label className="form-grid__field" htmlFor="creditLimit">Limite de credito</label>
-                <input
+                <NumberInput
                   id="creditLimit"
                   className="form-grid__input"
-                  type="number"
                   step="0.01"
                   value={instrumentForm.creditLimit ?? 0}
-                  onChange={(event) => onInstrumentFormChange({ ...instrumentForm, creditLimit: Number(event.target.value) })}
+                  emptyValue={0}
+                  onValueChange={(creditLimit) => onInstrumentFormChange({ ...instrumentForm, creditLimit })}
                   required
                 />
 
                 <label className="form-grid__field" htmlFor="currentBalance">Saldo actual</label>
-                <input
+                <NumberInput
                   id="currentBalance"
                   className="form-grid__input"
-                  type="number"
                   step="0.01"
                   value={instrumentForm.currentBalance ?? 0}
-                  onChange={(event) => onInstrumentFormChange({ ...instrumentForm, currentBalance: Number(event.target.value) })}
+                  emptyValue={0}
+                  onValueChange={(currentBalance) => onInstrumentFormChange({ ...instrumentForm, currentBalance })}
                 />
 
                 <label className="form-grid__field" htmlFor="cutOffDay">Dia de corte</label>
-                <input
+                <NumberInput
                   id="cutOffDay"
                   className="form-grid__input"
-                  type="number"
                   min={1}
                   max={31}
                   value={instrumentForm.cutOffDay ?? 1}
-                  onChange={(event) => onInstrumentFormChange({ ...instrumentForm, cutOffDay: Number(event.target.value) })}
+                  emptyValue={0}
+                  onValueChange={(cutOffDay) => onInstrumentFormChange({ ...instrumentForm, cutOffDay })}
                   required
                 />
 
                 <label className="form-grid__field" htmlFor="paymentDueDay">Dia de pago</label>
-                <input
+                <NumberInput
                   id="paymentDueDay"
                   className="form-grid__input"
-                  type="number"
                   min={1}
                   max={31}
                   value={instrumentForm.paymentDueDay ?? 1}
-                  onChange={(event) => onInstrumentFormChange({ ...instrumentForm, paymentDueDay: Number(event.target.value) })}
+                  emptyValue={0}
+                  onValueChange={(paymentDueDay) => onInstrumentFormChange({ ...instrumentForm, paymentDueDay })}
                   required
                 />
               </>
             ) : (
               <>
                 <label className="form-grid__field" htmlFor="currentAmount">Saldo actual</label>
-                <input
+                <NumberInput
                   id="currentAmount"
                   className="form-grid__input"
-                  type="number"
                   step="0.01"
                   value={instrumentForm.currentAmount ?? 0}
+                  emptyValue={0}
                   disabled={instrumentForm.type === 'debit_card' && instrumentForm.linkedAccountId !== null}
-                  onChange={(event) => onInstrumentFormChange({ ...instrumentForm, currentAmount: Number(event.target.value) })}
+                  onValueChange={(currentAmount) => onInstrumentFormChange({ ...instrumentForm, currentAmount })}
                   required
                 />
                 {instrumentForm.type === 'debit_card' ? (

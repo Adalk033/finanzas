@@ -37,6 +37,13 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    label: 'Familia',
+    items: [
+      { key: 'familyDashboard', label: 'Inicio' },
+      { key: 'familyExpenses', label: 'Gastos' },
+    ],
+  },
+  {
     label: 'Cuentas y deudas',
     items: [
       { key: 'instruments', label: 'Instrumentos' },

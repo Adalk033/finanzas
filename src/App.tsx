@@ -18,6 +18,8 @@ const LoansSection = lazy(() => import('./components/sections/LoansSection').the
 const BudgetsSection = lazy(() => import('./components/sections/BudgetsSection').then((module) => ({ default: module.BudgetsSection })))
 const SimulatorSection = lazy(() => import('./components/sections/SimulatorSection').then((module) => ({ default: module.SimulatorSection })))
 const RemindersSection = lazy(() => import('./components/sections/RemindersSection').then((module) => ({ default: module.RemindersSection })) )
+const FamilyDashboardSection = lazy(() => import('./components/sections/FamilyDashboardSection').then((module) => ({ default: module.FamilyDashboardSection })))
+const FamilyExpensesSection = lazy(() => import('./components/sections/FamilyExpensesSection').then((module) => ({ default: module.FamilyExpensesSection })))
 
 export function App() {
   const {
@@ -41,6 +43,8 @@ export function App() {
     transactionsController,
     recurringIncomesController,
     savingsGoalsController,
+    familyDashboardController,
+    familyExpensesController,
   } = useAppControllers()
 
   if (databaseController.isLoading) {
@@ -81,6 +85,57 @@ export function App() {
                 void dashboardController.loadDashboard()
               }}
               onDashboardExpensePeriodChange={dashboardController.setDashboardExpensePeriod}
+            />
+          ) : null}
+
+          {activeSection === 'familyDashboard' ? (
+            <FamilyDashboardSection
+              hasConfig={hasConfig}
+              dashboard={familyDashboardController.familyDashboard}
+              selectedMonth={familyDashboardController.selectedFamilyMonth}
+              isLoading={familyDashboardController.isFamilyDashboardLoading}
+              error={familyDashboardController.familyDashboardError}
+              onMonthChange={(month) => {
+                void familyDashboardController.changeFamilyMonth(month)
+              }}
+              onReload={() => {
+                void familyDashboardController.loadFamilyDashboard()
+              }}
+            />
+          ) : null}
+
+          {activeSection === 'familyExpenses' ? (
+            <FamilyExpensesSection
+              hasConfig={hasConfig}
+              categories={categoriesController.categories}
+              expenses={familyExpensesController.familyExpenses}
+              form={familyExpensesController.familyExpenseForm}
+              filters={familyExpensesController.familyExpenseFilters}
+              subcategories={familyExpensesController.familyExpenseSubcategories}
+              editingId={familyExpensesController.editingFamilyExpenseId}
+              isLoading={familyExpensesController.isFamilyExpensesLoading}
+              error={familyExpensesController.familyExpenseError}
+              message={familyExpensesController.familyExpenseMessage}
+              onFormChange={familyExpensesController.setFamilyExpenseForm}
+              onFiltersChange={familyExpensesController.setFamilyExpenseFilters}
+              onMonthChange={(month) => {
+                void familyExpensesController.changeFamilyExpenseMonth(month)
+              }}
+              onSubmit={familyExpensesController.handleFamilyExpenseSubmit}
+              onFiltersSubmit={familyExpensesController.applyFamilyExpenseFilters}
+              onReset={familyExpensesController.resetFamilyExpenseForm}
+              onClearFilters={() => {
+                void familyExpensesController.clearFamilyExpenseFilters()
+              }}
+              onReload={() => {
+                void familyExpensesController.loadFamilyExpenses()
+              }}
+              onEdit={familyExpensesController.startFamilyExpenseEdit}
+              onDelete={(id) => {
+                if (window.confirm('¿Eliminar este gasto familiar?')) {
+                  void familyExpensesController.handleFamilyExpenseDelete(id)
+                }
+              }}
             />
           ) : null}
 

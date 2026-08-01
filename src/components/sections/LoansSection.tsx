@@ -9,10 +9,11 @@ import type {
   LoanPaymentRegisterInput,
   LoanPaymentType,
 } from '../../types/domain'
+import { NumberInput } from '../NumberInput'
 
 const LOAN_PAYMENT_FREQUENCY_LABELS: Record<LoanPaymentFrequency, string> = {
   weekly: 'Semanal',
-  biweekly: 'Quincenal (cada 14 dias)',
+  biweekly: 'Quincenal',
   monthly: 'Mensual',
 }
 
@@ -143,25 +144,25 @@ export function LoansSection({
                 </select>
 
                 <label className="form-grid__field" htmlFor="loanOriginalAmount">Monto original</label>
-                <input
+                <NumberInput
                   id="loanOriginalAmount"
                   className="form-grid__input"
-                  type="number"
                   min={0.01}
                   step="0.01"
                   value={loanForm.originalAmount}
-                  onChange={(event) => onLoanFormChange({ ...loanForm, originalAmount: Number(event.target.value) })}
+                  emptyValue={0}
+                  onValueChange={(originalAmount) => onLoanFormChange({ ...loanForm, originalAmount })}
                   required
                 />
 
                 <label className="form-grid__field" htmlFor="loanTotalInstallments">Total de cuotas</label>
-                <input
+                <NumberInput
                   id="loanTotalInstallments"
                   className="form-grid__input"
-                  type="number"
                   min={1}
                   value={loanForm.totalInstallments}
-                  onChange={(event) => onLoanFormChange({ ...loanForm, totalInstallments: Number(event.target.value) })}
+                  emptyValue={0}
+                  onValueChange={(totalInstallments) => onLoanFormChange({ ...loanForm, totalInstallments })}
                   required
                 />
 
@@ -186,7 +187,10 @@ export function LoansSection({
                     onLoanFormChange({
                       ...loanForm,
                       paymentFrequency,
-                      paymentDay: paymentFrequency === 'monthly' ? (loanForm.paymentDay ?? 1) : null,
+                      paymentDay: paymentFrequency === 'weekly' ? null : (loanForm.paymentDay ?? 1),
+                      secondPaymentDay: paymentFrequency === 'biweekly'
+                        ? (loanForm.secondPaymentDay ?? 15)
+                        : null,
                     })
                   }}
                 >
@@ -198,44 +202,41 @@ export function LoansSection({
                 {loanForm.paymentType === 'fixed' ? (
                   <>
                     <label className="form-grid__field" htmlFor="loanFixedPayment">Pago fijo por cuota</label>
-                    <input
+                    <NumberInput
                       id="loanFixedPayment"
                       className="form-grid__input"
-                      type="number"
                       min={0.01}
                       step="0.01"
                       value={loanForm.fixedPayment ?? 0}
-                      onChange={(event) => onLoanFormChange({ ...loanForm, fixedPayment: Number(event.target.value) })}
+                      emptyValue={0}
+                      onValueChange={(fixedPayment) => onLoanFormChange({ ...loanForm, fixedPayment })}
                       required
                     />
                     <label className="form-grid__field" htmlFor="loanAnnualRateFixed">Tasa anual (%)</label>
-                    <input
+                    <NumberInput
                       id="loanAnnualRateFixed"
                       className="form-grid__input"
-                      type="number"
                       min={0}
                       step="0.0001"
                       value={loanForm.annualRate ?? 0}
-                      onChange={(event) => onLoanFormChange({
+                      emptyValue={0}
+                      onValueChange={(annualRate) => onLoanFormChange({
                         ...loanForm,
-                        annualRate: Number(event.target.value),
+                        annualRate,
                       })}
                     />
                   </>
                 ) : (
                   <>
                     <label className="form-grid__field" htmlFor="loanAnnualRate">Tasa anual (%)</label>
-                    <input
+                    <NumberInput
                       id="loanAnnualRate"
                       className="form-grid__input"
-                      type="number"
                       min={0.0001}
                       step="0.0001"
-                      value={loanForm.annualRate ?? ''}
-                      onChange={(event) => {
-                        const raw = event.target.value
-                        onLoanFormChange({ ...loanForm, annualRate: raw ? Number(raw) : null })
-                      }}
+                      value={loanForm.annualRate}
+                      emptyValue={null}
+                      onValueChange={(annualRate) => onLoanFormChange({ ...loanForm, annualRate })}
                       required
                     />
                   </>
@@ -244,18 +245,42 @@ export function LoansSection({
                 {loanForm.paymentFrequency === 'monthly' ? (
                   <>
                     <label className="form-grid__field" htmlFor="loanPaymentDay">Dia de pago</label>
-                    <input
+                    <NumberInput
                       id="loanPaymentDay"
                       className="form-grid__input"
-                      type="number"
                       min={1}
                       max={31}
                       value={loanForm.paymentDay ?? 1}
-                      onChange={(event) => onLoanFormChange({ ...loanForm, paymentDay: Number(event.target.value) })}
+                      emptyValue={0}
+                      onValueChange={(paymentDay) => onLoanFormChange({ ...loanForm, paymentDay })}
                     />
                   </>
+                ) : loanForm.paymentFrequency === 'biweekly' ? (
+                  <>
+                    <label className="form-grid__field" htmlFor="loanFirstPaymentDay">Primer dia de cobro</label>
+                    <NumberInput
+                      id="loanFirstPaymentDay"
+                      className="form-grid__input"
+                      min={1}
+                      max={31}
+                      value={loanForm.paymentDay}
+                      emptyValue={null}
+                      onValueChange={(paymentDay) => onLoanFormChange({ ...loanForm, paymentDay })}
+                    />
+                    <label className="form-grid__field" htmlFor="loanSecondPaymentDay">Segundo dia de cobro</label>
+                    <NumberInput
+                      id="loanSecondPaymentDay"
+                      className="form-grid__input"
+                      min={1}
+                      max={31}
+                      value={loanForm.secondPaymentDay}
+                      emptyValue={null}
+                      onValueChange={(secondPaymentDay) => onLoanFormChange({ ...loanForm, secondPaymentDay })}
+                    />
+                    <p className="card__subtitle form-grid__help">Se cobran dos veces al mes. Si un dia no existe, se usa el ultimo dia del mes.</p>
+                  </>
                 ) : (
-                  <p className="card__subtitle">Las fechas se calculan desde la fecha inicial, cada {loanForm.paymentFrequency === 'weekly' ? '7' : '14'} dias.</p>
+                  <p className="card__subtitle form-grid__help">Las fechas se calculan desde la fecha inicial, cada 7 dias.</p>
                 )}
 
                 <label className="form-grid__checkbox" htmlFor="loanAffectsInstrumentBalance">
@@ -268,7 +293,7 @@ export function LoansSection({
                   Descontar cada cuota del saldo de la cuenta vinculada
                 </label>
                 {!loanForm.affectsInstrumentBalance ? (
-                  <p className="card__subtitle">Usa esta opcion si la cuota ya esta descontada del ingreso de nomina que registras; reducira la deuda sin volver a restar saldo de la cuenta.</p>
+                  <p className="card__subtitle form-grid__help">Usa esta opcion si la cuota ya esta descontada del ingreso de nomina que registras; reducira la deuda sin volver a restar saldo de la cuenta.</p>
                 ) : null}
 
                 <label className="form-grid__field" htmlFor="loanStartDate">Fecha inicial</label>
@@ -338,17 +363,14 @@ export function LoansSection({
                 />
 
                 <label className="form-grid__field" htmlFor="loanRegisterAmount">Monto (opcional; acepta abono extra)</label>
-                <input
+                <NumberInput
                   id="loanRegisterAmount"
                   className="form-grid__input"
-                  type="number"
                   min={0.01}
                   step="0.01"
-                  value={loanPaymentRegister.amount ?? ''}
-                  onChange={(event) => {
-                    const raw = event.target.value
-                    onLoanPaymentRegisterChange({ ...loanPaymentRegister, amount: raw ? Number(raw) : null })
-                  }}
+                  value={loanPaymentRegister.amount}
+                  emptyValue={null}
+                  onValueChange={(amount) => onLoanPaymentRegisterChange({ ...loanPaymentRegister, amount })}
                 />
 
                 <label className="form-grid__field" htmlFor="loanRegisterNotes">Notas</label>
@@ -361,7 +383,7 @@ export function LoansSection({
                   placeholder="Comprobante o comentario"
                 />
 
-                <p className="card__subtitle">
+                <p className="card__subtitle form-grid__help">
                   Usa el boton Pagar de la tabla para registrar cada cuota pendiente con esta configuracion.
                 </p>
               </form>

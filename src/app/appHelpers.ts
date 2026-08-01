@@ -11,6 +11,8 @@ import type {
   DashboardSummary,
   FinancialInstrument,
   FinancialInstrumentInput,
+  FamilyExpenseFilters,
+  FamilyExpenseInput,
   FixedExpense,
   FixedExpenseInput,
   FixedExpensePaymentInput,
@@ -46,6 +48,8 @@ export type AppSection =
   | 'budgets'
   | 'reminders'
   | 'simulator'
+  | 'familyDashboard'
+  | 'familyExpenses'
 
 const currentDate = new Date()
 const TODAY_ISO = [
@@ -53,6 +57,7 @@ const TODAY_ISO = [
   String(currentDate.getMonth() + 1).padStart(2, '0'),
   String(currentDate.getDate()).padStart(2, '0'),
 ].join('-')
+export const CURRENT_MONTH_ISO = TODAY_ISO.slice(0, 7)
 
 export const EMPTY_BANK_FORM: BankInput = {
   name: '',
@@ -80,8 +85,6 @@ export const EMPTY_INSTRUMENT_FORM: FinancialInstrumentInput = {
 
 export const EMPTY_CATEGORY_FORM: CategoryInput = {
   name: '',
-  iconName: '',
-  color: '',
   type: 'expense',
   isActive: true,
 }
@@ -114,6 +117,21 @@ export const EMPTY_TRANSACTION_FILTERS: TransactionFilters = {
   categoryId: undefined,
   instrumentId: undefined,
   type: undefined,
+  search: '',
+}
+
+export const EMPTY_FAMILY_EXPENSE_FORM: FamilyExpenseInput = {
+  categoryId: null,
+  subcategoryId: null,
+  amount: 0,
+  description: '',
+  expenseDate: TODAY_ISO,
+  notes: '',
+}
+
+export const EMPTY_FAMILY_EXPENSE_FILTERS: FamilyExpenseFilters = {
+  month: CURRENT_MONTH_ISO,
+  categoryId: undefined,
   search: '',
 }
 
@@ -157,6 +175,7 @@ export const EMPTY_LOAN_FORM: LoanInput = {
   paymentType: 'fixed',
   fixedPayment: 0,
   paymentDay: 1,
+  secondPaymentDay: null,
   paymentFrequency: 'monthly',
   startDate: TODAY_ISO,
   endDate: '',
@@ -312,8 +331,6 @@ export function toEditableInstrument(instrument: FinancialInstrument): Financial
 export function toEditableCategory(category: Category): CategoryInput {
   return {
     name: category.name,
-    iconName: category.iconName ?? '',
-    color: category.color ?? '',
     type: category.type,
     isActive: category.isActive,
   }

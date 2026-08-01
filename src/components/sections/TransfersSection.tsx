@@ -6,6 +6,7 @@ import type {
   TransferInput,
   TransferType,
 } from '../../types/domain'
+import { NumberInput } from '../NumberInput'
 
 type TransfersSectionProps = {
   hasConfig: boolean
@@ -142,16 +143,16 @@ export function TransfersSection({
             </select>
 
             <label className="form-grid__field" htmlFor="transferAmount">Monto</label>
-            <input
+            <NumberInput
               id="transferAmount"
               className="form-grid__input"
-              type="number"
               min={0.01}
               step="0.01"
               value={transferForm.amount}
-              onChange={(event) => onFormChange({
+              emptyValue={0}
+              onValueChange={(amount) => onFormChange({
                 ...transferForm,
-                amount: Number(event.target.value),
+                amount,
               })}
               required
             />
