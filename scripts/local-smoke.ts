@@ -369,6 +369,15 @@ try {
   let reconciled = request<Array<{ id: number; currentAmount: number }>>('/instruments')
     .find((item) => item.id === reconciliationAccount.id)
   assert.equal(reconciled?.currentAmount, 95)
+  request(`/instruments/${reconciliationAccount.id}`, 'PUT', {
+    bankId: bank.id,
+    name: 'Cuenta para conciliacion',
+    type: 'account',
+    currencyId: 1,
+    currentAmount: 95,
+    notes: 'Saldo corregido mediante conciliacion',
+    isActive: true,
+  })
   request(`/instruments/${reconciliationAccount.id}`, 'DELETE')
   request(`/transactions/${reconciliationExpense.id}`, 'DELETE')
   reconciled = request<Array<{ id: number; currentAmount: number }>>('/instruments')
