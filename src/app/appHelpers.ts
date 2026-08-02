@@ -285,7 +285,19 @@ export const EMPTY_SAVINGS_GOAL_FORM: SavingsGoalInput = {
 }
 
 export const MSI_OPTIONS = [3, 6, 9, 12, 18, 24]
-export const DASHBOARD_CHART_COLORS = ['#57A6D8', '#6F86E8', '#F4C95D', '#E6A23C', '#F87171', '#A78BFA']
+export const DASHBOARD_CHART_COLORS = [
+  'var(--color-chart-neutral)',
+  'var(--color-chart-series-2)',
+  'var(--color-chart-net)',
+  'var(--color-chart-expense)',
+  'var(--color-chart-label)',
+]
+export const DASHBOARD_BALANCE_CHART_COLORS = [
+  'var(--color-chart-net)',
+  'var(--color-chart-series-2)',
+  'var(--color-chart-debt)',
+  'var(--color-chart-neutral)',
+]
 export const EMPTY_DASHBOARD_SUMMARY: DashboardSummary = {
   totalAvailable: 0,
   totalCreditDebt: 0,

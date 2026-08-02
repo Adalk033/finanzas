@@ -2,8 +2,8 @@
 
 :root {
   font-family: var(--font-base);
-  color: var(--color-text);
-  background: var(--color-bg);
+  color: var(--color-text-primary);
+  background: var(--color-bg-app);
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -38,7 +38,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100svh;
-  background: var(--color-bg);
+  background: var(--color-bg-app);
 }
 
 h1,

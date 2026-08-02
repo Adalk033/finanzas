@@ -406,6 +406,7 @@ export interface FixedExpenseInput {
 export interface FixedExpensePayment {
   id: number
   fixedExpenseId: number
+  fixedExpenseName: string | null
   amount: number
   periodMonth: number
   periodYear: number

@@ -20,6 +20,7 @@ export const ENDPOINTS = {
   LOANS: '/loans',
   SUBSCRIPTIONS: '/subscriptions',
   FIXED_EXPENSES: '/fixed-expenses',
+  FIXED_EXPENSE_PAYMENTS: '/fixed-expense-payments',
   BUDGETS: '/budgets',
   SIMULATIONS: '/simulations',
   REMINDERS: '/reminders',

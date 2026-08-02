@@ -698,6 +698,8 @@ export const apiClient = {
     request<FixedExpensePayment[]>(`${ENDPOINTS.FIXED_EXPENSES}/${fixedExpenseId}/payments`, {
       method: 'GET',
     }),
+  getAllFixedExpensePayments: () =>
+    request<FixedExpensePayment[]>(ENDPOINTS.FIXED_EXPENSE_PAYMENTS, { method: 'GET' }),
   createFixedExpensePayment: (fixedExpenseId: number, payload: FixedExpensePaymentInput) =>
     request<FixedExpensePayment>(`${ENDPOINTS.FIXED_EXPENSES}/${fixedExpenseId}/payments`, {
       method: 'POST',

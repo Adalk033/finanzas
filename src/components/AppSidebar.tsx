@@ -79,7 +79,10 @@ export function AppSidebar({ activeSection, pendingRemindersCount, databaseStatu
 
   return (
     <aside className="app-shell__sidebar">
-      <h1 className="app-shell__brand">Finanzas Lit</h1>
+      <div className="app-shell__brand-wrap">
+        <h1 className="app-shell__brand">Mis Finanzas</h1>
+        <p className="app-shell__tagline"></p>
+      </div>
 
       {shouldShowDatabaseStatus ? (
         <div className={`app-shell__database-pill app-shell__database-pill--${databaseStatus}`}>

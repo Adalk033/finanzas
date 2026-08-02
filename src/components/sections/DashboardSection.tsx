@@ -15,7 +15,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { DASHBOARD_CHART_COLORS, formatCurrency } from '../../app/appHelpers'
+import { DASHBOARD_BALANCE_CHART_COLORS, DASHBOARD_CHART_COLORS, formatCurrency } from '../../app/appHelpers'
 import type {
   DashboardBalanceEvolution,
   DashboardCashFlowPoint,
@@ -81,11 +81,12 @@ export function DashboardSection({
   const nextMonthProjection = dashboardFutureExpenses[0]
 
   return (
-    <section className="card">
+    <section className="card dashboard-page">
       <header className="card__header dashboard-header">
         <div>
-          <h2 className="card__title">Dashboard Principal</h2>
-          <p className="card__subtitle">Resumen financiero y tendencias clave de tus finanzas.</p>
+          <p className="dashboard-header__eyebrow">Resumen personal</p>
+          <h2 className="card__title"></h2>
+          <p className="card__subtitle"></p>
         </div>
         <button className="button button--secondary dashboard-header__reload" type="button" disabled={!hasConfig || isDashboardLoading} onClick={onReload}>
           {isDashboardLoading ? 'Cargando...' : 'Recargar'}
@@ -105,28 +106,35 @@ export function DashboardSection({
           </p>
         ) : null}
 
-      <div className="dashboard-grid">
-        <article className="summary-card">
+      <div className="dashboard-primary-metrics">
+        <article className="summary-card summary-card--primary">
+          <p className="summary-card__label">Dinero disponible</p>
+          <p className="summary-card__value summary-card__value--positive">
+            {formatCurrency(dashboardSummary.totalAvailable)}
+          </p>
+          <p className="summary-card__hint">Saldo que puedes usar hoy</p>
+        </article>
+        <article className="summary-card summary-card--primary">
           <p className="summary-card__label">Balance neto</p>
-          <p className={`summary-card__value ${dashboardSummary.netBalance >= 0 ? 'summary-card__value--positive' : ''}`}>
+          <p className={`summary-card__value ${dashboardSummary.netBalance >= 0 ? 'summary-card__value--positive' : 'summary-card__value--negative'}`}>
             {formatCurrency(dashboardSummary.netBalance)}
           </p>
+          <p className="summary-card__hint">Lo que queda después de tus deudas</p>
         </article>
-        <article className="summary-card">
-          <p className="summary-card__label">Dinero disponible total</p>
-          <p className="summary-card__value summary-card__value--positive">{formatCurrency(dashboardSummary.totalAvailable)}</p>
+      </div>
+
+      <div className="dashboard-secondary-metrics">
+        <article className="summary-card summary-card--secondary">
+          <p className="summary-card__label">Deuda en TDC</p>
+          <p className="summary-card__value summary-card__value--warning">{formatCurrency(dashboardSummary.totalCreditDebt)}</p>
         </article>
-        <article className="summary-card">
-          <p className="summary-card__label">Deuda total en TDC</p>
-          <p className="summary-card__value">{formatCurrency(dashboardSummary.totalCreditDebt)}</p>
+        <article className="summary-card summary-card--secondary">
+          <p className="summary-card__label">Deuda en préstamos</p>
+          <p className="summary-card__value summary-card__value--warning">{formatCurrency(dashboardSummary.totalLoanDebt)}</p>
         </article>
-        <article className="summary-card">
-          <p className="summary-card__label">Deuda total en prestamos</p>
-          <p className="summary-card__value">{formatCurrency(dashboardSummary.totalLoanDebt)}</p>
-        </article>
-        <article className="summary-card">
-          <p className="summary-card__label">Credito disponible total</p>
-          <p className="summary-card__value summary-card__value--positive">{formatCurrency(dashboardSummary.totalAvailableCredit)}</p>
+        <article className="summary-card summary-card--secondary">
+          <p className="summary-card__label">Crédito disponible</p>
+          <p className="summary-card__value summary-card__value--credit">{formatCurrency(dashboardSummary.totalAvailableCredit)}</p>
         </article>
       </div>
 
@@ -138,11 +146,11 @@ export function DashboardSection({
         <div className="dashboard-commitments__summary">
           <div>
             <p className="summary-card__label">Compromisos estimados</p>
-            <p className="summary-card__value">{formatCurrency(dashboardUpcomingCommitments.total)}</p>
+            <p className="summary-card__value summary-card__value--warning">{formatCurrency(dashboardUpcomingCommitments.total)}</p>
           </div>
           <div>
             <p className="summary-card__label">Disponible despues de compromisos</p>
-            <p className={`summary-card__value ${dashboardUpcomingCommitments.availableAfterCommitments >= 0 ? 'summary-card__value--positive' : ''}`}>
+            <p className={`summary-card__value ${dashboardUpcomingCommitments.availableAfterCommitments >= 0 ? 'summary-card__value--positive' : 'summary-card__value--negative'}`}>
               {formatCurrency(dashboardUpcomingCommitments.availableAfterCommitments)}
             </p>
           </div>
@@ -220,15 +228,15 @@ export function DashboardSection({
             <div className="chart-box">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={dashboardCashFlow}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-                  <XAxis dataKey="month" stroke="var(--color-text-secondary)" />
-                  <YAxis stroke="var(--color-text-secondary)" />
+                  <CartesianGrid strokeDasharray="2 4" stroke="var(--color-chart-grid)" strokeOpacity={0.72} />
+                  <XAxis dataKey="month" stroke="var(--color-chart-axis)" tick={{ fill: 'var(--color-chart-label)', fontSize: 11 }} tickLine={false} />
+                  <YAxis stroke="var(--color-chart-axis)" tick={{ fill: 'var(--color-chart-label)', fontSize: 11 }} tickLine={false} />
                   <Tooltip />
                   <Legend />
-                  <Bar dataKey="income" fill="var(--color-success)" name="Ingresos" />
-                  <Bar dataKey="expense" fill="var(--color-error)" name="Gasto reconocido" />
-                  <Bar dataKey="debtPayments" fill="#E6A23C" name="Pagos de deuda" />
-                  <Line type="monotone" dataKey="netCashFlow" stroke="#57A6D8" name="Flujo neto" />
+                  <Bar dataKey="income" fill="var(--color-chart-income)" fillOpacity={0.88} name="Ingresos" />
+                  <Bar dataKey="expense" fill="var(--color-chart-expense)" fillOpacity={0.88} name="Gasto reconocido" />
+                  <Bar dataKey="debtPayments" fill="var(--color-chart-debt)" fillOpacity={0.88} name="Pagos de deuda" />
+                  <Line type="monotone" dataKey="netCashFlow" stroke="var(--color-chart-net)" strokeWidth={2.4} name="Flujo neto" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -245,9 +253,9 @@ export function DashboardSection({
             <div className="chart-box">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={dashboardBalanceEvolution.points}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-                  <XAxis dataKey="month" stroke="var(--color-text-secondary)" />
-                  <YAxis stroke="var(--color-text-secondary)" />
+                  <CartesianGrid strokeDasharray="2 4" stroke="var(--color-chart-grid)" strokeOpacity={0.72} />
+                  <XAxis dataKey="month" stroke="var(--color-chart-axis)" tick={{ fill: 'var(--color-chart-label)', fontSize: 11 }} tickLine={false} />
+                  <YAxis stroke="var(--color-chart-axis)" tick={{ fill: 'var(--color-chart-label)', fontSize: 11 }} tickLine={false} />
                   <Tooltip />
                   <Legend />
                   {dashboardBalanceEvolution.series.map((series, index) => (
@@ -256,8 +264,8 @@ export function DashboardSection({
                       type="monotone"
                       dataKey={series.key}
                       name={series.label}
-                      stroke={DASHBOARD_CHART_COLORS[index % DASHBOARD_CHART_COLORS.length]}
-                      strokeWidth={2}
+                      stroke={DASHBOARD_BALANCE_CHART_COLORS[index % DASHBOARD_BALANCE_CHART_COLORS.length]}
+                      strokeWidth={2.2}
                       dot={false}
                     />
                   ))}
@@ -282,15 +290,15 @@ export function DashboardSection({
             <div className="chart-box">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={dashboardFutureExpenses}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-                  <XAxis dataKey="month" stroke="var(--color-text-secondary)" />
-                  <YAxis stroke="var(--color-text-secondary)" />
+                  <CartesianGrid strokeDasharray="2 4" stroke="var(--color-chart-grid)" strokeOpacity={0.72} />
+                  <XAxis dataKey="month" stroke="var(--color-chart-axis)" tick={{ fill: 'var(--color-chart-label)', fontSize: 11 }} tickLine={false} />
+                  <YAxis stroke="var(--color-chart-axis)" tick={{ fill: 'var(--color-chart-label)', fontSize: 11 }} tickLine={false} />
                   <Tooltip />
                   <Legend />
-                  <Area type="monotone" dataKey="subscriptions" stackId="1" stroke="#57A6D8" fill="#57A6D8" name="Suscripciones" />
-                  <Area type="monotone" dataKey="fixedExpenses" stackId="1" stroke="#6F86E8" fill="#6F86E8" name="Gastos fijos" />
-                  <Area type="monotone" dataKey="loanPayments" stackId="1" stroke="#E6A23C" fill="#E6A23C" name="Pagos prestamos" />
-                  <Area type="monotone" dataKey="creditCardInstallments" stackId="1" stroke="#F87171" fill="#F87171" name="Mensualidades MSI" />
+                  <Area type="monotone" dataKey="subscriptions" stackId="1" stroke="var(--color-chart-net)" fill="var(--color-chart-net)" fillOpacity={0.18} strokeWidth={2.2} name="Suscripciones" />
+                  <Area type="monotone" dataKey="fixedExpenses" stackId="1" stroke="var(--color-chart-series-2)" fill="var(--color-chart-series-2)" fillOpacity={0.18} strokeWidth={2.2} name="Gastos fijos" />
+                  <Area type="monotone" dataKey="loanPayments" stackId="1" stroke="var(--color-chart-debt)" fill="var(--color-chart-debt)" fillOpacity={0.18} strokeWidth={2.2} name="Pagos prestamos" />
+                  <Area type="monotone" dataKey="creditCardInstallments" stackId="1" stroke="var(--color-chart-expense)" fill="var(--color-chart-expense)" fillOpacity={0.18} strokeWidth={2.2} name="Mensualidades MSI" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>

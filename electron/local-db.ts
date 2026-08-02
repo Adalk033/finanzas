@@ -230,8 +230,7 @@ const SCHEMA = `
     notes TEXT,
     transaction_id INTEGER REFERENCES transactions(id),
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-    UNIQUE(fixed_expense_id, period_month, period_year)
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
   CREATE TABLE IF NOT EXISTS budgets (
@@ -420,6 +419,52 @@ function addColumn(table: string, definition: string, column: string): void {
   database.exec(`ALTER TABLE ${table} ADD COLUMN ${definition}`)
 }
 
+function allowMultipleFixedExpensePaymentsPerPeriod(): void {
+  if (!database) {
+    return
+  }
+
+  const table = database.prepare(`
+    SELECT sql FROM sqlite_master
+    WHERE type = 'table' AND name = 'fixed_expense_payments'
+  `).get() as { sql: string } | undefined
+
+  if (table?.sql?.match(/UNIQUE\s*\(\s*fixed_expense_id\s*,\s*period_month\s*,\s*period_year\s*\)/i)) {
+    database.transaction(() => {
+      database?.exec(`ALTER TABLE fixed_expense_payments RENAME TO fixed_expense_payments_legacy`)
+      database?.exec(`
+        CREATE TABLE fixed_expense_payments (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          fixed_expense_id INTEGER NOT NULL REFERENCES fixed_expenses(id) ON DELETE CASCADE,
+          amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+          period_month INTEGER NOT NULL CHECK (period_month BETWEEN 1 AND 12),
+          period_year INTEGER NOT NULL CHECK (period_year BETWEEN 2000 AND 2200),
+          payment_date TEXT,
+          is_paid INTEGER NOT NULL DEFAULT 0 CHECK (is_paid IN (0, 1)),
+          notes TEXT,
+          transaction_id INTEGER REFERENCES transactions(id),
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        INSERT INTO fixed_expense_payments (
+          id, fixed_expense_id, amount_cents, period_month, period_year, payment_date,
+          is_paid, notes, transaction_id, created_at, updated_at
+        )
+        SELECT
+          id, fixed_expense_id, amount_cents, period_month, period_year, payment_date,
+          is_paid, notes, transaction_id, created_at, updated_at
+        FROM fixed_expense_payments_legacy;
+        DROP TABLE fixed_expense_payments_legacy;
+      `)
+    })()
+  }
+
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS idx_fixed_expense_payments_period
+      ON fixed_expense_payments(fixed_expense_id, period_year, period_month, is_paid);
+  `)
+}
+
 function migrateSchema(): void {
   removeDeprecatedBankColumns()
   removeDeprecatedCategoryColumns()
@@ -445,6 +490,7 @@ function migrateSchema(): void {
     'transaction_id INTEGER REFERENCES transactions(id)',
     'transaction_id',
   )
+  allowMultipleFixedExpensePaymentsPerPeriod()
   addColumn(
     'recurring_incomes',
     'second_payment_day INTEGER CHECK (second_payment_day IS NULL OR second_payment_day BETWEEN 1 AND 31)',
@@ -513,7 +559,7 @@ export function initializeLocalDb(dbPath: string): void {
 
   database.prepare(`
     INSERT INTO app_metadata (key, value)
-    VALUES ('schema_version', '6')
+    VALUES ('schema_version', '7')
     ON CONFLICT(key) DO UPDATE SET value = excluded.value
   `).run()
 }
