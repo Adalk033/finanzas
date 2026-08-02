@@ -1,30 +1,119 @@
 :root {
-  --color-bg: #0f1218;
-  --color-sidebar: #131a24;
-  --color-card: #1a212d;
-  --color-surface: #202936;
-  --color-input: #0f1824;
-  --color-primary: #6f86e8;
-  --color-primary-strong: #465db5;
-  --color-primary-soft: #20294a;
-  --color-text: #f3f6fa;
-  --color-text-secondary: #a9b3bf;
-  --color-border: #2a3442;
-  --color-success: #3cb179;
-  --color-warning: #e6a23c;
-  --color-error: #d95f5f;
-  --color-info: #57a6d8;
-  --color-scrollbar-track: #151c27;
-  --color-scrollbar-thumb: #465466;
-  --color-scrollbar-thumb-hover: #62738a;
+  /* Neutral foundation: the interface should feel calm before color carries meaning. */
+  --color-bg-app: #181A1E;
+  --color-bg-sidebar: #1C1F24;
+  --color-bg-header: #202329;
+  --color-bg-section: #20242A;
+  --color-bg-panel: #252A31;
+  --color-bg-panel-2: #2A2F37;
+  --color-bg-subtle: #1D2025;
+  --color-bg-hover: #24282E;
+  --color-bg-active: #292D34;
+  --color-bg-selected-soft: rgba(217, 220, 223, 0.08);
 
-  --shadow-card: 0px 4px 6px -1px rgba(0, 0, 0, 0.35);
-  --radius-card: 12px;
+  --color-input-bg: #1C2026;
+  --color-control-bg: #24282F;
+  --color-control-hover: #2B3038;
+  --color-control-pressed: #30353E;
+  --color-control-disabled: #21252B;
+
+  --color-text-primary: #F0F1F2;
+  --color-text-secondary: #ADB1B8;
+  --color-text-muted: #828790;
+  --color-text-disabled: #656A72;
+  --color-text-inverse: #181A1E;
+  --color-text-on-dark: #F7F8F9;
+
+  --color-border-primary: #343941;
+  --color-border-secondary: #2B3037;
+  --color-border-subtle: #262A30;
+  --color-divider: #2E333A;
+  --color-outline-soft: rgba(255, 255, 255, 0.06);
+
+  --color-nav-bg: transparent;
+  --color-nav-hover: #24282E;
+  --color-nav-active: #292D34;
+  --color-nav-indicator: #D5D8DC;
+  --color-nav-text: #C6CAD0;
+  --color-nav-text-active: #F0F1F2;
+  --color-nav-icon: #9CA2AA;
+  --color-nav-icon-active: #E9EAEC;
+
+  --color-action-primary: #D9DCDF;
+  --color-action-primary-hover: #F0F1F2;
+  --color-action-muted: #9EA4AC;
+  --color-action-soft: rgba(217, 220, 223, 0.08);
+  --color-focus-ring: rgba(217, 220, 223, 0.18);
+
+  --color-positive: #62C99A;
+  --color-positive-soft: rgba(98, 201, 154, 0.12);
+  --color-positive-border: rgba(98, 201, 154, 0.28);
+
+  --color-negative: #DD7878;
+  --color-negative-soft: rgba(221, 120, 120, 0.12);
+  --color-negative-border: rgba(221, 120, 120, 0.28);
+
+  --color-warning: #D7AD62;
+  --color-warning-soft: rgba(215, 173, 98, 0.12);
+  --color-warning-border: rgba(215, 173, 98, 0.28);
+
+  --color-info: #83A9C7;
+  --color-info-soft: rgba(131, 169, 199, 0.12);
+  --color-info-border: rgba(131, 169, 199, 0.28);
+
+  --color-income: #62C99A;
+  --color-expense: #DD7878;
+  --color-debt: #D7AD62;
+  --color-savings: #7EC8B8;
+  --color-credit: #A7B4C7;
+
+  --color-chart-income: #66C49A;
+  --color-chart-expense: #E07C7C;
+  --color-chart-debt: #D4B06A;
+  --color-chart-net: #8FB3C9;
+  --color-chart-neutral: #A5AFBD;
+  --color-chart-series-2: #B09FD6;
+  --color-chart-grid: #31363D;
+  --color-chart-axis: #59606B;
+  --color-chart-label: #AEB4BC;
+  --color-chart-tooltip-bg: #252A31;
+  --color-chart-tooltip-border: #343941;
+
+  --color-scrollbar-track: #1C1F24;
+  --color-scrollbar-thumb: #454A52;
+  --color-scrollbar-thumb-hover: #5A606A;
+
+  --color-overlay: rgba(10, 12, 16, 0.52);
+  --color-scrim: rgba(0, 0, 0, 0.32);
+  --color-white: #FFFFFF;
+  --color-black: #000000;
+
+  /* Compatibility aliases used by the existing component styles. */
+  --color-bg: var(--color-bg-app);
+  --color-sidebar: var(--color-bg-sidebar);
+  --color-card: var(--color-bg-panel);
+  --color-surface: var(--color-bg-section);
+  --color-input: var(--color-input-bg);
+  --color-primary: var(--color-action-primary);
+  --color-primary-strong: var(--color-action-primary);
+  --color-primary-soft: var(--color-action-soft);
+  --color-text: var(--color-text-primary);
+  --color-border: var(--color-border-primary);
+  --color-success: var(--color-positive);
+  --color-error: var(--color-negative);
+  --color-chart-yellow: var(--color-chart-debt);
+  --color-chart-red: var(--color-chart-expense);
+  --color-chart-purple: var(--color-chart-series-2);
+  --color-chart-warning: var(--color-chart-debt);
+  --color-chart-secondary: var(--color-chart-series-2);
+  --color-yellow-light: var(--color-warning);
+
+  --shadow-card: 0 12px 32px rgba(10, 12, 16, 0.16);
+  --radius-card: 10px;
   --space-1: 8px;
   --space-2: 16px;
   --space-3: 24px;
   --space-4: 32px;
   --space-5: 48px;
-
-  --font-base: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-base: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
 }

@@ -42,44 +42,29 @@ export function useFixedExpensesController({
     return categories.find((category) => category.id === fixedExpenseForm.categoryId) ?? null
   }, [categories, fixedExpenseForm.categoryId])
 
-  const selectedFixedExpense = useMemo(() => {
-    if (!selectedFixedExpenseId) {
-      return null
-    }
-
-    return fixedExpenses.find((expense) => expense.id === selectedFixedExpenseId) ?? null
-  }, [fixedExpenses, selectedFixedExpenseId])
-
   const loadFixedExpenses = async (): Promise<void> => {
     setIsFixedExpensesLoading(true)
-    setFixedExpenseError('')
-
-    const result = await apiClient.getFixedExpenses()
-
-    if (!result.success) {
-      setFixedExpenseError(result.error ?? 'No se pudieron cargar los gastos fijos.')
-      setIsFixedExpensesLoading(false)
-      return
-    }
-
-    setFixedExpenses(result.data ?? [])
-    setIsFixedExpensesLoading(false)
-  }
-
-  const loadFixedExpensePayments = async (fixedExpenseId: number): Promise<void> => {
     setIsFixedExpensePaymentsLoading(true)
     setFixedExpenseError('')
 
-    const result = await apiClient.getFixedExpensePayments(fixedExpenseId)
+    const [expensesResult, paymentsResult] = await Promise.all([
+      apiClient.getFixedExpenses(),
+      apiClient.getAllFixedExpensePayments(),
+    ])
 
-    if (!result.success) {
-      setFixedExpenseError(result.error ?? 'No se pudo cargar el historial de pagos.')
-      setIsFixedExpensePaymentsLoading(false)
-      return
+    if (!expensesResult.success) {
+      setFixedExpenseError(expensesResult.error ?? 'No se pudieron cargar los gastos fijos.')
+    } else {
+      setFixedExpenses(expensesResult.data ?? [])
     }
 
-    setSelectedFixedExpenseId(fixedExpenseId)
-    setFixedExpensePayments(result.data ?? [])
+    if (!paymentsResult.success) {
+      setFixedExpenseError(paymentsResult.error ?? 'No se pudo cargar el historial de pagos.')
+    } else {
+      setFixedExpensePayments(paymentsResult.data ?? [])
+    }
+
+    setIsFixedExpensesLoading(false)
     setIsFixedExpensePaymentsLoading(false)
   }
 
@@ -150,13 +135,16 @@ export function useFixedExpensesController({
     }
     if (selectedFixedExpenseId === fixedExpenseId) {
       setSelectedFixedExpenseId(null)
-      setFixedExpensePayments([])
     }
     await loadFixedExpenses()
   }
 
   const resetFixedExpensePaymentForm = (): void => {
-    setFixedExpensePaymentForm(EMPTY_FIXED_EXPENSE_PAYMENT_FORM)
+    const selectedExpense = fixedExpenses.find((expense) => expense.id === selectedFixedExpenseId)
+    setFixedExpensePaymentForm({
+      ...EMPTY_FIXED_EXPENSE_PAYMENT_FORM,
+      amount: selectedExpense?.estimatedAmount ?? 0,
+    })
   }
 
   const handleFixedExpensePaymentSubmit = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
@@ -189,32 +177,31 @@ export function useFixedExpensesController({
 
     setFixedExpenseMessage('Pago mensual registrado correctamente.')
     resetFixedExpensePaymentForm()
-    await loadFixedExpensePayments(selectedFixedExpenseId)
+    await loadFixedExpenses()
   }
 
-  const handleFixedExpensePaymentDelete = async (paymentId: number): Promise<void> => {
-    if (!selectedFixedExpenseId) {
-      return
-    }
-
+  const handleFixedExpensePaymentDelete = async (fixedExpenseId: number, paymentId: number): Promise<void> => {
     setFixedExpenseError('')
     setFixedExpenseMessage('')
 
-    const deleted = await apiClient.deleteFixedExpensePayment(selectedFixedExpenseId, paymentId)
+    const deleted = await apiClient.deleteFixedExpensePayment(fixedExpenseId, paymentId)
     if (!deleted.success) {
       setFixedExpenseError(deleted.error ?? 'No se pudo eliminar el pago mensual.')
       return
     }
 
     setFixedExpenseMessage('Pago mensual eliminado correctamente.')
-    await loadFixedExpensePayments(selectedFixedExpenseId)
+    await loadFixedExpenses()
   }
 
   const selectFixedExpense = (fixedExpenseId: number | null): void => {
     setSelectedFixedExpenseId(fixedExpenseId)
-    setFixedExpensePayments([])
-    if (fixedExpenseId) {
-      void loadFixedExpensePayments(fixedExpenseId)
+    const selectedExpense = fixedExpenses.find((expense) => expense.id === fixedExpenseId)
+    if (selectedExpense) {
+      setFixedExpensePaymentForm((currentForm) => ({
+        ...currentForm,
+        amount: selectedExpense.estimatedAmount,
+      }))
     }
   }
 
@@ -230,11 +217,9 @@ export function useFixedExpensesController({
     isFixedExpensePaymentsLoading,
     fixedExpensePaymentForm,
     selectedFixedExpenseCategory,
-    selectedFixedExpense,
     setFixedExpenseForm,
     setFixedExpensePaymentForm,
     loadFixedExpenses,
-    loadFixedExpensePayments,
     resetFixedExpenseEditor,
     startFixedExpenseEdit,
     handleFixedExpenseSubmit,

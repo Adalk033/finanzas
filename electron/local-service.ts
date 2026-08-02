@@ -445,6 +445,7 @@ function mapFixedExpensePayment(row: DbRow): Record<string, unknown> {
   return {
     id: toNumber(row.id),
     fixedExpenseId: toNumber(row.fixed_expense_id),
+    fixedExpenseName: row.fixed_expense_name ?? null,
     amount: fromCents(row.amount_cents),
     periodMonth: toNumber(row.period_month),
     periodYear: toNumber(row.period_year),
@@ -2924,10 +2925,21 @@ function deleteFixedExpense(db: Database.Database, id: number): { id: number } {
 function listFixedExpensePayments(db: Database.Database, fixedExpenseId: number): Record<string, unknown>[] {
   requireEntity(db, 'fixed_expenses', fixedExpenseId)
   return (db.prepare(`
-    SELECT * FROM fixed_expense_payments
-    WHERE fixed_expense_id = ?
-    ORDER BY period_year DESC, period_month DESC
+    SELECT p.*, f.name AS fixed_expense_name
+    FROM fixed_expense_payments p
+    JOIN fixed_expenses f ON f.id = p.fixed_expense_id
+    WHERE p.fixed_expense_id = ?
+    ORDER BY p.period_year DESC, p.period_month DESC, p.id DESC
   `).all(fixedExpenseId) as DbRow[]).map(mapFixedExpensePayment)
+}
+
+function listAllFixedExpensePayments(db: Database.Database): Record<string, unknown>[] {
+  return (db.prepare(`
+    SELECT p.*, f.name AS fixed_expense_name
+    FROM fixed_expense_payments p
+    JOIN fixed_expenses f ON f.id = p.fixed_expense_id
+    ORDER BY p.period_year DESC, p.period_month DESC, p.id DESC
+  `).all() as DbRow[]).map(mapFixedExpensePayment)
 }
 
 function saveFixedExpensePayment(
@@ -3476,14 +3488,30 @@ function getDashboardUpcomingCommitments(db: Database.Database): Record<string, 
     estimated_amount_cents: number
     instrument_name: string | null
   }>
+  const paidFixedExpenseAmount = db.prepare(`
+    SELECT COALESCE(SUM(amount_cents), 0) AS total_cents
+    FROM fixed_expense_payments
+    WHERE fixed_expense_id = ?
+      AND period_month = ?
+      AND period_year = ?
+      AND is_paid = 1
+  `)
   for (const expense of fixedExpenses) {
     const paymentDate = nextMonthlyDateOnOrAfter(startDate, toNumber(expense.payment_day))
     if (paymentDate <= endDate) {
+      const periodMonth = Number(paymentDate.slice(5, 7))
+      const periodYear = Number(paymentDate.slice(0, 4))
+      const paidAmount = paidFixedExpenseAmount.get(expense.id, periodMonth, periodYear) as { total_cents: number }
+      const paidCents = toNumber(paidAmount.total_cents)
+      const remainingCents = Math.max(toNumber(expense.estimated_amount_cents) - paidCents, 0)
+      if (remainingCents === 0) {
+        continue
+      }
       commitments.push({
         id: `fixed-expense-${expense.id}-${paymentDate}`,
         name: expense.name,
         date: paymentDate,
-        amountCents: toNumber(expense.estimated_amount_cents),
+        amountCents: remainingCents,
         type: 'fixed_expense',
         instrumentName: expense.instrument_name,
         affectsAvailableBalance: true,
@@ -4046,6 +4074,7 @@ function routeRequest(
   if (fixedPayment && method === 'DELETE') {
     return deleteFixedExpensePayment(db, Number(fixedPayment[1]), Number(fixedPayment[2]))
   }
+  if (path === '/fixed-expense-payments' && method === 'GET') return listAllFixedExpensePayments(db)
   const fixedPayments = path.match(/^\/fixed-expenses\/(\d+)\/payments$/)
   if (fixedPayments && method === 'GET') return listFixedExpensePayments(db, requireId(fixedPayments))
   if (fixedPayments && method === 'POST') return saveFixedExpensePayment(db, requireId(fixedPayments), input())

@@ -47,7 +47,7 @@ function createMainWindow(): void {
     height: 840,
     minWidth: 900,
     minHeight: 620,
-    backgroundColor: '#0f1218',
+    backgroundColor: '#11141a',
     webPreferences: {
       preload: resolvePreloadPath(),
       contextIsolation: true,

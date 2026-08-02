@@ -434,7 +434,6 @@ export function App() {
               editingFixedExpenseId={fixedExpensesController.editingFixedExpenseId}
               fixedExpensePayments={fixedExpensesController.fixedExpensePayments}
               selectedFixedExpenseId={fixedExpensesController.selectedFixedExpenseId}
-              selectedFixedExpense={fixedExpensesController.selectedFixedExpense}
               fixedExpensePaymentForm={fixedExpensesController.fixedExpensePaymentForm}
               isFixedExpensesLoading={fixedExpensesController.isFixedExpensesLoading}
               isFixedExpensePaymentsLoading={fixedExpensesController.isFixedExpensePaymentsLoading}
@@ -451,17 +450,14 @@ export function App() {
               }}
               onSelectFixedExpense={fixedExpensesController.selectFixedExpense}
               onEditFixedExpense={fixedExpensesController.startFixedExpenseEdit}
-              onLoadFixedExpensePayments={(fixedExpenseId) => {
-                void fixedExpensesController.loadFixedExpensePayments(fixedExpenseId)
-              }}
               onDeleteFixedExpense={(fixedExpenseId) => {
                 if (window.confirm('¿Archivar este gasto fijo?')) {
                   void fixedExpensesController.handleFixedExpenseDelete(fixedExpenseId)
                 }
               }}
-              onDeleteFixedExpensePayment={(paymentId) => {
+              onDeleteFixedExpensePayment={(fixedExpenseId, paymentId) => {
                 if (window.confirm('¿Eliminar este pago y revertir su movimiento asociado?')) {
-                  void fixedExpensesController.handleFixedExpensePaymentDelete(paymentId)
+                  void fixedExpensesController.handleFixedExpensePaymentDelete(fixedExpenseId, paymentId)
                 }
               }}
             />

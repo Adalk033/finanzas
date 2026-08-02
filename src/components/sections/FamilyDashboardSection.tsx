@@ -109,11 +109,11 @@ export function FamilyDashboardSection({
           <div className="chart-box">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={dashboard.monthlyTrend}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-                <XAxis dataKey="month" stroke="var(--color-text-secondary)" />
-                <YAxis stroke="var(--color-text-secondary)" />
+                <CartesianGrid strokeDasharray="2 4" stroke="var(--color-chart-grid)" strokeOpacity={0.72} />
+                <XAxis dataKey="month" stroke="var(--color-chart-axis)" tick={{ fill: 'var(--color-chart-label)', fontSize: 11 }} tickLine={false} />
+                <YAxis stroke="var(--color-chart-axis)" tick={{ fill: 'var(--color-chart-label)', fontSize: 11 }} tickLine={false} />
                 <Tooltip formatter={(value) => formatCurrency(Number(value))} />
-                <Bar dataKey="total" fill="var(--color-error)" name="Gasto familiar" />
+                <Bar dataKey="total" fill="var(--color-chart-expense)" fillOpacity={0.88} name="Gasto familiar" />
               </BarChart>
             </ResponsiveContainer>
           </div>

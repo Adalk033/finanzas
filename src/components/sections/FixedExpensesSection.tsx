@@ -20,7 +20,6 @@ type FixedExpensesSectionProps = {
   editingFixedExpenseId: number | null
   fixedExpensePayments: FixedExpensePayment[]
   selectedFixedExpenseId: number | null
-  selectedFixedExpense: FixedExpense | null
   fixedExpensePaymentForm: FixedExpensePaymentInput
   isFixedExpensesLoading: boolean
   isFixedExpensePaymentsLoading: boolean
@@ -35,9 +34,8 @@ type FixedExpensesSectionProps = {
   onReloadFixedExpenses: () => void
   onSelectFixedExpense: (fixedExpenseId: number | null) => void
   onEditFixedExpense: (expense: FixedExpense) => void
-  onLoadFixedExpensePayments: (fixedExpenseId: number) => void
   onDeleteFixedExpense: (fixedExpenseId: number) => void
-  onDeleteFixedExpensePayment: (paymentId: number) => void
+  onDeleteFixedExpensePayment: (fixedExpenseId: number, paymentId: number) => void
 }
 
 export function FixedExpensesSection({
@@ -50,7 +48,6 @@ export function FixedExpensesSection({
   editingFixedExpenseId,
   fixedExpensePayments,
   selectedFixedExpenseId,
-  selectedFixedExpense,
   fixedExpensePaymentForm,
   isFixedExpensesLoading,
   isFixedExpensePaymentsLoading,
@@ -65,7 +62,6 @@ export function FixedExpensesSection({
   onReloadFixedExpenses,
   onSelectFixedExpense,
   onEditFixedExpense,
-  onLoadFixedExpensePayments,
   onDeleteFixedExpense,
   onDeleteFixedExpensePayment,
 }: FixedExpensesSectionProps) {
@@ -78,7 +74,7 @@ export function FixedExpensesSection({
     <section className="card">
       <header className="card__header">
         <h2 className="card__title">Gastos Fijos</h2>
-        <p className="card__subtitle">Gestion de gastos recurrentes y registro de pagos mensuales.</p>
+        <p className="card__subtitle">Gestión de gastos recurrentes, pagos y abonos asociados a cada instrumento.</p>
       </header>
 
       <div className="transaction-layout">
@@ -147,7 +143,7 @@ export function FixedExpensesSection({
                   ))}
                 </select>
 
-                <label className="form-grid__field" htmlFor="fixedExpenseCategory">Categoria</label>
+                <label className="form-grid__field" htmlFor="fixedExpenseCategory">Categoría</label>
                 <select
                   id="fixedExpenseCategory"
                   className="form-grid__input"
@@ -157,13 +153,13 @@ export function FixedExpensesSection({
                     onFixedExpenseFormChange({ ...fixedExpenseForm, categoryId: nextCategoryId, subcategoryId: null })
                   }}
                 >
-                  <option value="">Sin categoria</option>
+                  <option value="">Sin categoría</option>
                   {expenseCategoryOptions.map((category) => (
                     <option key={category.id} value={category.id}>{category.name}</option>
                   ))}
                 </select>
 
-                <label className="form-grid__field" htmlFor="fixedExpenseSubcategory">Subcategoria</label>
+                <label className="form-grid__field" htmlFor="fixedExpenseSubcategory">Subcategoría</label>
                 <select
                   id="fixedExpenseSubcategory"
                   className="form-grid__input"
@@ -174,7 +170,7 @@ export function FixedExpensesSection({
                   }}
                   disabled={!selectedFixedExpenseCategory}
                 >
-                  <option value="">Sin subcategoria</option>
+                  <option value="">Sin subcategoría</option>
                   {(selectedFixedExpenseCategory?.subcategories ?? []).map((subcategory) => (
                     <option key={subcategory.id} value={subcategory.id}>{subcategory.name}</option>
                   ))}
@@ -191,7 +187,7 @@ export function FixedExpensesSection({
                   <option value="yes">Variable</option>
                 </select>
 
-                <label className="form-grid__field" htmlFor="fixedExpensePaymentDay">Dia de pago</label>
+                <label className="form-grid__field" htmlFor="fixedExpensePaymentDay">Día de pago</label>
                 <NumberInput
                   id="fixedExpensePaymentDay"
                   className="form-grid__input"
@@ -227,8 +223,8 @@ export function FixedExpensesSection({
 
         <section className="mini-card">
           <header className="mini-card__header">
-            <h3 className="mini-card__title">Registrar pago mensual</h3>
-            <p className="mini-card__subtitle">Selecciona un gasto fijo y registra el pago del periodo.</p>
+            <h3 className="mini-card__title">Registrar pago o abono</h3>
+            <p className="mini-card__subtitle">Puedes registrar varios pagos para un mismo periodo; cada uno se carga al instrumento del gasto fijo.</p>
           </header>
 
           <div className="section-toolbar">
@@ -288,7 +284,7 @@ export function FixedExpensesSection({
                   required
                 />
 
-                <label className="form-grid__field" htmlFor="fixedExpensePaymentYear">Anio</label>
+                <label className="form-grid__field" htmlFor="fixedExpensePaymentYear">Año</label>
                 <NumberInput
                   id="fixedExpensePaymentYear"
                   className="form-grid__input"
@@ -350,22 +346,23 @@ export function FixedExpensesSection({
               <thead>
                 <tr>
                   <th>Nombre</th>
+                  <th>Instrumento</th>
                   <th>Monto estimado</th>
                   <th>Variable</th>
-                  <th>Dia pago</th>
+                  <th>Día de pago</th>
                   <th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {isFixedExpensesLoading ? (
                   <tr>
-                    <td colSpan={5}>Cargando gastos fijos...</td>
+                  <td colSpan={6}>Cargando gastos fijos...</td>
                   </tr>
                 ) : null}
 
                 {!isFixedExpensesLoading && fixedExpenses.length === 0 ? (
                   <tr>
-                    <td colSpan={5}>No hay gastos fijos registrados.</td>
+                  <td colSpan={6}>No hay gastos fijos registrados.</td>
                   </tr>
                 ) : null}
 
@@ -373,16 +370,14 @@ export function FixedExpensesSection({
                   ? fixedExpenses.map((expense) => (
                     <tr key={expense.id}>
                       <td>{expense.name}</td>
+                      <td>{expense.instrumentName ?? 'Sin instrumento'}</td>
                       <td>{formatCurrency(expense.estimatedAmount)}</td>
-                      <td>{expense.isVariable ? 'Si' : 'No'}</td>
+                      <td>{expense.isVariable ? 'Sí' : 'No'}</td>
                       <td>{expense.paymentDay ?? '-'}</td>
                       <td>
                         <div className="table__actions">
                           <button className="button button--secondary" type="button" onClick={() => onEditFixedExpense(expense)}>
                             Editar
-                          </button>
-                          <button className="button button--secondary" type="button" onClick={() => onLoadFixedExpensePayments(expense.id)}>
-                            Historial
                           </button>
                           <button className="button button--danger" type="button" onClick={() => onDeleteFixedExpense(expense.id)}>
                             Eliminar
@@ -397,12 +392,11 @@ export function FixedExpensesSection({
           </div>
         </article>
 
-        {selectedFixedExpense !== null ? (
-          <article className="category-card">
+        <article className="category-card">
             <header className="category-card__header">
               <div>
-                <h3 className="category-card__title">Historial de pagos · {selectedFixedExpense.name}</h3>
-                <p className="category-card__meta">Pagos registrados por mes y anio.</p>
+                <h3 className="category-card__title">Historial de pagos</h3>
+                <p className="category-card__meta">Pagos registrados de todos los gastos fijos.</p>
               </div>
             </header>
 
@@ -410,6 +404,7 @@ export function FixedExpensesSection({
               <table className="table">
                 <thead>
                   <tr>
+                    <th>Gasto fijo</th>
                     <th>Periodo</th>
                     <th>Monto</th>
                     <th>Fecha pago</th>
@@ -420,26 +415,27 @@ export function FixedExpensesSection({
                 <tbody>
                   {isFixedExpensePaymentsLoading ? (
                     <tr>
-                      <td colSpan={5}>Cargando historial de pagos...</td>
+                      <td colSpan={6}>Cargando historial de pagos...</td>
                     </tr>
                   ) : null}
 
                   {!isFixedExpensePaymentsLoading && fixedExpensePayments.length === 0 ? (
                     <tr>
-                      <td colSpan={5}>No hay pagos registrados para este gasto fijo.</td>
+                      <td colSpan={6}>No hay pagos registrados.</td>
                     </tr>
                   ) : null}
 
                   {!isFixedExpensePaymentsLoading
                     ? fixedExpensePayments.map((payment) => (
                       <tr key={payment.id}>
+                        <td>{payment.fixedExpenseName ?? 'Gasto fijo eliminado'}</td>
                         <td>{`${payment.periodMonth}/${payment.periodYear}`}</td>
                         <td>{formatCurrency(payment.amount)}</td>
                         <td>{payment.paymentDate ?? '-'}</td>
                         <td>{payment.isPaid ? 'Pagado' : 'Pendiente'}</td>
                         <td>
                           <div className="table__actions">
-                            <button className="button button--danger" type="button" onClick={() => onDeleteFixedExpensePayment(payment.id)}>
+                            <button className="button button--danger" type="button" onClick={() => onDeleteFixedExpensePayment(payment.fixedExpenseId, payment.id)}>
                               Eliminar
                             </button>
                           </div>
@@ -450,8 +446,7 @@ export function FixedExpensesSection({
                 </tbody>
               </table>
             </div>
-          </article>
-        ) : null}
+        </article>
       </div>
     </section>
   )

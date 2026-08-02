@@ -65,6 +65,75 @@ function verifyDeprecatedBankColumnsMigration(): void {
   closeLocalDb()
 }
 
+function verifyFixedExpensePaymentsMigration(): void {
+  const legacyPath = path.join(tempDirectory, 'legacy-fixed-expense-payments.sqlite')
+  const legacyDb = new Database(legacyPath)
+  legacyDb.exec(`
+    PRAGMA foreign_keys = OFF;
+    CREATE TABLE currencies (
+      id INTEGER PRIMARY KEY,
+      code TEXT NOT NULL UNIQUE CHECK (length(code) = 3),
+      name TEXT NOT NULL,
+      symbol TEXT NOT NULL,
+      is_default INTEGER NOT NULL DEFAULT 0 CHECK (is_default IN (0, 1)),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    INSERT INTO currencies (id, code, name, symbol, is_default)
+    VALUES (1, 'MXN', 'Peso Mexicano', '$', 1);
+    CREATE TABLE fixed_expenses (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 150),
+      instrument_id INTEGER REFERENCES financial_instruments(id),
+      category_id INTEGER REFERENCES categories(id),
+      subcategory_id INTEGER REFERENCES subcategories(id),
+      currency_id INTEGER NOT NULL REFERENCES currencies(id),
+      estimated_amount_cents INTEGER NOT NULL CHECK (estimated_amount_cents > 0),
+      is_variable INTEGER NOT NULL DEFAULT 0 CHECK (is_variable IN (0, 1)),
+      payment_day INTEGER CHECK (payment_day IS NULL OR payment_day BETWEEN 1 AND 31),
+      is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+      notes TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE fixed_expense_payments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      fixed_expense_id INTEGER NOT NULL REFERENCES fixed_expenses(id) ON DELETE CASCADE,
+      amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+      period_month INTEGER NOT NULL CHECK (period_month BETWEEN 1 AND 12),
+      period_year INTEGER NOT NULL CHECK (period_year BETWEEN 2000 AND 2200),
+      payment_date TEXT,
+      is_paid INTEGER NOT NULL DEFAULT 0 CHECK (is_paid IN (0, 1)),
+      notes TEXT,
+      transaction_id INTEGER REFERENCES transactions(id),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(fixed_expense_id, period_month, period_year)
+    );
+    INSERT INTO fixed_expenses (
+      id, name, currency_id, estimated_amount_cents
+    ) VALUES (1, 'Renta legada', 1, 500000);
+    INSERT INTO fixed_expense_payments (
+      fixed_expense_id, amount_cents, period_month, period_year, is_paid
+    ) VALUES (1, 250000, 8, 2026, 1);
+  `)
+  legacyDb.close()
+
+  initializeLocalDb(legacyPath)
+  getDatabase().prepare(`
+    INSERT INTO fixed_expense_payments (
+      fixed_expense_id, amount_cents, period_month, period_year, is_paid
+    ) VALUES (?, ?, ?, ?, ?)
+  `).run(1, 250000, 8, 2026, 1)
+  const paymentCount = getDatabase().prepare(`
+    SELECT COUNT(*) AS total FROM fixed_expense_payments
+    WHERE fixed_expense_id = 1 AND period_month = 8 AND period_year = 2026
+  `).get() as { total: number }
+  assert.equal(paymentCount.total, 2)
+  assert.deepEqual(getDatabase().prepare('PRAGMA foreign_key_check').all(), [])
+  closeLocalDb()
+}
+
 function request<T>(pathValue: string, method = 'GET', body?: Record<string, unknown>): T {
   const response = handleLocalRequest({
     path: pathValue,
@@ -91,6 +160,7 @@ function requestFailure(
 
 try {
   verifyDeprecatedBankColumnsMigration()
+  verifyFixedExpensePaymentsMigration()
   initializeLocalDb(databasePath)
 
   const defaultDashboardPreferences = request<{ expensePeriod: string }>('/dashboard/preferences')
@@ -396,12 +466,45 @@ try {
     paymentDate: '2026-07-01',
     isPaid: true,
   })
+  const currentDate = new Date()
+  const nextFixedExpenseDate = new Date(
+    currentDate.getFullYear(),
+    currentDate.getMonth() + (currentDate.getDate() > 1 ? 1 : 0),
+    1,
+  )
+  const paidFixedExpensePeriodMonth = nextFixedExpenseDate.getMonth() + 1
+  const paidFixedExpensePeriodYear = nextFixedExpenseDate.getFullYear()
+  request(`/fixed-expenses/${fixedExpense.id}/payments`, 'POST', {
+    amount: 2500,
+    periodMonth: paidFixedExpensePeriodMonth,
+    periodYear: paidFixedExpensePeriodYear,
+    paymentDate: `${paidFixedExpensePeriodYear}-${String(paidFixedExpensePeriodMonth).padStart(2, '0')}-01`,
+    isPaid: true,
+  })
+  const secondFixedExpensePayment = request<{ id: number }>(`/fixed-expenses/${fixedExpense.id}/payments`, 'POST', {
+    amount: 2500,
+    periodMonth: paidFixedExpensePeriodMonth,
+    periodYear: paidFixedExpensePeriodYear,
+    paymentDate: `${paidFixedExpensePeriodYear}-${String(paidFixedExpensePeriodMonth).padStart(2, '0')}-02`,
+    isPaid: true,
+  })
+  assert.ok(secondFixedExpensePayment.id > 0)
+  const fixedExpensePaymentHistory = request<Array<{
+    fixedExpenseId: number
+    fixedExpenseName: string | null
+  }>>('/fixed-expense-payments')
+  assert.equal(
+    fixedExpensePaymentHistory.some((payment) => (
+      payment.fixedExpenseId === fixedExpense.id && payment.fixedExpenseName === 'Renta'
+    )),
+    true,
+  )
   const upcomingCommitments = request<{
     total: number
     availableAfterCommitments: number
     items: Array<{ name: string; amount: number }>
   }>('/dashboard/upcoming-commitments')
-  assert.equal(upcomingCommitments.items.some((item) => item.name === 'Renta' && item.amount === 5000), true)
+  assert.equal(upcomingCommitments.items.some((item) => item.name === 'Renta'), false)
   const availableBeforeCommitments = request<{ totalAvailable: number }>('/dashboard/summary').totalAvailable
   assert.equal(
     upcomingCommitments.availableAfterCommitments,
@@ -505,7 +608,7 @@ try {
   assert.equal(typeof simulation.isFavorable, 'boolean')
 
   const info = request<{ schemaVersion: string }>('/database/info')
-  assert.equal(info.schemaVersion, '6')
+  assert.equal(info.schemaVersion, '7')
 
   const cardBeforeHistorical = request<Array<{
     id: number
