@@ -254,6 +254,13 @@ export function App() {
               categories={categoriesController.categories}
               transactionForm={transactionsController.transactionForm}
               editingTransactionId={transactionsController.editingTransactionId}
+              cardPaymentForm={transactionsController.cardPaymentForm}
+              cardPaymentMessage={transactionsController.cardPaymentMessage}
+              cardPaymentError={transactionsController.cardPaymentError}
+              creditCardInstruments={transactionsController.creditCardInstruments}
+              compatibleCardPaymentSources={transactionsController.compatibleCardPaymentSources}
+              selectedCardPaymentCardId={transactionsController.selectedCardPaymentCardId}
+              selectedCardPaymentSourceId={transactionsController.selectedCardPaymentSourceId}
               selectedTransactionInstrumentId={transactionsController.selectedTransactionInstrumentId}
               selectedTransactionCategoryId={transactionsController.selectedTransactionCategoryId}
               selectedTransactionInstrument={transactionsController.selectedTransactionInstrument}
@@ -268,6 +275,10 @@ export function App() {
               transactionError={transactionsController.transactionError}
               transactionMessage={transactionsController.transactionMessage}
               onTransactionFormChange={transactionsController.setTransactionForm}
+              onCardPaymentFormChange={transactionsController.setCardPaymentForm}
+              onCardPaymentDestinationChange={transactionsController.handleCardPaymentDestinationChange}
+              onCardPaymentSubmit={transactionsController.handleCardPaymentSubmit}
+              onResetCardPayment={transactionsController.resetCardPaymentForm}
               onTransactionTypeChange={transactionsController.handleTransactionTypeChange}
               onTransactionSubmit={transactionsController.handleTransactionSubmit}
               onTransactionEdit={transactionsController.startTransactionEdit}
@@ -294,7 +305,7 @@ export function App() {
             <CreditCardsSection
               hasConfig={hasConfig}
               creditCardInstruments={creditCardsController.creditCardInstruments}
-              sourceTransferInstruments={creditCardsController.sourceTransferInstruments}
+              paymentSourceInstruments={creditCardsController.paymentSourceInstruments}
               selectedCardId={creditCardsController.selectedCardId}
               selectedCard={creditCardsController.selectedCard}
               currentStatement={creditCardsController.currentStatement}

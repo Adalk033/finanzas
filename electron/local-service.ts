@@ -1708,7 +1708,7 @@ function applyTransferImpact(
 ): void {
   source = getBalanceInstrument(db, source)
   destination = getBalanceInstrument(db, destination)
-  if (source.type === 'credit_card') {
+  if (source.type !== 'account' && source.type !== 'debit_card') {
     throw new ValidationError('El origen de una transferencia debe ser una cuenta o tarjeta de debito.')
   }
   const sourceAmount = toNumber(source.current_amount_cents) - amountCents * direction
@@ -1845,7 +1845,7 @@ function validateTransfer(db: Database.Database, body: Input, transferId?: numbe
   if (sourceBalanceInstrument.id === destinationBalanceInstrument.id) {
     throw new ValidationError('El origen y el destino representan la misma cuenta.')
   }
-  if (source.type === 'credit_card') {
+  if (source.type !== 'account' && source.type !== 'debit_card') {
     throw new ValidationError('El origen debe ser una cuenta o tarjeta de debito.')
   }
   const type = requiredEnum(body, 'type', TRANSFER_TYPES)
@@ -1858,17 +1858,28 @@ function validateTransfer(db: Database.Database, body: Input, transferId?: numbe
   const amountCents = moneyToCents(body.amount, 'amount')
   if (type === 'card_payment') {
     let payableBalance = toNumber(destination.current_balance_cents)
+    let sourceAvailable = toNumber(sourceBalanceInstrument.current_amount_cents)
     if (transferId) {
       const previous = requireEntity(db, 'transfers', transferId)
-      if (
-        previous.type === 'card_payment'
-        && toNumber(previous.destination_instrument_id) === destinationId
-      ) {
-        payableBalance += toNumber(previous.amount_cents)
+      if (previous.type === 'card_payment') {
+        const previousAmount = toNumber(previous.amount_cents)
+        if (toNumber(previous.destination_instrument_id) === destinationId) {
+          payableBalance += previousAmount
+        }
+        const previousSource = getBalanceInstrument(
+          db,
+          getInstrument(db, toNumber(previous.source_instrument_id), false),
+        )
+        if (previousSource.id === sourceBalanceInstrument.id) {
+          sourceAvailable += previousAmount
+        }
       }
     }
     if (amountCents > payableBalance) {
-      throw new ValidationError('El pago no puede superar el saldo actual de la tarjeta.')
+      throw new ValidationError('El abono no puede superar el saldo actual de la tarjeta.')
+    }
+    if (amountCents > sourceAvailable) {
+      throw new ValidationError('La cuenta de origen no tiene saldo suficiente para este abono.')
     }
   }
   const transferDate = requiredDate(body, 'transferDate')

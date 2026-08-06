@@ -3,6 +3,7 @@ import { apiClient } from '../api/client'
 import {
   EMPTY_TRANSACTION_FILTERS,
   EMPTY_TRANSACTION_FORM,
+  EMPTY_TRANSFER_FORM,
 } from '../app/appHelpers'
 import type {
   Category,
@@ -11,6 +12,7 @@ import type {
   TransactionFilters,
   TransactionInput,
   TransactionType,
+  TransferInput,
 } from '../types/domain'
 
 type UseTransactionsControllerParams = {
@@ -44,6 +46,12 @@ export function useTransactionsController({
   const [transactionFilters, setTransactionFilters] = useState<TransactionFilters>(EMPTY_TRANSACTION_FILTERS)
   const [showAutoAdjustmentsOnly, setShowAutoAdjustmentsOnly] = useState(false)
   const [excludeFromBalance, setExcludeFromBalance] = useState(false)
+  const [cardPaymentForm, setCardPaymentForm] = useState<TransferInput>({
+    ...EMPTY_TRANSFER_FORM,
+    type: 'card_payment',
+  })
+  const [cardPaymentMessage, setCardPaymentMessage] = useState('')
+  const [cardPaymentError, setCardPaymentError] = useState('')
 
   const stripNoBalancePrefix = (notes: string): string => {
     if (!notes.startsWith(NO_BALANCE_IMPACT_NOTE_PREFIX)) {
@@ -75,6 +83,35 @@ export function useTransactionsController({
   const selectedTransactionInstrument = useMemo(() => {
     return instruments.find((instrument) => instrument.id === selectedTransactionInstrumentId) ?? null
   }, [instruments, selectedTransactionInstrumentId])
+
+  const creditCardInstruments = useMemo(
+    () => instruments.filter((instrument) => instrument.type === 'credit_card' && instrument.isActive),
+    [instruments],
+  )
+  const cardPaymentSourceInstruments = useMemo(
+    () => instruments.filter(
+      (instrument) => (instrument.type === 'account' || instrument.type === 'debit_card') && instrument.isActive,
+    ),
+    [instruments],
+  )
+  const selectedCardPaymentCardId = cardPaymentForm.destinationInstrumentId
+    && creditCardInstruments.some((instrument) => instrument.id === cardPaymentForm.destinationInstrumentId)
+    ? cardPaymentForm.destinationInstrumentId
+    : creditCardInstruments[0]?.id ?? 0
+  const selectedCardPaymentCard = creditCardInstruments.find(
+    (instrument) => instrument.id === selectedCardPaymentCardId,
+  ) ?? null
+  const compatibleCardPaymentSources = useMemo(
+    () => cardPaymentSourceInstruments.filter(
+      (instrument) => selectedCardPaymentCard === null
+        || instrument.currencyId === selectedCardPaymentCard.currencyId,
+    ),
+    [cardPaymentSourceInstruments, selectedCardPaymentCard],
+  )
+  const selectedCardPaymentSourceId = cardPaymentForm.sourceInstrumentId
+    && compatibleCardPaymentSources.some((instrument) => instrument.id === cardPaymentForm.sourceInstrumentId)
+    ? cardPaymentForm.sourceInstrumentId
+    : compatibleCardPaymentSources[0]?.id ?? 0
 
   const transactionSubcategoryOptions = useMemo(() => {
     if (!selectedTransactionCategoryId) {
@@ -114,6 +151,71 @@ export function useTransactionsController({
 
     setTransactions(result.data ?? [])
     setIsTransactionsLoading(false)
+  }
+
+  const handleCardPaymentDestinationChange = (cardId: number): void => {
+    const card = creditCardInstruments.find((instrument) => instrument.id === cardId) ?? null
+    const nextSources = cardPaymentSourceInstruments.filter(
+      (instrument) => card === null || instrument.currencyId === card.currencyId,
+    )
+    setCardPaymentForm((previous) => ({
+      ...previous,
+      destinationInstrumentId: cardId,
+      sourceInstrumentId: nextSources[0]?.id ?? 0,
+      currencyId: card?.currencyId ?? EMPTY_TRANSFER_FORM.currencyId,
+    }))
+  }
+
+  const resetCardPaymentForm = (): void => {
+    const card = creditCardInstruments[0] ?? null
+    const source = cardPaymentSourceInstruments.find(
+      (instrument) => card === null || instrument.currencyId === card.currencyId,
+    )
+    setCardPaymentForm({
+      ...EMPTY_TRANSFER_FORM,
+      sourceInstrumentId: source?.id ?? 0,
+      destinationInstrumentId: card?.id ?? 0,
+      currencyId: card?.currencyId ?? EMPTY_TRANSFER_FORM.currencyId,
+      type: 'card_payment',
+    })
+  }
+
+  const handleCardPaymentSubmit = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault()
+    setCardPaymentError('')
+    setCardPaymentMessage('')
+
+    const payload: TransferInput = {
+      ...cardPaymentForm,
+      sourceInstrumentId: selectedCardPaymentSourceId,
+      destinationInstrumentId: selectedCardPaymentCardId,
+      currencyId: selectedCardPaymentCard?.currencyId ?? cardPaymentForm.currencyId,
+      type: 'card_payment',
+      statementId: null,
+      loanId: null,
+      description: cardPaymentForm.description.trim()
+        || `Abono a ${selectedCardPaymentCard?.name ?? 'tarjeta'}`,
+      notes: cardPaymentForm.notes.trim(),
+    }
+
+    if (payload.sourceInstrumentId < 1 || payload.destinationInstrumentId < 1) {
+      setCardPaymentError('Selecciona una cuenta de débito y una tarjeta de crédito.')
+      return
+    }
+    if (payload.amount <= 0 || !payload.transferDate) {
+      setCardPaymentError('Captura un monto de abono y una fecha válidos.')
+      return
+    }
+
+    const result = await apiClient.createTransfer(payload)
+    if (!result.success) {
+      setCardPaymentError(result.error ?? 'No se pudo registrar el abono.')
+      return
+    }
+
+    setCardPaymentMessage('Abono registrado y aplicado a la tarjeta.')
+    resetCardPaymentForm()
+    await Promise.all([loadInstruments(), loadTransactions()])
   }
 
   const resetTransactionForm = (): void => {
@@ -256,6 +358,13 @@ export function useTransactionsController({
     transactionError,
     transactionForm,
     editingTransactionId,
+    cardPaymentForm,
+    cardPaymentMessage,
+    cardPaymentError,
+    creditCardInstruments,
+    compatibleCardPaymentSources,
+    selectedCardPaymentCardId,
+    selectedCardPaymentSourceId,
     transactionFilters,
     selectedTransactionInstrumentId,
     selectedTransactionCategoryId,
@@ -270,6 +379,10 @@ export function useTransactionsController({
     setTransactionFilters,
     setShowAutoAdjustmentsOnly,
     loadTransactions,
+    setCardPaymentForm,
+    handleCardPaymentDestinationChange,
+    handleCardPaymentSubmit,
+    resetCardPaymentForm,
     startTransactionEdit,
     resetTransactionForm,
     handleTransactionTypeChange,
