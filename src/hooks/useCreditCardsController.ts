@@ -63,12 +63,23 @@ export function useCreditCardsController({
     [instruments],
   )
   const sourceTransferInstruments = useMemo(
-    () => instruments.filter((instrument) => instrument.type !== 'credit_card' && instrument.isActive),
+    () => instruments.filter(
+      (instrument) => (instrument.type === 'account' || instrument.type === 'debit_card') && instrument.isActive,
+    ),
     [instruments],
   )
   const resolvedSelectedCardId = selectedCardId || creditCardInstruments[0]?.id || 0
   const selectedCard = creditCardInstruments.find((card) => card.id === resolvedSelectedCardId) ?? null
-  const selectedPaymentSourceId = cardPaymentForm.sourceInstrumentId || sourceTransferInstruments[0]?.id || 0
+  const paymentSourceInstruments = useMemo(
+    () => sourceTransferInstruments.filter(
+      (instrument) => selectedCard === null || instrument.currencyId === selectedCard.currencyId,
+    ),
+    [selectedCard, sourceTransferInstruments],
+  )
+  const selectedPaymentSourceId = cardPaymentForm.sourceInstrumentId
+    && paymentSourceInstruments.some((instrument) => instrument.id === cardPaymentForm.sourceInstrumentId)
+    ? cardPaymentForm.sourceInstrumentId
+    : paymentSourceInstruments[0]?.id || 0
   const selectedTransferSourceInstrumentId = transferForm.sourceInstrumentId || sourceTransferInstruments[0]?.id || 0
   const selectedTransferDestinationInstrumentId = transferForm.destinationInstrumentId
     || sourceTransferInstruments.find((instrument) => instrument.id !== selectedTransferSourceInstrumentId)?.id
@@ -177,14 +188,19 @@ export function useCreditCardsController({
   }, [resolvedSelectedCardId])
 
   const selectCard = (cardId: number): void => {
+    const nextCard = creditCardInstruments.find((card) => card.id === cardId) ?? null
+    const nextPaymentSources = sourceTransferInstruments.filter(
+      (instrument) => nextCard === null || instrument.currencyId === nextCard.currencyId,
+    )
     setSelectedCardId(cardId)
     setActionError('')
     setActionMessage('')
     setPurchaseForm({ ...EMPTY_TRANSACTION_FORM, instrumentId: cardId })
     setCardPaymentForm({
       ...EMPTY_TRANSFER_FORM,
-      sourceInstrumentId: sourceTransferInstruments[0]?.id ?? 0,
+      sourceInstrumentId: nextPaymentSources[0]?.id ?? 0,
       destinationInstrumentId: cardId,
+      currencyId: nextCard?.currencyId ?? EMPTY_TRANSFER_FORM.currencyId,
       type: 'card_payment',
     })
     setSelectedStatementDetail(null)
@@ -240,8 +256,9 @@ export function useCreditCardsController({
   const resetCardPaymentForm = (): void => {
     setCardPaymentForm({
       ...EMPTY_TRANSFER_FORM,
-      sourceInstrumentId: sourceTransferInstruments[0]?.id ?? 0,
+      sourceInstrumentId: paymentSourceInstruments[0]?.id ?? 0,
       destinationInstrumentId: resolvedSelectedCardId,
+      currencyId: selectedCard?.currencyId ?? EMPTY_TRANSFER_FORM.currencyId,
       type: 'card_payment',
     })
   }
@@ -254,26 +271,27 @@ export function useCreditCardsController({
       ...cardPaymentForm,
       sourceInstrumentId: selectedPaymentSourceId,
       destinationInstrumentId: resolvedSelectedCardId,
+      currencyId: selectedCard?.currencyId ?? cardPaymentForm.currencyId,
       type: 'card_payment',
       statementId: null,
       loanId: null,
-      description: cardPaymentForm.description.trim() || `Pago de ${selectedCard?.name ?? 'tarjeta'}`,
+      description: cardPaymentForm.description.trim() || `Abono a ${selectedCard?.name ?? 'tarjeta'}`,
       notes: cardPaymentForm.notes.trim(),
     }
     if (payload.sourceInstrumentId < 1 || payload.destinationInstrumentId < 1) {
-      setActionError('Selecciona la cuenta desde la que realizarás el pago.')
+      setActionError('Selecciona la cuenta de débito desde la que realizarás el abono.')
       return
     }
     if (payload.amount <= 0 || !payload.transferDate) {
-      setActionError('Captura un monto y una fecha válidos.')
+      setActionError('Captura un monto de abono y una fecha válidos.')
       return
     }
     const result = await apiClient.createTransfer(payload)
     if (!result.success) {
-      setActionError(result.error ?? 'No se pudo registrar el pago.')
+      setActionError(result.error ?? 'No se pudo registrar el abono.')
       return
     }
-    setActionMessage('Pago registrado y aplicado a la tarjeta.')
+    setActionMessage('Abono registrado y aplicado a la tarjeta.')
     resetCardPaymentForm()
     await Promise.all([loadInstruments(), loadStatements(), loadTransfers()])
   }
@@ -412,6 +430,7 @@ export function useCreditCardsController({
     selectedCard,
     creditCardInstruments,
     sourceTransferInstruments,
+    paymentSourceInstruments,
     statements,
     selectedCardStatements,
     currentStatement,

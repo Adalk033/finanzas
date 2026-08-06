@@ -774,6 +774,54 @@ try {
   splitStatements = request(`/statements?instrument_id=${splitCard.id}`)
   assert.equal(splitStatements.find((item) => item.cutOffDate === '2026-01-10')?.isPaid, true)
   assert.equal(splitStatements.find((item) => item.cutOffDate === '2026-02-10')?.outstandingAmount, 50)
+
+  const lowBalanceSource = request<{ id: number }>('/instruments', 'POST', {
+    bankId: bank.id,
+    name: 'Cuenta sin saldo suficiente',
+    type: 'account',
+    currencyId: 1,
+    currentAmount: 10,
+    isActive: true,
+  })
+  const insufficientPaymentError = requestFailure('/transfers', 'POST', {
+    sourceInstrumentId: lowBalanceSource.id,
+    destinationInstrumentId: splitCard.id,
+    amount: 20,
+    currencyId: 1,
+    transferDate: '2026-03-01',
+    type: 'card_payment',
+  })
+  assert.match(insufficientPaymentError, /saldo suficiente/)
+  request(`/instruments/${lowBalanceSource.id}`, 'DELETE')
+
+  const debitCardSource = request<{ id: number }>('/instruments', 'POST', {
+    bankId: bank.id,
+    name: 'Tarjeta de débito para abonos',
+    type: 'debit_card',
+    currencyId: 1,
+    currentAmount: 0,
+    linkedAccountId: debit.id,
+    isActive: true,
+  })
+  const debitBeforeDebitCardPayment = request<Array<{ id: number; currentAmount: number }>>('/instruments')
+    .find((item) => item.id === debit.id)?.currentAmount
+  const debitCardPayment = request<{ id: number }>('/transfers', 'POST', {
+    sourceInstrumentId: debitCardSource.id,
+    destinationInstrumentId: splitCard.id,
+    amount: 25,
+    currencyId: 1,
+    transferDate: '2026-03-02',
+    type: 'card_payment',
+  })
+  const debitAfterDebitCardPayment = request<Array<{ id: number; currentAmount: number }>>('/instruments')
+    .find((item) => item.id === debit.id)?.currentAmount
+  assert.equal(debitAfterDebitCardPayment, (debitBeforeDebitCardPayment ?? 0) - 25)
+  request(`/transfers/${debitCardPayment.id}`, 'DELETE')
+  const debitAfterDebitCardPaymentDelete = request<Array<{ id: number; currentAmount: number }>>('/instruments')
+    .find((item) => item.id === debit.id)?.currentAmount
+  assert.equal(debitAfterDebitCardPaymentDelete, debitBeforeDebitCardPayment)
+  request(`/instruments/${debitCardSource.id}`, 'DELETE')
+
   request(`/transfers/${splitPayment.id}`, 'DELETE')
   splitStatements = request(`/statements?instrument_id=${splitCard.id}`)
   assert.equal(splitStatements.find((item) => item.cutOffDate === '2026-01-10')?.outstandingAmount, 100)

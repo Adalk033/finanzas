@@ -18,7 +18,7 @@ type ActionPanel = 'purchase' | 'payment' | null
 type CreditCardsSectionProps = {
   hasConfig: boolean
   creditCardInstruments: FinancialInstrument[]
-  sourceTransferInstruments: FinancialInstrument[]
+  paymentSourceInstruments: FinancialInstrument[]
   selectedCardId: number
   selectedCard: FinancialInstrument | null
   currentStatement: CreditCardStatement | null
@@ -132,7 +132,7 @@ function MovementTable({
 export function CreditCardsSection({
   hasConfig,
   creditCardInstruments,
-  sourceTransferInstruments,
+  paymentSourceInstruments,
   selectedCardId,
   selectedCard,
   currentStatement,
@@ -185,7 +185,7 @@ export function CreditCardsSection({
       <header className="card__header credit-cards__header">
         <div>
           <h2 className="card__title">Tarjetas de crédito</h2>
-          <p className="card__subtitle">Consulta lo que debes, registra compras y paga sin pasos innecesarios.</p>
+          <p className="card__subtitle">Consulta lo que debes, registra compras y abona desde tus cuentas de débito.</p>
         </div>
         <button className="button button--secondary" type="button" onClick={onReload}>
           Actualizar
@@ -273,10 +273,9 @@ export function CreditCardsSection({
                 <button
                   className="button button--secondary"
                   type="button"
-                  disabled={sourceTransferInstruments.length === 0}
                   onClick={() => handleActionToggle('payment')}
                 >
-                  {actionPanel === 'payment' ? 'Cerrar pago' : 'Registrar pago'}
+                  {actionPanel === 'payment' ? 'Cerrar abono' : 'Abonar a tarjeta'}
                 </button>
               </div>
 
@@ -408,9 +407,12 @@ export function CreditCardsSection({
               {actionPanel === 'payment' ? (
                 <article className="credit-card-form-panel">
                   <header>
-                    <h3>Registrar pago</h3>
-                    <p>El pago se asociará automáticamente al estado pendiente correspondiente.</p>
+                    <h3>Registrar abono</h3>
+                    <p>Puedes abonar cualquier monto desde una cuenta o tarjeta de débito. El saldo de ambos instrumentos se actualizará en una sola operación.</p>
                   </header>
+                  {paymentSourceInstruments.length === 0 ? (
+                    <p className="message message--error">No tienes una cuenta de débito en la misma moneda que esta tarjeta.</p>
+                  ) : null}
                   <div className="payment-presets">
                     <button type="button" onClick={() => onSetPaymentAmount(currentStatement?.minimumPayment ?? null)}>
                       <span>Mínimo</span>
@@ -430,7 +432,7 @@ export function CreditCardsSection({
                     </button>
                   </div>
                   <form className="form-grid credit-card-form-panel__form" onSubmit={onPaymentSubmit}>
-                    <label className="form-grid__field" htmlFor="cardPaymentSource">Pagar desde</label>
+                    <label className="form-grid__field" htmlFor="cardPaymentSource">Cuenta de débito origen</label>
                     <select
                       id="cardPaymentSource"
                       className="form-grid__input"
@@ -442,14 +444,14 @@ export function CreditCardsSection({
                       required
                     >
                       <option value={0}>Selecciona una cuenta</option>
-                      {sourceTransferInstruments.map((instrument) => (
+                      {paymentSourceInstruments.map((instrument) => (
                         <option key={instrument.id} value={instrument.id}>
-                          {instrument.name} · {formatCurrency(instrument.currentAmount)}
+                          {instrument.name} · Disponible {formatCurrency(instrument.currentAmount)}
                         </option>
                       ))}
                     </select>
 
-                    <label className="form-grid__field" htmlFor="cardPaymentAmount">Monto</label>
+                    <label className="form-grid__field" htmlFor="cardPaymentAmount">Monto del abono</label>
                     <NumberInput
                       id="cardPaymentAmount"
                       className="form-grid__input"
@@ -478,8 +480,8 @@ export function CreditCardsSection({
                     />
 
                     <div className="form-grid__actions">
-                      <button className="button button--primary" type="submit" disabled={!hasConfig}>
-                        Aplicar pago
+                      <button className="button button--primary" type="submit" disabled={!hasConfig || paymentSourceInstruments.length === 0}>
+                        Aplicar abono
                       </button>
                       <button className="button button--secondary" type="button" onClick={onResetPayment}>
                         Limpiar
@@ -554,7 +556,7 @@ export function CreditCardsSection({
                               <tr key={payment.id}>
                                 <td>{formatDate(payment.transferDate)}</td>
                                 <td>{payment.sourceInstrumentName ?? '-'}</td>
-                                <td>{payment.description ?? 'Pago de tarjeta'}</td>
+                                <td>{payment.description ?? 'Abono a tarjeta'}</td>
                                 <td className="table__amount table__amount--positive">{formatCurrency(payment.amount)}</td>
                                 <td>
                                   <button className="button button--danger" type="button" onClick={() => onDeletePayment(payment.id)}>

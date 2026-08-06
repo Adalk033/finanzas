@@ -7,6 +7,7 @@ import type {
   TransactionFilters,
   TransactionInput,
   TransactionType,
+  TransferInput,
 } from '../../types/domain'
 import { NumberInput } from '../NumberInput'
 
@@ -20,6 +21,13 @@ type TransactionsSectionProps = {
   categories: Category[]
   transactionForm: TransactionInput
   editingTransactionId: number | null
+  cardPaymentForm: TransferInput
+  cardPaymentMessage: string
+  cardPaymentError: string
+  creditCardInstruments: FinancialInstrument[]
+  compatibleCardPaymentSources: FinancialInstrument[]
+  selectedCardPaymentCardId: number
+  selectedCardPaymentSourceId: number
   selectedTransactionInstrumentId: number
   selectedTransactionCategoryId: number | null
   selectedTransactionInstrument: FinancialInstrument | null
@@ -34,6 +42,10 @@ type TransactionsSectionProps = {
   transactionError: string
   transactionMessage: string
   onTransactionFormChange: (nextForm: TransactionInput) => void
+  onCardPaymentFormChange: (nextForm: TransferInput) => void
+  onCardPaymentDestinationChange: (cardId: number) => void
+  onCardPaymentSubmit: (event: SyntheticEvent<HTMLFormElement>) => void
+  onResetCardPayment: () => void
   onTransactionTypeChange: (nextType: TransactionType) => void
   onTransactionSubmit: (event: SyntheticEvent<HTMLFormElement>) => void
   onTransactionEdit: (transaction: Transaction) => void
@@ -53,6 +65,13 @@ export function TransactionsSection({
   categories,
   transactionForm,
   editingTransactionId,
+  cardPaymentForm,
+  cardPaymentMessage,
+  cardPaymentError,
+  creditCardInstruments,
+  compatibleCardPaymentSources,
+  selectedCardPaymentCardId,
+  selectedCardPaymentSourceId,
   selectedTransactionInstrumentId,
   selectedTransactionCategoryId,
   selectedTransactionInstrument,
@@ -67,6 +86,10 @@ export function TransactionsSection({
   transactionError,
   transactionMessage,
   onTransactionFormChange,
+  onCardPaymentFormChange,
+  onCardPaymentDestinationChange,
+  onCardPaymentSubmit,
+  onResetCardPayment,
   onTransactionTypeChange,
   onTransactionSubmit,
   onTransactionEdit,
@@ -80,6 +103,7 @@ export function TransactionsSection({
   onReload,
 }: TransactionsSectionProps) {
   const [isTransactionFormOpen, setIsTransactionFormOpen] = useState(editingTransactionId !== null)
+  const [isCardPaymentFormOpen, setIsCardPaymentFormOpen] = useState(false)
   const [isFiltersFormOpen, setIsFiltersFormOpen] = useState(false)
   const isTransactionFormVisible = isTransactionFormOpen || editingTransactionId !== null
 
@@ -99,7 +123,7 @@ export function TransactionsSection({
     <section className="card">
       <header className="card__header">
         <h2 className="card__title">Transacciones</h2>
-        <p className="card__subtitle">Registro de gastos/ingresos, filtros y vista de MSI activas.</p>
+        <p className="card__subtitle">Registro de gastos/ingresos, abonos a TDC, filtros y vista de MSI activas.</p>
       </header>
 
       <div className="section-toolbar">
@@ -113,12 +137,118 @@ export function TransactionsSection({
         }}>
           {isTransactionFormVisible ? 'Ocultar formulario' : 'Nueva transaccion'}
         </button>
+        <button className="button button--secondary" type="button" onClick={() => setIsCardPaymentFormOpen((value) => !value)}>
+          {isCardPaymentFormOpen ? 'Ocultar abono' : 'Abonar a tarjeta'}
+        </button>
         <button className="button button--secondary" type="button" onClick={() => setIsFiltersFormOpen((value) => !value)}>
           {isFiltersFormOpen ? 'Ocultar filtros' : 'Filtros'}
         </button>
         <div className="section-toolbar__spacer" />
         <button className="button button--secondary" type="button" onClick={onReload}>Recargar</button>
       </div>
+
+      {isCardPaymentFormOpen ? (
+        <section className="mini-card transaction-card-payment">
+          <header className="mini-card__header">
+            <h3 className="mini-card__title">Abonar a tarjeta</h3>
+            <p className="mini-card__subtitle">
+              Elige la TDC, la cuenta de débito origen y cualquier monto. El movimiento se registrará como transferencia.
+            </p>
+          </header>
+
+          {creditCardInstruments.length === 0 ? (
+            <p className="message message--error">Primero registra una tarjeta de crédito en Instrumentos.</p>
+          ) : null}
+          {creditCardInstruments.length > 0 && compatibleCardPaymentSources.length === 0 ? (
+            <p className="message message--error">No tienes una cuenta o tarjeta de débito en la misma moneda que la TDC seleccionada.</p>
+          ) : null}
+
+          <form className="form-grid" onSubmit={onCardPaymentSubmit}>
+            <label className="form-grid__field" htmlFor="movementCardPaymentDestination">Tarjeta destino</label>
+            <select
+              id="movementCardPaymentDestination"
+              className="form-grid__input"
+              value={selectedCardPaymentCardId}
+              onChange={(event) => onCardPaymentDestinationChange(Number(event.target.value))}
+              required
+            >
+              <option value={0}>Selecciona una tarjeta</option>
+              {creditCardInstruments.map((card) => (
+                <option key={card.id} value={card.id}>
+                  {card.name} · Saldo {formatCurrency(card.currentBalance)}
+                </option>
+              ))}
+            </select>
+
+            <label className="form-grid__field" htmlFor="movementCardPaymentSource">Cuenta de débito origen</label>
+            <select
+              id="movementCardPaymentSource"
+              className="form-grid__input"
+              value={selectedCardPaymentSourceId}
+              onChange={(event) => onCardPaymentFormChange({
+                ...cardPaymentForm,
+                sourceInstrumentId: Number(event.target.value),
+              })}
+              required
+            >
+              <option value={0}>Selecciona una cuenta</option>
+              {compatibleCardPaymentSources.map((instrument) => (
+                <option key={instrument.id} value={instrument.id}>
+                  {instrument.name} · Disponible {formatCurrency(instrument.currentAmount)}
+                </option>
+              ))}
+            </select>
+
+            <label className="form-grid__field" htmlFor="movementCardPaymentAmount">Monto del abono</label>
+            <NumberInput
+              id="movementCardPaymentAmount"
+              className="form-grid__input"
+              min={0.01}
+              step="0.01"
+              value={cardPaymentForm.amount}
+              emptyValue={0}
+              onValueChange={(amount) => onCardPaymentFormChange({ ...cardPaymentForm, amount })}
+              required
+            />
+
+            <label className="form-grid__field" htmlFor="movementCardPaymentDate">Fecha</label>
+            <input
+              id="movementCardPaymentDate"
+              className="form-grid__input"
+              type="date"
+              value={cardPaymentForm.transferDate}
+              onChange={(event) => onCardPaymentFormChange({ ...cardPaymentForm, transferDate: event.target.value })}
+              required
+            />
+
+            <label className="form-grid__field" htmlFor="movementCardPaymentDescription">Descripción</label>
+            <input
+              id="movementCardPaymentDescription"
+              className="form-grid__input"
+              value={cardPaymentForm.description}
+              maxLength={255}
+              onChange={(event) => onCardPaymentFormChange({ ...cardPaymentForm, description: event.target.value })}
+              placeholder="Abono a tarjeta"
+            />
+
+            <div className="form-grid__actions">
+              <button
+                className="button button--primary"
+                type="submit"
+                disabled={!hasConfig || creditCardInstruments.length === 0 || compatibleCardPaymentSources.length === 0}
+              >
+                Aplicar abono
+              </button>
+              <button className="button button--secondary" type="button" onClick={onResetCardPayment}>
+                Limpiar
+              </button>
+            </div>
+          </form>
+
+          {cardPaymentError ? <p className="message message--error">{cardPaymentError}</p> : null}
+          {cardPaymentMessage ? <p className="message message--success">{cardPaymentMessage}</p> : null}
+        </section>
+      ) : null}
 
       <div className="transaction-layout">
         <section className="mini-card">
