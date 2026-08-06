@@ -498,6 +498,18 @@ input[type='month']::-webkit-calendar-picker-indicator {
   font-size: 14px;
 }
 
+.transaction-card-payment {
+  margin-bottom: var(--space-3);
+}
+
+.transaction-card-payment .form-grid {
+  row-gap: var(--space-3);
+}
+
+.transaction-card-payment .form-grid__actions {
+  margin-top: var(--space-2);
+}
+
 .category-list {
   display: grid;
   gap: var(--space-3);
