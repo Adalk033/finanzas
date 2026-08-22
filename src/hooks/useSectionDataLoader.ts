@@ -9,6 +9,7 @@ type SectionLoaders = {
   loadTransactions: () => Promise<void>
   loadStatements: () => Promise<void>
   loadTransfers: () => Promise<void>
+  loadDebitCardMovements: () => Promise<void>
   loadSubscriptions: () => Promise<void>
   loadRecurringIncomes: () => Promise<void>
   loadFixedExpenses: () => Promise<void>
@@ -66,6 +67,13 @@ export function useSectionDataLoader(hasConfig: boolean, loaders: SectionLoaders
         loaders.loadInstruments(),
         loaders.loadStatements(),
         loaders.loadTransfers(),
+      ])
+    },
+    debitCards: async () => {
+      await Promise.all([
+        loaders.loadInstruments(),
+        loaders.loadCategories(),
+        loaders.loadDebitCardMovements(),
       ])
     },
     transfers: async () => {

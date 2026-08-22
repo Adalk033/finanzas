@@ -347,6 +347,12 @@ export interface LoanPaymentRegisterInput {
   notes: string
 }
 
+export interface LoanReconciliationInput {
+  actualBalance: number
+  reconciliationDate: string
+  notes: string
+}
+
 export interface Subscription {
   id: number
   name: string

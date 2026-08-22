@@ -24,6 +24,7 @@ import type {
   LoanInput,
   LoanPayment,
   LoanPaymentRegisterInput,
+  LoanReconciliationInput,
   Subscription,
   SubscriptionInput,
   FixedExpense,
@@ -661,6 +662,15 @@ export const apiClient = {
       `${ENDPOINTS.LOANS}/${loanId}/payments/${installmentNum}/unpay`,
       { method: 'POST', body: JSON.stringify({}) },
     ),
+  reconcileLoan: (loanId: number, payload: LoanReconciliationInput) =>
+    request<Loan>(`${ENDPOINTS.LOANS}/${loanId}/reconcile`, {
+      method: 'POST',
+      body: JSON.stringify({
+        actualBalance: payload.actualBalance,
+        reconciliationDate: payload.reconciliationDate,
+        notes: payload.notes.trim(),
+      }),
+    }),
   getSubscriptions: () => request<Subscription[]>(ENDPOINTS.SUBSCRIPTIONS, { method: 'GET' }),
   createSubscription: (payload: SubscriptionInput) =>
     request<Subscription>(ENDPOINTS.SUBSCRIPTIONS, {

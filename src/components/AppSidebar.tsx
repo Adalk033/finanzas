@@ -46,10 +46,11 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Cuentas y deudas',
     items: [
-      { key: 'instruments', label: 'Instrumentos' },
-      { key: 'creditCards', label: 'Tarjetas' },
+      { key: 'creditCards', label: 'Tarjetas de crédito' },
+      { key: 'debitCards', label: 'Tarjetas de débito' },
       { key: 'transfers', label: 'Transferencias' },
       { key: 'loans', label: 'Prestamos' },
+      { key: 'instruments', label: 'Instrumentos' },
     ],
   },
   {

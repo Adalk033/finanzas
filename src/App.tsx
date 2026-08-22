@@ -11,6 +11,7 @@ const InstrumentsSection = lazy(() => import('./components/sections/InstrumentsS
 const CategoriesSection = lazy(() => import('./components/sections/CategoriesSection').then((module) => ({ default: module.CategoriesSection })))
 const TransactionsSection = lazy(() => import('./components/sections/TransactionsSection').then((module) => ({ default: module.TransactionsSection })))
 const CreditCardsSection = lazy(() => import('./components/sections/CreditCardsSection').then((module) => ({ default: module.CreditCardsSection })))
+const DebitCardsSection = lazy(() => import('./components/sections/DebitCardsSection').then((module) => ({ default: module.DebitCardsSection })))
 const TransfersSection = lazy(() => import('./components/sections/TransfersSection').then((module) => ({ default: module.TransfersSection })))
 const SubscriptionsSection = lazy(() => import('./components/sections/SubscriptionsSection').then((module) => ({ default: module.SubscriptionsSection })))
 const FixedExpensesSection = lazy(() => import('./components/sections/FixedExpensesSection').then((module) => ({ default: module.FixedExpensesSection })))
@@ -33,6 +34,7 @@ export function App() {
     banksController,
     categoriesController,
     creditCardsController,
+    debitCardsController,
     loansController,
     subscriptionsController,
     fixedExpensesController,
@@ -365,6 +367,34 @@ export function App() {
             />
           ) : null}
 
+          {activeSection === 'debitCards' ? (
+            <DebitCardsSection
+              hasConfig={hasConfig}
+              debitCardInstruments={debitCardsController.debitCardInstruments}
+              selectedDebitCardId={debitCardsController.selectedDebitCardId}
+              selectedDebitCard={debitCardsController.selectedDebitCard}
+              debitCardMovements={debitCardsController.debitCardMovements}
+              movementForm={debitCardsController.debitCardMovementForm}
+              movementCategories={debitCardsController.debitCardMovementCategories}
+              movementSubcategories={debitCardsController.debitCardMovementSubcategories}
+              isDebitCardMovementsLoading={debitCardsController.isDebitCardMovementsLoading}
+              message={debitCardsController.debitCardMessage}
+              error={debitCardsController.debitCardError}
+              onSelectDebitCard={debitCardsController.selectDebitCard}
+              onMovementFormChange={debitCardsController.setDebitCardMovementForm}
+              onMovementSubmit={debitCardsController.handleDebitCardMovementSubmit}
+              onResetMovement={debitCardsController.resetDebitCardMovementForm}
+              onReconcile={debitCardsController.reconcileDebitCard}
+              onReload={() => {
+                void Promise.all([
+                  instrumentsController.loadInstruments(),
+                  categoriesController.loadCategories(),
+                  debitCardsController.loadDebitCardMovements(),
+                ])
+              }}
+            />
+          ) : null}
+
           {activeSection === 'transfers' ? (
             <TransfersSection
               hasConfig={hasConfig}
@@ -517,6 +547,7 @@ export function App() {
                   void loansController.handleUndoInstallment(installmentNum)
                 }
               }}
+              onReconcileLoan={loansController.handleLoanReconcile}
             />
           ) : null}
 

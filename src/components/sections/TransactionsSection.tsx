@@ -292,7 +292,6 @@ export function TransactionsSection({
                 <form className="transaction-form" onSubmit={handleTransactionFormSubmit}>
                   <fieldset className="transaction-form__group">
                     <legend className="transaction-form__legend">Datos del movimiento</legend>
-                    <p className="transaction-form__group-description">Los campos marcados con * son obligatorios.</p>
                     <div className="transaction-form__fields">
                       <div className="transaction-form__field">
                         <label className="transaction-form__label" htmlFor="transactionInstrument">

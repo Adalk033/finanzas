@@ -553,12 +553,6 @@ input[type='month']::-webkit-calendar-picker-indicator {
   font-weight: 600;
 }
 
-.transaction-form__group-description {
-  margin-top: 4px;
-  color: var(--color-text-secondary);
-  font-size: 13px;
-}
-
 .transaction-form__fields {
   display: grid;
   grid-template-columns: 1fr;
@@ -2111,5 +2105,216 @@ input[type='month']::-webkit-calendar-picker-indicator {
 
   .dashboard-commitments {
     padding: 18px;
+  }
+}
+
+.debit-cards__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.debit-cards__empty {
+  border: 1px dashed var(--color-border-secondary);
+  border-radius: var(--radius-card);
+  padding: var(--space-5) var(--space-3);
+  text-align: center;
+}
+
+.debit-cards__empty h3 {
+  margin-bottom: var(--space-1);
+  font-size: 18px;
+}
+
+.debit-cards__empty p,
+.debit-card-movement-form header p,
+.debit-card-reconciliation header p,
+.debit-card-movements__header p {
+  color: var(--color-text-secondary);
+}
+
+.debit-card-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.debit-card-picker__item {
+  display: grid;
+  gap: 6px;
+  min-height: 112px;
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--radius-card);
+  padding: var(--space-2);
+  background: var(--color-bg-panel-2);
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 140ms ease, background-color 140ms ease, transform 140ms ease;
+}
+
+.debit-card-picker__item:hover {
+  border-color: var(--color-action-primary);
+  transform: translateY(-1px);
+}
+
+.debit-card-picker__item--active {
+  border-color: var(--color-action-primary);
+  background: var(--color-control-pressed);
+  box-shadow: inset 0 0 0 1px var(--color-action-primary);
+}
+
+.debit-card-picker__item strong {
+  align-self: end;
+  font-size: 16px;
+}
+
+.debit-card-picker__item > span:last-child,
+.debit-card-picker__bank {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.debit-card-overview {
+  display: grid;
+  grid-template-columns: minmax(200px, 0.9fr) minmax(230px, 0.9fr) minmax(260px, 1.2fr);
+  overflow: hidden;
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--radius-card);
+  background: var(--color-bg-subtle);
+}
+
+.debit-card-overview__identity,
+.debit-card-overview__balance,
+.debit-card-overview__details {
+  padding: var(--space-3);
+}
+
+.debit-card-overview__identity {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 184px;
+  background: var(--color-bg-panel-2);
+}
+
+.debit-card-overview__identity span,
+.debit-card-overview__identity p {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.debit-card-overview__identity h3 {
+  margin: 6px 0;
+  font-size: 22px;
+}
+
+.debit-card-overview__balance {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+}
+
+.debit-card-overview__balance > span,
+.debit-card-overview__balance small,
+.debit-card-overview__details dt {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.debit-card-overview__balance strong {
+  color: var(--color-positive);
+  font-size: clamp(25px, 2.5vw, 34px);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+}
+
+.debit-card-overview__details {
+  display: grid;
+  align-content: center;
+  gap: 12px;
+  border-left: 1px solid var(--color-border-subtle);
+}
+
+.debit-card-overview__details div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  border-bottom: 1px solid var(--color-border-subtle);
+  padding-bottom: 8px;
+}
+
+.debit-card-overview__details dd {
+  margin: 0;
+  font-size: 14px;
+  text-align: right;
+}
+
+.debit-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-3) 0;
+}
+
+.debit-card-movement-form,
+.debit-card-reconciliation {
+  margin-bottom: var(--space-3);
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-card);
+  padding: var(--space-3);
+  background: var(--color-bg-section);
+}
+
+.debit-card-movement-form header,
+.debit-card-reconciliation header {
+  margin-bottom: var(--space-3);
+}
+
+.debit-card-movement-form h3,
+.debit-card-reconciliation h3,
+.debit-card-movements h3 {
+  margin-bottom: 4px;
+  font-size: 18px;
+}
+
+.debit-card-movements {
+  margin-top: var(--space-4);
+  border-top: 1px solid var(--color-border-subtle);
+  padding-top: var(--space-3);
+}
+
+.debit-card-movements__header {
+  margin-bottom: var(--space-2);
+}
+
+@media (max-width: 768px) {
+  .debit-cards__header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .debit-cards__header .button {
+    align-self: flex-start;
+  }
+
+  .debit-card-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .debit-card-overview__identity {
+    min-height: 152px;
+  }
+
+  .debit-card-overview__details {
+    border-top: 1px solid var(--color-border-subtle);
+    border-left: 0;
+  }
+
+  .debit-card-actions {
+    flex-direction: column;
   }
 }

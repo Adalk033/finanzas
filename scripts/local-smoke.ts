@@ -885,6 +885,59 @@ try {
   )
   assert.equal(adjustableUndone.loan.remainingAmount, 1000)
 
+  const balanceBeforeLoanReconciliation = request<Array<{ id: number; currentAmount: number }>>('/instruments')
+    .find((item) => item.id === debit.id)?.currentAmount
+  const reconciledLoan = request<{ remainingAmount: number; isActive: boolean }>(
+    `/loans/${adjustableLoan.id}/reconcile`,
+    'POST',
+    {
+      actualBalance: 720,
+      reconciliationDate: '2026-07-19',
+      notes: 'Saldo confirmado con el acreedor',
+    },
+  )
+  assert.equal(reconciledLoan.remainingAmount, 720)
+  assert.equal(reconciledLoan.isActive, true)
+  const balanceAfterLoanReconciliation = request<Array<{ id: number; currentAmount: number }>>('/instruments')
+    .find((item) => item.id === debit.id)?.currentAmount
+  assert.equal(balanceAfterLoanReconciliation, balanceBeforeLoanReconciliation)
+  const reconciledPayments = request<Array<{ principal: number | null; isPaid: boolean }>>(
+    `/loans/${adjustableLoan.id}/payments`,
+  )
+  assert.equal(reconciledPayments.filter((payment) => !payment.isPaid).reduce(
+    (total, payment) => total + (payment.principal ?? 0),
+    0,
+  ), 720)
+  const loanReconciliationRecord = getDatabase().prepare(`
+    SELECT previous_remaining_cents, actual_remaining_cents, reconciliation_date, notes
+    FROM loan_reconciliations WHERE loan_id = ?
+  `).get(adjustableLoan.id) as {
+    previous_remaining_cents: number
+    actual_remaining_cents: number
+    reconciliation_date: string
+    notes: string | null
+  }
+  assert.deepEqual(loanReconciliationRecord, {
+    previous_remaining_cents: 100000,
+    actual_remaining_cents: 72000,
+    reconciliation_date: '2026-07-19',
+    notes: 'Saldo confirmado con el acreedor',
+  })
+  const duplicateLoanReconciliationError = requestFailure(
+    `/loans/${adjustableLoan.id}/reconcile`,
+    'POST',
+    { actualBalance: 720, reconciliationDate: '2026-07-19' },
+  )
+  assert.match(duplicateLoanReconciliationError, /ya coincide/)
+  const settledLoan = request<{ remainingAmount: number; isActive: boolean }>(
+    `/loans/${adjustableLoan.id}/reconcile`,
+    'POST',
+    { actualBalance: 0, reconciliationDate: '2026-07-19' },
+  )
+  assert.equal(settledLoan.remainingAmount, 0)
+  assert.equal(settledLoan.isActive, false)
+  assert.equal(request<Array<{ isPaid: boolean }>>(`/loans/${adjustableLoan.id}/payments`).length, 0)
+
   const payrollLoan = request<{ id: number }>('/loans', 'POST', {
     name: 'Prestamo descontado de nomina',
     currencyId: 1,

@@ -7,6 +7,7 @@ import type {
   LoanInput,
   LoanPayment,
   LoanPaymentRegisterInput,
+  LoanReconciliationInput,
   LoanPaymentType,
 } from '../types/domain'
 
@@ -221,6 +222,27 @@ export function useLoansController({ instruments }: UseLoansControllerParams) {
     await loadLoanPayments(selectedLoanId)
   }
 
+  const handleLoanReconcile = async (
+    loanId: number,
+    payload: LoanReconciliationInput,
+  ): Promise<boolean> => {
+    setLoanError('')
+    setLoanMessage('')
+
+    const result = await apiClient.reconcileLoan(loanId, payload)
+    if (!result.success) {
+      setLoanError(result.error ?? 'No se pudo conciliar el saldo pendiente.')
+      return false
+    }
+
+    setLoanMessage('Saldo pendiente conciliado y cuotas futuras recalculadas.')
+    await loadLoans()
+    if (selectedLoanId === loanId) {
+      await loadLoanPayments(loanId)
+    }
+    return true
+  }
+
   return {
     loans,
     isLoansLoading,
@@ -244,5 +266,6 @@ export function useLoansController({ instruments }: UseLoansControllerParams) {
     handleLoanDelete,
     handlePayInstallment,
     handleUndoInstallment,
+    handleLoanReconcile,
   }
 }

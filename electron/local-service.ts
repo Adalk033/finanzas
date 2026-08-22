@@ -2361,6 +2361,65 @@ function listLoanPayments(db: Database.Database, loanId: number): Record<string,
     .map(mapLoanPayment)
 }
 
+function reconcileLoan(
+  db: Database.Database,
+  loanId: number,
+  body: Input,
+): Record<string, unknown> {
+  const actualRemainingCents = moneyToCents(body.actualBalance, 'actualBalance', true)
+  const reconciliationDate = requiredDate(body, 'reconciliationDate')
+  const notes = optionalString(body, 'notes', 2000)
+
+  const operation = db.transaction(() => {
+    const loan = requireEntity(db, 'loans', loanId)
+    const currentRemainingCents = toNumber(loan.remaining_amount_cents)
+    if (actualRemainingCents === currentRemainingCents) {
+      throw new ValidationError('El saldo capturado ya coincide con el saldo pendiente registrado.')
+    }
+
+    const pendingCount = db.prepare(`
+      SELECT COUNT(*) AS total
+      FROM loan_payments
+      WHERE loan_id = ? AND is_paid = 0
+    `).get(loanId) as { total: number }
+    if (actualRemainingCents > 0 && pendingCount.total === 0) {
+      throw new ValidationError('El prestamo no tiene cuotas pendientes para recalcular.')
+    }
+
+    db.prepare(`
+      INSERT INTO loan_reconciliations (
+        loan_id, previous_remaining_cents, actual_remaining_cents, reconciliation_date, notes
+      ) VALUES (?, ?, ?, ?, ?)
+    `).run(loanId, currentRemainingCents, actualRemainingCents, reconciliationDate, notes)
+
+    db.prepare(`
+      UPDATE loans
+      SET remaining_amount_cents = ?,
+          is_active = CASE WHEN ? = 0 THEN 0 ELSE is_active END,
+          updated_at = datetime('now')
+      WHERE id = ?
+    `).run(actualRemainingCents, actualRemainingCents, loanId)
+
+    if (actualRemainingCents === 0) {
+      db.prepare(`
+        UPDATE reminders
+        SET is_dismissed = 1, updated_at = datetime('now')
+        WHERE reference_type = 'loan_payment'
+          AND reference_id IN (
+            SELECT id FROM loan_payments WHERE loan_id = ? AND is_paid = 0
+          )
+      `).run(loanId)
+      db.prepare('DELETE FROM loan_payments WHERE loan_id = ? AND is_paid = 0').run(loanId)
+      return
+    }
+
+    rebuildRemainingLoanSchedule(db, loanId)
+  })
+
+  operation()
+  return mapLoan(asRow(db.prepare(loanSelect('WHERE l.id = ?')).get(loanId)))
+}
+
 function payLoanInstallment(
   db: Database.Database,
   loanId: number,
@@ -4197,6 +4256,10 @@ function routeRequest(
       Number(undoLoanPayment[1]),
       Number(undoLoanPayment[2]),
     )
+  }
+  const loanReconciliation = path.match(/^\/loans\/(\d+)\/reconcile$/)
+  if (loanReconciliation && method === 'POST') {
+    return reconcileLoan(db, requireId(loanReconciliation), input())
   }
   const loanPayments = path.match(/^\/loans\/(\d+)\/payments$/)
   if (loanPayments && method === 'GET') return listLoanPayments(db, requireId(loanPayments))
