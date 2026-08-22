@@ -254,6 +254,55 @@
   flex: 1 1 auto;
 }
 
+.transaction-table-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.transaction-table-toolbar__title {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.transaction-search {
+  display: flex;
+  flex: 0 1 440px;
+  gap: var(--space-1);
+}
+
+.transaction-search__input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.transaction-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.transaction-pagination__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.transaction-pagination__status {
+  color: var(--color-text-secondary);
+  font-size: 14px;
+}
+
+.transaction-table-wrap {
+  margin-top: var(--space-2);
+}
+
 .section-panel {
   margin-top: var(--space-2);
   container-type: inline-size;
@@ -1038,14 +1087,15 @@ input[type='month']::-webkit-calendar-picker-indicator {
   height: 280px;
 }
 
-.dashboard-expenses-header {
+.dashboard-expenses-header,
+.dashboard-balance-evolution-header {
   display: grid;
   gap: var(--space-2);
 }
 
-.dashboard-expense-periods {
+.dashboard-expense-periods,
+.dashboard-balance-evolution-periods {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 4px;
   border: 1px solid var(--color-border);
   border-radius: 10px;
@@ -1053,7 +1103,16 @@ input[type='month']::-webkit-calendar-picker-indicator {
   padding: 4px;
 }
 
-.dashboard-expense-periods button {
+.dashboard-expense-periods {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.dashboard-balance-evolution-periods {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.dashboard-expense-periods button,
+.dashboard-balance-evolution-periods button {
   min-width: 0;
   border: 0;
   border-radius: 7px;
@@ -1065,23 +1124,27 @@ input[type='month']::-webkit-calendar-picker-indicator {
   transition: background-color 140ms ease, color 140ms ease, box-shadow 140ms ease;
 }
 
-.dashboard-expense-periods button:hover:not(:disabled) {
+.dashboard-expense-periods button:hover:not(:disabled),
+.dashboard-balance-evolution-periods button:hover:not(:disabled) {
   background: var(--color-input);
   color: var(--color-text);
 }
 
-.dashboard-expense-periods .dashboard-expense-periods__item--active {
+.dashboard-expense-periods .dashboard-expense-periods__item--active,
+.dashboard-balance-evolution-periods .dashboard-balance-evolution-periods__item--active {
   background: var(--color-primary);
   box-shadow: inset 0 0 0 1px var(--color-border-primary);
   color: var(--color-white);
 }
 
-.dashboard-expense-periods button:focus-visible {
+.dashboard-expense-periods button:focus-visible,
+.dashboard-balance-evolution-periods button:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
 
-.dashboard-expense-periods button:disabled {
+.dashboard-expense-periods button:disabled,
+.dashboard-balance-evolution-periods button:disabled {
   cursor: wait;
   opacity: 0.6;
 }
@@ -1445,6 +1508,20 @@ input[type='month']::-webkit-calendar-picker-indicator {
     grid-template-columns: 1fr;
   }
 
+  .transaction-search {
+    flex: 1 1 auto;
+  }
+
+  .transaction-table-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .transaction-pagination {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .summary-grid {
     grid-template-columns: 1fr;
   }
@@ -1631,6 +1708,7 @@ input[type='month']::-webkit-calendar-picker-indicator {
 .button:focus-visible,
 .nav-button:focus-visible,
 .dashboard-expense-periods button:focus-visible,
+.dashboard-balance-evolution-periods button:focus-visible,
 .credit-card-tabs button:focus-visible {
   outline: none;
   border-color: var(--color-action-primary);
@@ -1832,16 +1910,19 @@ input[type='month']::-webkit-calendar-picker-indicator {
   padding: 20px;
 }
 
-.dashboard-expense-periods {
+.dashboard-expense-periods,
+.dashboard-balance-evolution-periods {
   border-color: var(--color-border-secondary);
   background: var(--color-control-bg);
 }
 
-.dashboard-expense-periods button:hover:not(:disabled) {
+.dashboard-expense-periods button:hover:not(:disabled),
+.dashboard-balance-evolution-periods button:hover:not(:disabled) {
   background: var(--color-control-hover);
 }
 
-.dashboard-expense-periods .dashboard-expense-periods__item--active {
+.dashboard-expense-periods .dashboard-expense-periods__item--active,
+.dashboard-balance-evolution-periods .dashboard-balance-evolution-periods__item--active {
   background: var(--color-control-pressed);
   box-shadow: inset 0 0 0 1px var(--color-border-primary);
   color: var(--color-text-primary);

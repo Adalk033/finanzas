@@ -1,5 +1,5 @@
 import { useState, type SyntheticEvent } from 'react'
-import { formatCurrency } from '../../app/appHelpers'
+import { formatCurrency, formatIsoDate } from '../../app/appHelpers'
 import type {
   Category,
   FinancialInstrument,
@@ -310,7 +310,7 @@ export function SubscriptionsSection({
                   <td>{subscription.instrumentName ?? '-'}</td>
                   <td>{formatCurrency(subscription.amount)}</td>
                   <td>{subscription.billingCycle}</td>
-                  <td>{subscription.nextBilling ?? '-'}</td>
+                  <td>{formatIsoDate(subscription.nextBilling)}</td>
                   <td>
                     <div className="table__actions">
                       <button className="button button--secondary" type="button" onClick={() => onEdit(subscription)}>
@@ -483,7 +483,7 @@ export function SubscriptionsSection({
                   <td>{income.instrumentName ?? '-'}</td>
                   <td>{formatCurrency(income.amount)}</td>
                   <td>{formatRecurringIncomeSchedule(income)}</td>
-                  <td>{income.nextPayment}</td>
+                  <td>{formatIsoDate(income.nextPayment)}</td>
                   <td>
                     <div className="table__actions">
                       <button className="button button--secondary" type="button" onClick={() => onRecurringIncomeEdit(income)}>Editar</button>

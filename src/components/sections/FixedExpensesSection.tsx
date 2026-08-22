@@ -1,5 +1,5 @@
 import { useState, type SyntheticEvent } from 'react'
-import { formatCurrency } from '../../app/appHelpers'
+import { formatCurrency, formatIsoDate } from '../../app/appHelpers'
 import type {
   Category,
   FinancialInstrument,
@@ -431,7 +431,7 @@ export function FixedExpensesSection({
                         <td>{payment.fixedExpenseName ?? 'Gasto fijo eliminado'}</td>
                         <td>{`${payment.periodMonth}/${payment.periodYear}`}</td>
                         <td>{formatCurrency(payment.amount)}</td>
-                        <td>{payment.paymentDate ?? '-'}</td>
+                        <td>{formatIsoDate(payment.paymentDate)}</td>
                         <td>{payment.isPaid ? 'Pagado' : 'Pendiente'}</td>
                         <td>
                           <div className="table__actions">

@@ -1,5 +1,5 @@
 import { useState, type SyntheticEvent } from 'react'
-import { MSI_OPTIONS, formatCurrency, getSimulationScenarioLabel } from '../../app/appHelpers'
+import { MSI_OPTIONS, formatCurrency, formatIsoDate, getSimulationScenarioLabel } from '../../app/appHelpers'
 import type {
   FinancialInstrument,
   Simulation,
@@ -265,7 +265,7 @@ export function SimulatorSection({
 
                     return (
                       <tr key={simulation.id}>
-                        <td>{simulation.simulationDate}</td>
+                        <td>{formatIsoDate(simulation.simulationDate)}</td>
                         <td>{simulation.name}</td>
                         <td>{getSimulationScenarioLabel(scenarioType)}</td>
                         <td>{formatCurrency(amount)}</td>

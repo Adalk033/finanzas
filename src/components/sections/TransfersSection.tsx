@@ -1,5 +1,5 @@
 import type { SyntheticEvent } from 'react'
-import { formatCurrency } from '../../app/appHelpers'
+import { formatCurrency, formatIsoDate } from '../../app/appHelpers'
 import type {
   FinancialInstrument,
   Transfer,
@@ -32,14 +32,6 @@ type TransfersSectionProps = {
 const TRANSFER_TYPE_LABELS: Record<'inter_account' | 'other', string> = {
   inter_account: 'Entre mis cuentas',
   other: 'Otro movimiento',
-}
-
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat('es-MX', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  }).format(new Date(`${value}T00:00:00`))
 }
 
 export function TransfersSection({
@@ -236,7 +228,7 @@ export function TransfersSection({
                   : null}
                 {!isLoading ? visibleTransfers.map((transfer) => (
                   <tr key={transfer.id}>
-                    <td>{formatDate(transfer.transferDate)}</td>
+                    <td>{formatIsoDate(transfer.transferDate)}</td>
                     <td>
                       <strong>{transfer.sourceInstrumentName ?? '-'}</strong>
                       <span className="transfers__route">a {transfer.destinationInstrumentName ?? '-'}</span>

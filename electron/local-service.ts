@@ -37,6 +37,12 @@ const RECURRING_INCOME_FREQUENCIES = new Set(['weekly', 'biweekly', 'monthly', '
 const MSI_MONTHS = new Set([3, 6, 9, 12, 18, 24])
 const DASHBOARD_EXPENSE_PERIODS = new Set(['current_month', 'previous_month', 'last_3_months', 'last_year'])
 const DASHBOARD_EXPENSE_PERIOD_DEFAULT = 'current_month'
+const DASHBOARD_BALANCE_EVOLUTION_PERIODS = new Set(['one_month', 'three_months', 'six_months'])
+const DASHBOARD_BALANCE_EVOLUTION_PERIOD_DEFAULT = 'one_month'
+const TRANSACTIONS_PAGE_SIZE = 10
+const TRANSACTIONS_MAX_PAGE = 1_000_000
+const AUTO_ADJUSTMENT_NOTE_PREFIX = 'AUTO_ADJUSTMENT_TRANSFER:'
+const AUTO_ADJUSTMENT_DESCRIPTION = 'Otros (por ajuste)'
 
 class ValidationError extends Error {}
 class NotFoundError extends Error {}
@@ -136,6 +142,21 @@ function optionalDate(input: Input, key: string): string | null {
     return null
   }
   return requiredDate(input, key)
+}
+
+function optionalPositiveSearchParam(url: URL, key: string, max: number): number | null {
+  const raw = url.searchParams.get(key)
+  if (raw === null) {
+    return null
+  }
+  if (!/^[1-9]\d*$/.test(raw)) {
+    throw new ValidationError(`${key} debe ser un entero positivo.`)
+  }
+  const value = Number(raw)
+  if (!Number.isSafeInteger(value) || value > max) {
+    throw new ValidationError(`${key} esta fuera del rango permitido.`)
+  }
+  return value
 }
 
 function requiredMonth(value: string): string {
@@ -528,14 +549,20 @@ function instrumentSelect(where = ''): string {
   `
 }
 
-function transactionSelect(where = ''): string {
+function transactionFrom(): string {
   return `
-    SELECT t.*, i.name AS instrument_name, i.type AS instrument_type,
-           c.name AS category_name, s.name AS subcategory_name
     FROM transactions t
     JOIN financial_instruments i ON i.id = t.instrument_id
     LEFT JOIN categories c ON c.id = t.category_id
     LEFT JOIN subcategories s ON s.id = t.subcategory_id
+  `
+}
+
+function transactionSelect(where = ''): string {
+  return `
+    SELECT t.*, i.name AS instrument_name, i.type AS instrument_type,
+           c.name AS category_name, s.name AS subcategory_name
+    ${transactionFrom()}
     ${where}
   `
 }
@@ -1155,13 +1182,13 @@ function validateTransaction(db: Database.Database, body: Input): {
   }
 }
 
-function listTransactions(db: Database.Database, url: URL): Record<string, unknown>[] {
+function listTransactions(db: Database.Database, url: URL): Record<string, unknown>[] | Record<string, unknown> {
   syncMsiRemaining(db)
   const clauses: string[] = []
   const params: unknown[] = []
-  const add = (clause: string, value: unknown): void => {
+  const add = (clause: string, ...values: unknown[]): void => {
     clauses.push(clause)
-    params.push(value)
+    params.push(...values)
   }
   const fromDate = url.searchParams.get('from_date')
   const toDate = url.searchParams.get('to_date')
@@ -1169,16 +1196,62 @@ function listTransactions(db: Database.Database, url: URL): Record<string, unkno
   const instrumentId = Number(url.searchParams.get('instrument_id'))
   const type = url.searchParams.get('type')
   const search = url.searchParams.get('search')?.trim()
+  const autoAdjustmentsOnly = url.searchParams.get('auto_adjustments_only')
+  const page = optionalPositiveSearchParam(url, 'page', TRANSACTIONS_MAX_PAGE)
+  const automaticAdjustmentClause = '(t.notes LIKE ? OR t.description = ?)'
   if (fromDate) add('t.transaction_date >= ?', fromDate)
   if (toDate) add('t.transaction_date <= ?', toDate)
   if (Number.isInteger(categoryId) && categoryId > 0) add('t.category_id = ?', categoryId)
   if (Number.isInteger(instrumentId) && instrumentId > 0) add('t.instrument_id = ?', instrumentId)
   if (type && TRANSACTION_TYPES.has(type)) add('t.type = ?', type)
-  if (search) add('(t.description LIKE ? OR t.notes LIKE ?)', `%${search}%`)
-  if (search) params.push(`%${search}%`)
+  if (search && search.length > 255) throw new ValidationError('search no puede superar 255 caracteres.')
+  if (search) {
+    const searchValue = `%${search}%`
+    add(
+      '(t.description LIKE ? OR t.notes LIKE ? OR c.name LIKE ? OR s.name LIKE ? OR i.name LIKE ?)',
+      searchValue,
+      searchValue,
+      searchValue,
+      searchValue,
+      searchValue,
+    )
+  }
+  if (autoAdjustmentsOnly !== null && autoAdjustmentsOnly !== 'true') {
+    throw new ValidationError('auto_adjustments_only debe ser true.')
+  }
+  if (autoAdjustmentsOnly === 'true') {
+    add(automaticAdjustmentClause, `${AUTO_ADJUSTMENT_NOTE_PREFIX}%`, AUTO_ADJUSTMENT_DESCRIPTION)
+  }
   const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : ''
-  return (db.prepare(`${transactionSelect(where)} ORDER BY t.transaction_date DESC, t.id DESC`).all(...params) as DbRow[])
-    .map(mapTransaction)
+  if (page === null) {
+    return (db.prepare(`${transactionSelect(where)} ORDER BY t.transaction_date DESC, t.id DESC`).all(...params) as DbRow[])
+      .map(mapTransaction)
+  }
+
+  const totalRow = db.prepare(`SELECT COUNT(*) AS total ${transactionFrom()} ${where}`)
+    .get(...params) as { total: number }
+  const total = toNumber(totalRow.total)
+  const totalPages = Math.max(1, Math.ceil(total / TRANSACTIONS_PAGE_SIZE))
+  const resolvedPage = Math.min(page, totalPages)
+  const offset = (resolvedPage - 1) * TRANSACTIONS_PAGE_SIZE
+  const transactions = (db.prepare(`
+    ${transactionSelect(where)}
+    ORDER BY t.transaction_date DESC, t.id DESC
+    LIMIT ? OFFSET ?
+  `).all(...params, TRANSACTIONS_PAGE_SIZE, offset) as DbRow[]).map(mapTransaction)
+  const activeMsiWhere = `${where}${where ? ' AND' : 'WHERE'} t.is_msi = 1 AND t.msi_remaining > 0`
+  const activeMsiTransactions = (db.prepare(`
+    ${transactionSelect(activeMsiWhere)}
+    ORDER BY t.transaction_date DESC, t.id DESC
+  `).all(...params) as DbRow[]).map(mapTransaction)
+  return {
+    transactions,
+    activeMsiTransactions,
+    page: resolvedPage,
+    pageSize: TRANSACTIONS_PAGE_SIZE,
+    total,
+    totalPages,
+  }
 }
 
 function saveTransaction(
@@ -3605,18 +3678,53 @@ function getDashboardExpensePeriod(db: Database.Database): string {
   return row && DASHBOARD_EXPENSE_PERIODS.has(row.value) ? row.value : DASHBOARD_EXPENSE_PERIOD_DEFAULT
 }
 
+function getDashboardBalanceEvolutionPeriod(db: Database.Database): string {
+  const row = db.prepare(`
+    SELECT value FROM app_metadata WHERE key = 'dashboard_balance_evolution_period'
+  `).get() as { value: string } | undefined
+  return row && DASHBOARD_BALANCE_EVOLUTION_PERIODS.has(row.value)
+    ? row.value
+    : DASHBOARD_BALANCE_EVOLUTION_PERIOD_DEFAULT
+}
+
 function getDashboardPreferences(db: Database.Database): Record<string, unknown> {
-  return { expensePeriod: getDashboardExpensePeriod(db) }
+  return {
+    expensePeriod: getDashboardExpensePeriod(db),
+    balanceEvolutionPeriod: getDashboardBalanceEvolutionPeriod(db),
+  }
 }
 
 function saveDashboardPreferences(db: Database.Database, body: Input): Record<string, unknown> {
-  const expensePeriod = requiredEnum(body, 'expensePeriod', DASHBOARD_EXPENSE_PERIODS)
-  db.prepare(`
-    INSERT INTO app_metadata (key, value)
-    VALUES ('dashboard_expense_period', ?)
-    ON CONFLICT(key) DO UPDATE SET value = excluded.value
-  `).run(expensePeriod)
-  return { expensePeriod }
+  const hasExpensePeriod = body.expensePeriod !== undefined
+  const hasBalanceEvolutionPeriod = body.balanceEvolutionPeriod !== undefined
+  if (!hasExpensePeriod && !hasBalanceEvolutionPeriod) {
+    throw new ValidationError('Se requiere al menos una preferencia del dashboard.')
+  }
+
+  const expensePeriod = hasExpensePeriod
+    ? requiredEnum(body, 'expensePeriod', DASHBOARD_EXPENSE_PERIODS)
+    : getDashboardExpensePeriod(db)
+  const balanceEvolutionPeriod = hasBalanceEvolutionPeriod
+    ? requiredEnum(body, 'balanceEvolutionPeriod', DASHBOARD_BALANCE_EVOLUTION_PERIODS)
+    : getDashboardBalanceEvolutionPeriod(db)
+
+  db.transaction(() => {
+    if (hasExpensePeriod) {
+      db.prepare(`
+        INSERT INTO app_metadata (key, value)
+        VALUES ('dashboard_expense_period', ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+      `).run(expensePeriod)
+    }
+    if (hasBalanceEvolutionPeriod) {
+      db.prepare(`
+        INSERT INTO app_metadata (key, value)
+        VALUES ('dashboard_balance_evolution_period', ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+      `).run(balanceEvolutionPeriod)
+    }
+  })()
+  return { expensePeriod, balanceEvolutionPeriod }
 }
 
 function getDashboardExpensesByCategory(db: Database.Database, period: string): Record<string, unknown>[] {
@@ -3706,6 +3814,43 @@ function getDashboardCashFlow(db: Database.Database): Record<string, unknown>[] 
   })
 }
 
+function balanceEvolutionSequence(period: string): Array<{ date: string; label: string }> {
+  const monthsByPeriod: Record<string, number> = {
+    one_month: 1,
+    three_months: 3,
+    six_months: 6,
+  }
+  const months = monthsByPeriod[period]
+  if (!months) {
+    throw new ValidationError('El periodo de evolucion de saldo no es valido.')
+  }
+
+  const end = todayIso()
+  const start = addMonths(end, -months)
+  const points: Array<{ date: string; label: string }> = []
+  for (let date = start; date < end; date = addDays(date, 5)) {
+    points.push({
+      date,
+      label: new Intl.DateTimeFormat('es-MX', {
+        day: 'numeric',
+        month: 'short',
+        year: '2-digit',
+        timeZone: 'UTC',
+      }).format(new Date(`${date}T00:00:00Z`)),
+    })
+  }
+  points.push({
+    date: end,
+    label: new Intl.DateTimeFormat('es-MX', {
+      day: 'numeric',
+      month: 'short',
+      year: '2-digit',
+      timeZone: 'UTC',
+    }).format(new Date(`${end}T00:00:00Z`)),
+  })
+  return points
+}
+
 function getDashboardBalanceEvolution(db: Database.Database): Record<string, unknown> {
   const instruments = db.prepare(`
     SELECT
@@ -3728,50 +3873,54 @@ function getDashboardBalanceEvolution(db: Database.Database): Record<string, unk
     current_amount_cents: number
     opening_date: string | null
   }>
-  const months = monthSequence(6)
+  const period = getDashboardBalanceEvolutionPeriod(db)
+  const dates = balanceEvolutionSequence(period)
   const series = instruments.map((instrument) => ({
     key: `instrument_${instrument.id}`,
     label: instrument.name,
   }))
-  const points = months.map(({ start, label }) => {
-    const end = addMonths(start, 1)
-    const point: Record<string, string | number> = { month: label }
+  const laterTransactionsStatement = db.prepare(`
+    SELECT COALESCE(SUM(CASE
+      WHEN t.type = 'income' THEN t.amount_cents ELSE -t.amount_cents END), 0) AS net
+    FROM transactions t
+    JOIN financial_instruments movement_instrument ON movement_instrument.id = t.instrument_id
+    WHERE (t.instrument_id = ? OR movement_instrument.linked_account_id = ?)
+      AND t.affects_balance = 1 AND t.transaction_date > ?
+  `)
+  const laterTransfersStatement = db.prepare(`
+    SELECT
+      COALESCE(SUM(CASE
+        WHEN destination_instrument_id = ? OR destination.linked_account_id = ? THEN amount_cents
+        WHEN source_instrument_id = ? OR source.linked_account_id = ? THEN -amount_cents
+        ELSE 0
+      END), 0) AS net
+    FROM transfers
+    JOIN financial_instruments source ON source.id = source_instrument_id
+    JOIN financial_instruments destination ON destination.id = destination_instrument_id
+    WHERE transfer_date > ?
+  `)
+  const laterLoanPaymentsStatement = db.prepare(`
+    SELECT COALESCE(SUM(-p.amount_cents), 0) AS net
+    FROM loan_payments p
+    JOIN loans l ON l.id = p.loan_id
+    LEFT JOIN financial_instruments payment_instrument ON payment_instrument.id = l.instrument_id
+    WHERE p.is_paid = 1 AND p.paid_date > ?
+      AND p.affects_instrument_balance = 1
+      AND (l.instrument_id = ? OR payment_instrument.linked_account_id = ?)
+  `)
+  const points = dates.map(({ date, label }) => {
+    const point: Record<string, string | number> = { date, label }
     for (const instrument of instruments) {
-      if (instrument.opening_date !== null && end <= instrument.opening_date) {
+      if (instrument.opening_date !== null && date < instrument.opening_date) {
         point[`instrument_${instrument.id}`] = 0
         continue
       }
-      const laterTransactions = db.prepare(`
-        SELECT COALESCE(SUM(CASE
-          WHEN t.type = 'income' THEN t.amount_cents ELSE -t.amount_cents END), 0) AS net
-        FROM transactions t
-        JOIN financial_instruments movement_instrument ON movement_instrument.id = t.instrument_id
-        WHERE (t.instrument_id = ? OR movement_instrument.linked_account_id = ?)
-          AND t.affects_balance = 1 AND t.transaction_date >= ?
-      `).get(instrument.id, instrument.id, end) as { net: number }
-      const laterTransfers = db.prepare(`
-        SELECT
-          COALESCE(SUM(CASE
-            WHEN destination_instrument_id = ? OR destination.linked_account_id = ? THEN amount_cents
-            WHEN source_instrument_id = ? OR source.linked_account_id = ? THEN -amount_cents
-            ELSE 0
-          END), 0) AS net
-        FROM transfers
-        JOIN financial_instruments source ON source.id = source_instrument_id
-        JOIN financial_instruments destination ON destination.id = destination_instrument_id
-        WHERE transfer_date >= ?
-      `).get(
-        instrument.id, instrument.id, instrument.id, instrument.id, end,
-      ) as { net: number }
-      const laterLoanPayments = db.prepare(`
-        SELECT COALESCE(SUM(-p.amount_cents), 0) AS net
-        FROM loan_payments p
-        JOIN loans l ON l.id = p.loan_id
-        LEFT JOIN financial_instruments payment_instrument ON payment_instrument.id = l.instrument_id
-        WHERE p.is_paid = 1 AND p.paid_date >= ?
-          AND p.affects_instrument_balance = 1
-          AND (l.instrument_id = ? OR payment_instrument.linked_account_id = ?)
-      `).get(end, instrument.id, instrument.id) as { net: number }
+      const laterTransactions = laterTransactionsStatement
+        .get(instrument.id, instrument.id, date) as { net: number }
+      const laterTransfers = laterTransfersStatement
+        .get(instrument.id, instrument.id, instrument.id, instrument.id, date) as { net: number }
+      const laterLoanPayments = laterLoanPaymentsStatement
+        .get(date, instrument.id, instrument.id) as { net: number }
       point[`instrument_${instrument.id}`] = (
         instrument.current_amount_cents
         - laterTransactions.net

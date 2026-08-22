@@ -1,5 +1,5 @@
 import { useState, type SyntheticEvent } from 'react'
-import { formatCurrency } from '../../app/appHelpers'
+import { formatCurrency, formatIsoDate } from '../../app/appHelpers'
 import type {
   FinancialInstrument,
   Loan,
@@ -502,11 +502,11 @@ export function LoansSection({
                     ? loanPayments.map((payment) => (
                       <tr key={payment.id}>
                         <td>{payment.installmentNum}</td>
-                        <td>{payment.paymentDate}</td>
+                        <td>{formatIsoDate(payment.paymentDate)}</td>
                         <td>{formatCurrency(payment.amount)}</td>
                         <td>{formatCurrency(payment.principal)}</td>
                         <td>{formatCurrency(payment.interest)}</td>
-                        <td>{payment.isPaid ? `Pagada ${payment.paidDate ?? ''}${payment.affectsInstrumentBalance ? '' : ' · Descontada del ingreso'}` : 'Pendiente'}</td>
+                        <td>{payment.isPaid ? `Pagada${payment.paidDate ? ` ${formatIsoDate(payment.paidDate)}` : ''}${payment.affectsInstrumentBalance ? '' : ' · Descontada del ingreso'}` : 'Pendiente'}</td>
                         <td>
                           <div className="table__actions">
                             <button

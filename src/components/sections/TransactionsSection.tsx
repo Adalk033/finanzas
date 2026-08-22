@@ -1,5 +1,5 @@
 import { useState, type SyntheticEvent } from 'react'
-import { formatCurrency } from '../../app/appHelpers'
+import { formatCurrency, formatIsoDate } from '../../app/appHelpers'
 import type {
   Category,
   FinancialInstrument,
@@ -35,9 +35,14 @@ type TransactionsSectionProps = {
   transactionFilters: TransactionFilters
   excludeFromBalance: boolean
   showAutoAdjustmentsOnly: boolean
-  autoAdjustmentCount: number
   transactions: Transaction[]
   activeMsiTransactions: Transaction[]
+  transactionPagination: {
+    page: number
+    pageSize: number
+    total: number
+    totalPages: number
+  }
   isTransactionsLoading: boolean
   transactionError: string
   transactionMessage: string
@@ -52,10 +57,12 @@ type TransactionsSectionProps = {
   onTransactionDelete: (transactionId: number) => void
   onResetTransactionForm: () => void
   onFiltersChange: (nextFilters: TransactionFilters) => void
+  onSearchChange: (search: string) => void
   onExcludeFromBalanceChange: (nextValue: boolean) => void
   onToggleAutoAdjustmentsOnly: (nextValue: boolean) => void
   onFiltersSubmit: (event: SyntheticEvent<HTMLFormElement>) => void
   onClearFilters: () => void
+  onPageChange: (page: number) => void
   onReload: () => void
 }
 
@@ -79,9 +86,9 @@ export function TransactionsSection({
   transactionFilters,
   excludeFromBalance,
   showAutoAdjustmentsOnly,
-  autoAdjustmentCount,
   transactions,
   activeMsiTransactions,
+  transactionPagination,
   isTransactionsLoading,
   transactionError,
   transactionMessage,
@@ -96,16 +103,25 @@ export function TransactionsSection({
   onTransactionDelete,
   onResetTransactionForm,
   onFiltersChange,
+  onSearchChange,
   onExcludeFromBalanceChange,
   onToggleAutoAdjustmentsOnly,
   onFiltersSubmit,
   onClearFilters,
+  onPageChange,
   onReload,
 }: TransactionsSectionProps) {
   const [isTransactionFormOpen, setIsTransactionFormOpen] = useState(editingTransactionId !== null)
   const [isCardPaymentFormOpen, setIsCardPaymentFormOpen] = useState(false)
   const [isFiltersFormOpen, setIsFiltersFormOpen] = useState(false)
   const isTransactionFormVisible = isTransactionFormOpen || editingTransactionId !== null
+  const firstVisibleTransaction = transactionPagination.total === 0
+    ? 0
+    : ((transactionPagination.page - 1) * transactionPagination.pageSize) + 1
+  const lastVisibleTransaction = Math.min(
+    transactionPagination.page * transactionPagination.pageSize,
+    transactionPagination.total,
+  )
 
   const isAutoAdjustmentTransaction = (transaction: Transaction): boolean => {
     const notes = transaction.notes ?? ''
@@ -250,16 +266,17 @@ export function TransactionsSection({
         </section>
       ) : null}
 
-      <div className="transaction-layout">
-        <section className="mini-card">
+      {isTransactionFormVisible || isFiltersFormOpen ? (
+        <div className="transaction-layout">
+          {isTransactionFormVisible ? (
+            <section className="mini-card">
           <header className="mini-card__header">
             <h3 className="mini-card__title">{editingTransactionId === null ? 'Nueva transaccion' : 'Editar transaccion'}</h3>
             <p className="mini-card__subtitle">Crea gastos o ingresos asociados a instrumento y categoria.</p>
           </header>
 
-          {isTransactionFormVisible ? (
-            <div className="section-panel">
-              <form className="form-grid" onSubmit={onTransactionSubmit}>
+          <div className="section-panel">
+            <form className="form-grid" onSubmit={onTransactionSubmit}>
             <label className="form-grid__field" htmlFor="transactionInstrument">Instrumento</label>
             <select
               id="transactionInstrument"
@@ -425,20 +442,20 @@ export function TransactionsSection({
                     {editingTransactionId === null ? 'Limpiar' : 'Cancelar edicion'}
                   </button>
                 </div>
-              </form>
-            </div>
+            </form>
+          </div>
+            </section>
           ) : null}
-        </section>
 
-        <section className="mini-card">
+          {isFiltersFormOpen ? (
+            <section className="mini-card">
           <header className="mini-card__header">
             <h3 className="mini-card__title">Filtros</h3>
             <p className="mini-card__subtitle">Refina por fecha, tipo, categoria, instrumento y texto.</p>
           </header>
 
-          {isFiltersFormOpen ? (
-            <div className="section-panel">
-              <form className="form-grid" onSubmit={onFiltersSubmit}>
+          <div className="section-panel">
+            <form className="form-grid" onSubmit={onFiltersSubmit}>
             <label className="form-grid__field" htmlFor="filterFromDate">Desde</label>
             <input
               id="filterFromDate"
@@ -533,17 +550,32 @@ export function TransactionsSection({
                     Limpiar filtros
                   </button>
                 </div>
-              </form>
-            </div>
+            </form>
+          </div>
+            </section>
           ) : null}
-        </section>
-      </div>
+        </div>
+      ) : null}
 
       {transactionError ? <p className="message message--error">{transactionError}</p> : null}
       {transactionMessage ? <p className="message message--success">{transactionMessage}</p> : null}
-      <p className="card__subtitle">Ajustes automáticos detectados: {autoAdjustmentCount}</p>
+      <div className="transaction-table-toolbar">
+        <h3 className="transaction-table-toolbar__title">Movimientos</h3>
+        <div className="transaction-search">
+          <input
+            id="movementSearch"
+            className="form-grid__input transaction-search__input"
+            type="search"
+            value={transactionFilters.search ?? ''}
+            onChange={(event) => onSearchChange(event.target.value)}
+            placeholder="Buscar"
+            aria-label="Buscar movimientos"
+            disabled={!hasConfig}
+          />
+        </div>
+      </div>
 
-      <div className="table-wrap">
+      <div className="table-wrap transaction-table-wrap">
         <table className="table">
           <thead>
             <tr>
@@ -573,7 +605,7 @@ export function TransactionsSection({
             {!isTransactionsLoading
               ? transactions.map((transaction) => (
                 <tr key={transaction.id}>
-                  <td>{transaction.transactionDate}</td>
+                  <td>{formatIsoDate(transaction.transactionDate)}</td>
                   <td>{transaction.type === 'expense' ? 'Gasto' : 'Ingreso'}</td>
                   <td>{formatCurrency(transaction.amount)}</td>
                   <td>{transaction.instrumentName ?? '-'}</td>
@@ -614,6 +646,35 @@ export function TransactionsSection({
         </table>
       </div>
 
+      <div className="transaction-pagination">
+        <p className="card__subtitle">
+          {transactionPagination.total === 0
+            ? 'No hay movimientos para mostrar.'
+            : `Mostrando ${firstVisibleTransaction}-${lastVisibleTransaction} de ${transactionPagination.total} movimientos.`}
+        </p>
+        <nav className="transaction-pagination__controls" aria-label="Paginación de movimientos">
+          <button
+            className="button button--secondary"
+            type="button"
+            disabled={isTransactionsLoading || transactionPagination.page <= 1}
+            onClick={() => onPageChange(transactionPagination.page - 1)}
+          >
+            Anterior
+          </button>
+          <span className="transaction-pagination__status">
+            Página {transactionPagination.page} de {transactionPagination.totalPages}
+          </span>
+          <button
+            className="button button--secondary"
+            type="button"
+            disabled={isTransactionsLoading || transactionPagination.page >= transactionPagination.totalPages}
+            onClick={() => onPageChange(transactionPagination.page + 1)}
+          >
+            Siguiente
+          </button>
+        </nav>
+      </div>
+
       <div className="category-list">
         <article className="category-card">
           <header className="category-card__header">
@@ -649,7 +710,7 @@ export function TransactionsSection({
                     <td>{formatCurrency(transaction.amount)}</td>
                     <td>{formatCurrency(transaction.msiMonthlyAmount)}</td>
                     <td>{transaction.msiRemaining ?? transaction.msiMonths ?? '-'}</td>
-                    <td>{transaction.msiStartDate ?? '-'}</td>
+                    <td>{formatIsoDate(transaction.msiStartDate)}</td>
                   </tr>
                 ))}
               </tbody>

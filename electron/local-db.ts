@@ -319,6 +319,7 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_instruments_bank ON financial_instruments(bank_id);
   CREATE INDEX IF NOT EXISTS idx_transactions_instrument_date ON transactions(instrument_id, transaction_date);
   CREATE INDEX IF NOT EXISTS idx_transactions_category_date ON transactions(category_id, transaction_date);
+  CREATE INDEX IF NOT EXISTS idx_transactions_date_id ON transactions(transaction_date DESC, id DESC);
   CREATE INDEX IF NOT EXISTS idx_family_expenses_date ON family_expenses(expense_date);
   CREATE INDEX IF NOT EXISTS idx_family_expenses_category_date ON family_expenses(category_id, expense_date);
   CREATE INDEX IF NOT EXISTS idx_transfers_instruments_date ON transfers(source_instrument_id, destination_instrument_id, transfer_date);

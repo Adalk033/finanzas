@@ -77,6 +77,7 @@ export function App() {
               dashboardSummary={dashboardController.dashboardSummary}
               dashboardExpensesByCategory={dashboardController.dashboardExpensesByCategory}
               dashboardExpensePeriod={dashboardController.dashboardExpensePeriod}
+              dashboardBalanceEvolutionPeriod={dashboardController.dashboardBalanceEvolutionPeriod}
               dashboardCashFlow={dashboardController.dashboardCashFlow}
               dashboardBalanceEvolution={dashboardController.dashboardBalanceEvolution}
               dashboardFutureExpenses={dashboardController.dashboardFutureExpenses}
@@ -85,6 +86,7 @@ export function App() {
                 void dashboardController.loadDashboard()
               }}
               onDashboardExpensePeriodChange={dashboardController.setDashboardExpensePeriod}
+              onDashboardBalanceEvolutionPeriodChange={dashboardController.setDashboardBalanceEvolutionPeriod}
             />
           ) : null}
 
@@ -268,9 +270,9 @@ export function App() {
               transactionFilters={transactionsController.transactionFilters}
               excludeFromBalance={transactionsController.excludeFromBalance}
               showAutoAdjustmentsOnly={transactionsController.showAutoAdjustmentsOnly}
-              autoAdjustmentCount={transactionsController.autoAdjustmentCount}
               transactions={transactionsController.transactions}
               activeMsiTransactions={transactionsController.activeMsiTransactions}
+              transactionPagination={transactionsController.transactionPagination}
               isTransactionsLoading={transactionsController.isTransactionsLoading}
               transactionError={transactionsController.transactionError}
               transactionMessage={transactionsController.transactionMessage}
@@ -289,12 +291,14 @@ export function App() {
               }}
               onResetTransactionForm={transactionsController.resetTransactionForm}
               onFiltersChange={transactionsController.setTransactionFilters}
+              onSearchChange={transactionsController.handleTransactionSearchChange}
               onExcludeFromBalanceChange={transactionsController.setExcludeFromBalance}
               onToggleAutoAdjustmentsOnly={transactionsController.setShowAutoAdjustmentsOnly}
               onFiltersSubmit={transactionsController.handleTransactionFiltersSubmit}
               onClearFilters={() => {
                 void transactionsController.clearTransactionFilters()
               }}
+              onPageChange={transactionsController.changeTransactionPage}
               onReload={() => {
                 void transactionsController.loadTransactions()
               }}

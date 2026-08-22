@@ -1,5 +1,5 @@
 import { useState, type SyntheticEvent } from 'react'
-import { formatCurrency, getBudgetStatusLabel } from '../../app/appHelpers'
+import { formatCurrency, formatIsoDate, getBudgetStatusLabel } from '../../app/appHelpers'
 import type {
   Budget,
   BudgetInput,
@@ -348,7 +348,7 @@ export function BudgetsSection({
                   <td>{formatCurrency(goal.targetAmount)}</td>
                   <td>{formatCurrency(goal.currentAmount)}</td>
                   <td>{goal.progressPercent}%</td>
-                  <td>{goal.targetDate ?? '-'}</td>
+                  <td>{formatIsoDate(goal.targetDate)}</td>
                   <td><div className="table__actions">
                     <button className="button button--secondary" type="button" onClick={() => onSavingsGoalEdit(goal)}>Editar</button>
                     <button className="button button--danger" type="button" onClick={() => onSavingsGoalDelete(goal.id)}>Archivar</button>

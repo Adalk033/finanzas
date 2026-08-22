@@ -49,6 +49,7 @@ import type {
   Transaction,
   TransactionFilters,
   TransactionInput,
+  TransactionPage,
   ReconciliationInput,
   RecurringIncome,
   RecurringIncomeInput,
@@ -413,7 +414,7 @@ function buildFamilyExpenseQuery(filters: FamilyExpenseFilters): string {
   return `?${params.toString()}`
 }
 
-function buildTransactionQuery(filters: TransactionFilters): string {
+function buildTransactionQuery(filters: TransactionFilters, page?: number): string {
   const params = new URLSearchParams()
 
   if (filters.fromDate) {
@@ -440,6 +441,14 @@ function buildTransactionQuery(filters: TransactionFilters): string {
     params.set('search', filters.search.trim())
   }
 
+  if (filters.autoAdjustmentsOnly) {
+    params.set('auto_adjustments_only', 'true')
+  }
+
+  if (page !== undefined) {
+    params.set('page', String(page))
+  }
+
   const query = params.toString()
   return query.length > 0 ? `?${query}` : ''
 }
@@ -448,10 +457,10 @@ export const apiClient = {
   health: () => request<{ status: string }>(ENDPOINTS.HEALTH, { method: 'GET' }),
   getDashboardSummary: () => request<DashboardSummary>(ENDPOINTS.DASHBOARD_SUMMARY, { method: 'GET' }),
   getDashboardPreferences: () => request<DashboardPreferences>(ENDPOINTS.DASHBOARD_PREFERENCES, { method: 'GET' }),
-  updateDashboardPreferences: (expensePeriod: DashboardExpensePeriod) =>
+  updateDashboardPreferences: (preferences: Partial<DashboardPreferences>) =>
     request<DashboardPreferences>(ENDPOINTS.DASHBOARD_PREFERENCES, {
       method: 'PUT',
-      body: JSON.stringify({ expensePeriod }),
+      body: JSON.stringify(preferences),
     }),
   getDashboardExpensesByCategory: (period: DashboardExpensePeriod) =>
     request<DashboardExpenseByCategory[]>(`${ENDPOINTS.DASHBOARD_EXPENSES_BY_CATEGORY}?period=${period}`, { method: 'GET' }),
@@ -561,6 +570,8 @@ export const apiClient = {
     ),
   getTransactions: (filters: TransactionFilters = {}) =>
     request<Transaction[]>(`${ENDPOINTS.TRANSACTIONS}${buildTransactionQuery(filters)}`, { method: 'GET' }),
+  getTransactionsPage: (filters: TransactionFilters = {}, page = 1) =>
+    request<TransactionPage>(`${ENDPOINTS.TRANSACTIONS}${buildTransactionQuery(filters, page)}`, { method: 'GET' }),
   createTransaction: (payload: TransactionInput) =>
     request<Transaction>(ENDPOINTS.TRANSACTIONS, {
       method: 'POST',
