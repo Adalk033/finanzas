@@ -2291,6 +2291,38 @@ input[type='month']::-webkit-calendar-picker-indicator {
   margin-bottom: var(--space-2);
 }
 
+.loan-reconciliation {
+  margin-top: var(--space-3);
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-card);
+  padding: var(--space-3);
+  background: var(--color-bg-section);
+}
+
+.loan-reconciliation__header {
+  margin-bottom: var(--space-3);
+}
+
+.loan-reconciliation__title {
+  margin-bottom: 4px;
+  font-size: 18px;
+}
+
+.loan-reconciliation__description {
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.loan-reconciliation .loan-reconciliation__form {
+  max-width: 760px;
+  grid-template-columns: minmax(160px, 0.35fr) minmax(0, 1fr);
+}
+
+.loan-reconciliation .form-grid__actions {
+  grid-column: 1 / -1;
+}
+
 @media (max-width: 768px) {
   .debit-cards__header {
     align-items: stretch;
@@ -2316,5 +2348,19 @@ input[type='month']::-webkit-calendar-picker-indicator {
 
   .debit-card-actions {
     flex-direction: column;
+  }
+
+  .loan-reconciliation .loan-reconciliation__form {
+    grid-template-columns: 1fr;
+  }
+
+  .loan-reconciliation .form-grid__actions {
+    grid-column: 1;
+  }
+}
+
+@media (max-width: 640px) {
+  .loan-reconciliation {
+    padding: var(--space-2);
   }
 }

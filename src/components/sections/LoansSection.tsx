@@ -429,10 +429,12 @@ export function LoansSection({
       </div>
 
       {reconciliationLoan !== null ? (
-        <div className="section-panel">
-          <h3 className="card__title">Conciliar saldo pendiente · {reconciliationLoan.name}</h3>
-          <p className="card__subtitle">Captura el saldo real indicado por el acreedor. La app no modifica tu cuenta vinculada y recalcula las cuotas futuras.</p>
-          <form className="form-grid" onSubmit={(event) => { void submitReconciliation(event) }}>
+        <section className="loan-reconciliation">
+          <header className="loan-reconciliation__header">
+            <h3 className="loan-reconciliation__title">Conciliar saldo pendiente · {reconciliationLoan.name}</h3>
+            <p className="loan-reconciliation__description">Captura el saldo real indicado por el acreedor. La app no modifica tu cuenta vinculada y recalcula las cuotas futuras.</p>
+          </header>
+          <form className="form-grid loan-reconciliation__form" onSubmit={(event) => { void submitReconciliation(event) }}>
             <label className="form-grid__field" htmlFor="loanReconciliationBalance">Saldo pendiente real</label>
             <input
               id="loanReconciliationBalance"
@@ -472,7 +474,7 @@ export function LoansSection({
               </button>
             </div>
           </form>
-        </div>
+        </section>
       ) : null}
 
       {loanError ? <p className="message message--error">{loanError}</p> : null}
