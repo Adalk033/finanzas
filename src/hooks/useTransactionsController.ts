@@ -278,7 +278,7 @@ export function useTransactionsController({
     }
   }
 
-  const handleTransactionSubmit = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
+  const handleTransactionSubmit = async (event: SyntheticEvent<HTMLFormElement>): Promise<boolean> => {
     event.preventDefault()
     setTransactionError('')
     setTransactionMessage('')
@@ -299,17 +299,17 @@ export function useTransactionsController({
 
     if (payload.instrumentId < 1) {
       setTransactionError('Selecciona un instrumento valido.')
-      return
+      return false
     }
 
     if (!payload.transactionDate) {
       setTransactionError('Selecciona una fecha valida.')
-      return
+      return false
     }
 
     if (payload.amount <= 0) {
       setTransactionError('Ingresa un monto mayor a cero.')
-      return
+      return false
     }
 
     if (editingTransactionId !== null) {
@@ -317,27 +317,28 @@ export function useTransactionsController({
 
       if (!updated.success) {
         setTransactionError(updated.error ?? 'No se pudo actualizar la transaccion.')
-        return
+        return false
       }
 
       setTransactionMessage('Transaccion actualizada correctamente.')
       resetTransactionForm()
       await loadInstruments()
       await loadTransactions()
-      return
+      return true
     }
 
     const created = await apiClient.createTransaction(payload)
 
     if (!created.success) {
       setTransactionError(created.error ?? 'No se pudo crear la transaccion.')
-      return
+      return false
     }
 
     setTransactionMessage('Transaccion creada correctamente.')
     resetTransactionForm()
     await loadInstruments()
     await loadTransactions(transactionFilters, 1)
+    return true
   }
 
   const handleTransactionDelete = async (id: number): Promise<void> => {
