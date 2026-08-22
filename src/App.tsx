@@ -11,6 +11,7 @@ const InstrumentsSection = lazy(() => import('./components/sections/InstrumentsS
 const CategoriesSection = lazy(() => import('./components/sections/CategoriesSection').then((module) => ({ default: module.CategoriesSection })))
 const TransactionsSection = lazy(() => import('./components/sections/TransactionsSection').then((module) => ({ default: module.TransactionsSection })))
 const CreditCardsSection = lazy(() => import('./components/sections/CreditCardsSection').then((module) => ({ default: module.CreditCardsSection })))
+const DebitCardsSection = lazy(() => import('./components/sections/DebitCardsSection').then((module) => ({ default: module.DebitCardsSection })))
 const TransfersSection = lazy(() => import('./components/sections/TransfersSection').then((module) => ({ default: module.TransfersSection })))
 const SubscriptionsSection = lazy(() => import('./components/sections/SubscriptionsSection').then((module) => ({ default: module.SubscriptionsSection })))
 const FixedExpensesSection = lazy(() => import('./components/sections/FixedExpensesSection').then((module) => ({ default: module.FixedExpensesSection })))
@@ -33,6 +34,7 @@ export function App() {
     banksController,
     categoriesController,
     creditCardsController,
+    debitCardsController,
     loansController,
     subscriptionsController,
     fixedExpensesController,
@@ -77,6 +79,7 @@ export function App() {
               dashboardSummary={dashboardController.dashboardSummary}
               dashboardExpensesByCategory={dashboardController.dashboardExpensesByCategory}
               dashboardExpensePeriod={dashboardController.dashboardExpensePeriod}
+              dashboardBalanceEvolutionPeriod={dashboardController.dashboardBalanceEvolutionPeriod}
               dashboardCashFlow={dashboardController.dashboardCashFlow}
               dashboardBalanceEvolution={dashboardController.dashboardBalanceEvolution}
               dashboardFutureExpenses={dashboardController.dashboardFutureExpenses}
@@ -85,6 +88,7 @@ export function App() {
                 void dashboardController.loadDashboard()
               }}
               onDashboardExpensePeriodChange={dashboardController.setDashboardExpensePeriod}
+              onDashboardBalanceEvolutionPeriodChange={dashboardController.setDashboardBalanceEvolutionPeriod}
             />
           ) : null}
 
@@ -268,9 +272,9 @@ export function App() {
               transactionFilters={transactionsController.transactionFilters}
               excludeFromBalance={transactionsController.excludeFromBalance}
               showAutoAdjustmentsOnly={transactionsController.showAutoAdjustmentsOnly}
-              autoAdjustmentCount={transactionsController.autoAdjustmentCount}
               transactions={transactionsController.transactions}
               activeMsiTransactions={transactionsController.activeMsiTransactions}
+              transactionPagination={transactionsController.transactionPagination}
               isTransactionsLoading={transactionsController.isTransactionsLoading}
               transactionError={transactionsController.transactionError}
               transactionMessage={transactionsController.transactionMessage}
@@ -289,12 +293,14 @@ export function App() {
               }}
               onResetTransactionForm={transactionsController.resetTransactionForm}
               onFiltersChange={transactionsController.setTransactionFilters}
+              onSearchChange={transactionsController.handleTransactionSearchChange}
               onExcludeFromBalanceChange={transactionsController.setExcludeFromBalance}
               onToggleAutoAdjustmentsOnly={transactionsController.setShowAutoAdjustmentsOnly}
               onFiltersSubmit={transactionsController.handleTransactionFiltersSubmit}
               onClearFilters={() => {
                 void transactionsController.clearTransactionFilters()
               }}
+              onPageChange={transactionsController.changeTransactionPage}
               onReload={() => {
                 void transactionsController.loadTransactions()
               }}
@@ -357,6 +363,34 @@ export function App() {
                 if (window.confirm('¿Eliminar este pago y restaurar los saldos y estados de cuenta?')) {
                   void creditCardsController.handleTransferDelete(transferId)
                 }
+              }}
+            />
+          ) : null}
+
+          {activeSection === 'debitCards' ? (
+            <DebitCardsSection
+              hasConfig={hasConfig}
+              debitCardInstruments={debitCardsController.debitCardInstruments}
+              selectedDebitCardId={debitCardsController.selectedDebitCardId}
+              selectedDebitCard={debitCardsController.selectedDebitCard}
+              debitCardMovements={debitCardsController.debitCardMovements}
+              movementForm={debitCardsController.debitCardMovementForm}
+              movementCategories={debitCardsController.debitCardMovementCategories}
+              movementSubcategories={debitCardsController.debitCardMovementSubcategories}
+              isDebitCardMovementsLoading={debitCardsController.isDebitCardMovementsLoading}
+              message={debitCardsController.debitCardMessage}
+              error={debitCardsController.debitCardError}
+              onSelectDebitCard={debitCardsController.selectDebitCard}
+              onMovementFormChange={debitCardsController.setDebitCardMovementForm}
+              onMovementSubmit={debitCardsController.handleDebitCardMovementSubmit}
+              onResetMovement={debitCardsController.resetDebitCardMovementForm}
+              onReconcile={debitCardsController.reconcileDebitCard}
+              onReload={() => {
+                void Promise.all([
+                  instrumentsController.loadInstruments(),
+                  categoriesController.loadCategories(),
+                  debitCardsController.loadDebitCardMovements(),
+                ])
               }}
             />
           ) : null}
@@ -513,6 +547,7 @@ export function App() {
                   void loansController.handleUndoInstallment(installmentNum)
                 }
               }}
+              onReconcileLoan={loansController.handleLoanReconcile}
             />
           ) : null}
 

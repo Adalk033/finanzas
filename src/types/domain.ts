@@ -129,6 +129,15 @@ export interface Transaction {
   updatedAt: string
 }
 
+export interface TransactionPage {
+  transactions: Transaction[]
+  activeMsiTransactions: Transaction[]
+  page: number
+  pageSize: number
+  total: number
+  totalPages: number
+}
+
 export interface TransactionInput {
   instrumentId: number
   categoryId: number | null
@@ -151,6 +160,7 @@ export interface TransactionFilters {
   instrumentId?: number
   type?: TransactionType
   search?: string
+  autoAdjustmentsOnly?: boolean
 }
 
 export interface FamilyExpense {
@@ -337,6 +347,12 @@ export interface LoanPaymentRegisterInput {
   notes: string
 }
 
+export interface LoanReconciliationInput {
+  actualBalance: number
+  reconciliationDate: string
+  notes: string
+}
+
 export interface Subscription {
   id: number
   name: string
@@ -489,9 +505,11 @@ export interface DashboardExpenseByCategory {
 }
 
 export type DashboardExpensePeriod = 'current_month' | 'previous_month' | 'last_3_months' | 'last_year'
+export type DashboardBalanceEvolutionPeriod = 'one_month' | 'three_months' | 'six_months'
 
 export interface DashboardPreferences {
   expensePeriod: DashboardExpensePeriod
+  balanceEvolutionPeriod: DashboardBalanceEvolutionPeriod
 }
 
 export interface DashboardCashFlowPoint {
@@ -508,7 +526,8 @@ export interface DashboardBalanceSeries {
 }
 
 export interface DashboardBalancePoint {
-  month: string
+  date: string
+  label: string
   [key: string]: string | number
 }
 

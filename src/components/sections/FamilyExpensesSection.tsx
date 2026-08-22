@@ -1,5 +1,5 @@
 import { useState, type SyntheticEvent } from 'react'
-import { formatCurrency } from '../../app/appHelpers'
+import { formatCurrency, formatIsoDate } from '../../app/appHelpers'
 import type {
   Category,
   FamilyExpense,
@@ -258,7 +258,7 @@ export function FamilyExpensesSection({
             {!isLoading && expenses.length === 0 ? <tr><td colSpan={6}>No hay gastos familiares en este mes.</td></tr> : null}
             {!isLoading ? expenses.map((expense) => (
               <tr key={expense.id}>
-                <td>{expense.expenseDate}</td>
+                <td>{formatIsoDate(expense.expenseDate)}</td>
                 <td>{expense.description}</td>
                 <td>{expense.categoryName ?? 'Sin categoria'}{expense.subcategoryName ? ` / ${expense.subcategoryName}` : ''}</td>
                 <td>{formatCurrency(expense.amount)}</td>

@@ -1,4 +1,4 @@
-import { useMemo, useState, type SyntheticEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type SyntheticEvent } from 'react'
 import { apiClient } from '../api/client'
 import {
   EMPTY_TRANSACTION_FILTERS,
@@ -21,16 +21,8 @@ type UseTransactionsControllerParams = {
   loadInstruments: () => Promise<void>
 }
 
-const AUTO_ADJUSTMENT_NOTE_PREFIX = 'AUTO_ADJUSTMENT_TRANSFER:'
-const AUTO_ADJUSTMENT_DESCRIPTION = 'Otros (por ajuste)'
 const NO_BALANCE_IMPACT_NOTE_PREFIX = 'NO_BALANCE_IMPACT:'
-
-function isAutoAdjustmentTransaction(transaction: Transaction): boolean {
-  const notes = transaction.notes ?? ''
-  const description = transaction.description ?? ''
-
-  return notes.startsWith(AUTO_ADJUSTMENT_NOTE_PREFIX) || description === AUTO_ADJUSTMENT_DESCRIPTION
-}
+const TRANSACTION_SEARCH_DEBOUNCE_MS = 250
 
 export function useTransactionsController({
   instruments,
@@ -44,7 +36,13 @@ export function useTransactionsController({
   const [transactionForm, setTransactionForm] = useState<TransactionInput>(EMPTY_TRANSACTION_FORM)
   const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null)
   const [transactionFilters, setTransactionFilters] = useState<TransactionFilters>(EMPTY_TRANSACTION_FILTERS)
-  const [showAutoAdjustmentsOnly, setShowAutoAdjustmentsOnly] = useState(false)
+  const [activeMsiTransactions, setActiveMsiTransactions] = useState<Transaction[]>([])
+  const [transactionPagination, setTransactionPagination] = useState({
+    page: 1,
+    pageSize: 10,
+    total: 0,
+    totalPages: 1,
+  })
   const [excludeFromBalance, setExcludeFromBalance] = useState(false)
   const [cardPaymentForm, setCardPaymentForm] = useState<TransferInput>({
     ...EMPTY_TRANSFER_FORM,
@@ -52,6 +50,23 @@ export function useTransactionsController({
   })
   const [cardPaymentMessage, setCardPaymentMessage] = useState('')
   const [cardPaymentError, setCardPaymentError] = useState('')
+  const transactionSearchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const transactionRequestIdRef = useRef(0)
+
+  const clearTransactionSearchTimeout = (): void => {
+    if (transactionSearchTimeoutRef.current !== null) {
+      clearTimeout(transactionSearchTimeoutRef.current)
+      transactionSearchTimeoutRef.current = null
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      if (transactionSearchTimeoutRef.current !== null) {
+        clearTimeout(transactionSearchTimeoutRef.current)
+      }
+    }
+  }, [])
 
   const stripNoBalancePrefix = (notes: string): string => {
     if (!notes.startsWith(NO_BALANCE_IMPACT_NOTE_PREFIX)) {
@@ -121,27 +136,20 @@ export function useTransactionsController({
     return categories.find((category) => category.id === selectedTransactionCategoryId)?.subcategories ?? []
   }, [categories, selectedTransactionCategoryId])
 
-  const activeMsiTransactions = useMemo(() => {
-    return transactions.filter((transaction) => transaction.isMsi && (transaction.msiRemaining ?? 0) > 0)
-  }, [transactions])
-
-  const autoAdjustmentCount = useMemo(() => {
-    return transactions.filter(isAutoAdjustmentTransaction).length
-  }, [transactions])
-
-  const visibleTransactions = useMemo(() => {
-    if (!showAutoAdjustmentsOnly) {
-      return transactions
-    }
-
-    return transactions.filter(isAutoAdjustmentTransaction)
-  }, [showAutoAdjustmentsOnly, transactions])
-
-  const loadTransactions = async (filters: TransactionFilters = transactionFilters): Promise<void> => {
+  const loadTransactions = async (
+    filters: TransactionFilters = transactionFilters,
+    page = transactionPagination.page,
+  ): Promise<void> => {
+    const requestId = transactionRequestIdRef.current + 1
+    transactionRequestIdRef.current = requestId
     setIsTransactionsLoading(true)
     setTransactionError('')
 
-    const result = await apiClient.getTransactions(filters)
+    const result = await apiClient.getTransactionsPage(filters, page)
+
+    if (requestId !== transactionRequestIdRef.current) {
+      return
+    }
 
     if (!result.success) {
       setTransactionError(result.error ?? 'No se pudieron cargar las transacciones.')
@@ -149,7 +157,15 @@ export function useTransactionsController({
       return
     }
 
-    setTransactions(result.data ?? [])
+    const transactionPage = result.data
+    setTransactions(transactionPage?.transactions ?? [])
+    setActiveMsiTransactions(transactionPage?.activeMsiTransactions ?? [])
+    setTransactionPagination({
+      page: transactionPage?.page ?? page,
+      pageSize: transactionPage?.pageSize ?? 10,
+      total: transactionPage?.total ?? 0,
+      totalPages: transactionPage?.totalPages ?? 1,
+    })
     setIsTransactionsLoading(false)
   }
 
@@ -262,7 +278,7 @@ export function useTransactionsController({
     }
   }
 
-  const handleTransactionSubmit = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
+  const handleTransactionSubmit = async (event: SyntheticEvent<HTMLFormElement>): Promise<boolean> => {
     event.preventDefault()
     setTransactionError('')
     setTransactionMessage('')
@@ -283,17 +299,17 @@ export function useTransactionsController({
 
     if (payload.instrumentId < 1) {
       setTransactionError('Selecciona un instrumento valido.')
-      return
+      return false
     }
 
     if (!payload.transactionDate) {
       setTransactionError('Selecciona una fecha valida.')
-      return
+      return false
     }
 
     if (payload.amount <= 0) {
       setTransactionError('Ingresa un monto mayor a cero.')
-      return
+      return false
     }
 
     if (editingTransactionId !== null) {
@@ -301,27 +317,28 @@ export function useTransactionsController({
 
       if (!updated.success) {
         setTransactionError(updated.error ?? 'No se pudo actualizar la transaccion.')
-        return
+        return false
       }
 
       setTransactionMessage('Transaccion actualizada correctamente.')
       resetTransactionForm()
       await loadInstruments()
       await loadTransactions()
-      return
+      return true
     }
 
     const created = await apiClient.createTransaction(payload)
 
     if (!created.success) {
       setTransactionError(created.error ?? 'No se pudo crear la transaccion.')
-      return
+      return false
     }
 
     setTransactionMessage('Transaccion creada correctamente.')
     resetTransactionForm()
     await loadInstruments()
-    await loadTransactions()
+    await loadTransactions(transactionFilters, 1)
+    return true
   }
 
   const handleTransactionDelete = async (id: number): Promise<void> => {
@@ -342,17 +359,43 @@ export function useTransactionsController({
 
   const handleTransactionFiltersSubmit = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault()
-    await loadTransactions(transactionFilters)
+    clearTransactionSearchTimeout()
+    await loadTransactions(transactionFilters, 1)
   }
 
   const clearTransactionFilters = async (): Promise<void> => {
+    clearTransactionSearchTimeout()
     setTransactionFilters(EMPTY_TRANSACTION_FILTERS)
-    setShowAutoAdjustmentsOnly(false)
-    await loadTransactions(EMPTY_TRANSACTION_FILTERS)
+    await loadTransactions(EMPTY_TRANSACTION_FILTERS, 1)
+  }
+
+  const handleTransactionSearchChange = (search: string): void => {
+    const nextFilters: TransactionFilters = { ...transactionFilters, search }
+    setTransactionFilters(nextFilters)
+    clearTransactionSearchTimeout()
+    transactionSearchTimeoutRef.current = setTimeout(() => {
+      transactionSearchTimeoutRef.current = null
+      void loadTransactions(nextFilters, 1)
+    }, TRANSACTION_SEARCH_DEBOUNCE_MS)
+  }
+
+  const setShowAutoAdjustmentsOnly = (nextValue: boolean): void => {
+    clearTransactionSearchTimeout()
+    const nextFilters: TransactionFilters = {
+      ...transactionFilters,
+      autoAdjustmentsOnly: nextValue || undefined,
+    }
+    setTransactionFilters(nextFilters)
+    void loadTransactions(nextFilters, 1)
+  }
+
+  const changeTransactionPage = (page: number): void => {
+    clearTransactionSearchTimeout()
+    void loadTransactions(transactionFilters, page)
   }
 
   return {
-    transactions: visibleTransactions,
+    transactions,
     isTransactionsLoading,
     transactionMessage,
     transactionError,
@@ -371,12 +414,13 @@ export function useTransactionsController({
     selectedTransactionInstrument,
     transactionSubcategoryOptions,
     activeMsiTransactions,
-    autoAdjustmentCount,
-    showAutoAdjustmentsOnly,
+    showAutoAdjustmentsOnly: transactionFilters.autoAdjustmentsOnly ?? false,
+    transactionPagination,
     excludeFromBalance,
     setTransactionForm,
     setExcludeFromBalance,
     setTransactionFilters,
+    handleTransactionSearchChange,
     setShowAutoAdjustmentsOnly,
     loadTransactions,
     setCardPaymentForm,
@@ -390,5 +434,6 @@ export function useTransactionsController({
     handleTransactionDelete,
     handleTransactionFiltersSubmit,
     clearTransactionFilters,
+    changeTransactionPage,
   }
 }

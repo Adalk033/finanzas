@@ -163,18 +163,51 @@ try {
   verifyFixedExpensePaymentsMigration()
   initializeLocalDb(databasePath)
 
-  const defaultDashboardPreferences = request<{ expensePeriod: string }>('/dashboard/preferences')
+  const defaultDashboardPreferences = request<{
+    expensePeriod: string
+    balanceEvolutionPeriod: string
+  }>('/dashboard/preferences')
   assert.equal(defaultDashboardPreferences.expensePeriod, 'current_month')
-  const savedDashboardPreferences = request<{ expensePeriod: string }>('/dashboard/preferences', 'PUT', {
+  assert.equal(defaultDashboardPreferences.balanceEvolutionPeriod, 'one_month')
+  const defaultBalanceEvolution = request<{ points: Array<{ date: string; label: string }> }>('/dashboard/charts/balance-evolution')
+  assert.ok(defaultBalanceEvolution.points.length >= 7)
+  for (let index = 1; index < defaultBalanceEvolution.points.length; index += 1) {
+    const previousDate = defaultBalanceEvolution.points[index - 1]?.date
+    const currentDate = defaultBalanceEvolution.points[index]?.date
+    assert.ok(previousDate && currentDate)
+    const elapsedDays = (new Date(`${currentDate}T00:00:00Z`).getTime() - new Date(`${previousDate}T00:00:00Z`).getTime()) / 86_400_000
+    assert.ok(elapsedDays > 0 && elapsedDays <= 5)
+  }
+  const savedDashboardPreferences = request<{
+    expensePeriod: string
+    balanceEvolutionPeriod: string
+  }>('/dashboard/preferences', 'PUT', {
     expensePeriod: 'last_3_months',
   })
   assert.equal(savedDashboardPreferences.expensePeriod, 'last_3_months')
-  const restoredDashboardPreferences = request<{ expensePeriod: string }>('/dashboard/preferences')
+  assert.equal(savedDashboardPreferences.balanceEvolutionPeriod, 'one_month')
+  const savedBalanceEvolutionPreferences = request<{
+    expensePeriod: string
+    balanceEvolutionPeriod: string
+  }>('/dashboard/preferences', 'PUT', {
+    balanceEvolutionPeriod: 'six_months',
+  })
+  assert.equal(savedBalanceEvolutionPreferences.expensePeriod, 'last_3_months')
+  assert.equal(savedBalanceEvolutionPreferences.balanceEvolutionPeriod, 'six_months')
+  const restoredDashboardPreferences = request<{
+    expensePeriod: string
+    balanceEvolutionPeriod: string
+  }>('/dashboard/preferences')
   assert.equal(restoredDashboardPreferences.expensePeriod, 'last_3_months')
+  assert.equal(restoredDashboardPreferences.balanceEvolutionPeriod, 'six_months')
   const invalidDashboardPeriodError = requestFailure('/dashboard/preferences', 'PUT', {
     expensePeriod: 'all_time',
   })
   assert.match(invalidDashboardPeriodError, /expensePeriod no contiene un valor permitido/)
+  const invalidDashboardBalanceEvolutionPeriodError = requestFailure('/dashboard/preferences', 'PUT', {
+    balanceEvolutionPeriod: 'all_time',
+  })
+  assert.match(invalidDashboardBalanceEvolutionPeriodError, /balanceEvolutionPeriod no contiene un valor permitido/)
 
   const bank = request<{ id: number }>('/banks', 'POST', {
     name: 'Banco local',
@@ -852,6 +885,59 @@ try {
   )
   assert.equal(adjustableUndone.loan.remainingAmount, 1000)
 
+  const balanceBeforeLoanReconciliation = request<Array<{ id: number; currentAmount: number }>>('/instruments')
+    .find((item) => item.id === debit.id)?.currentAmount
+  const reconciledLoan = request<{ remainingAmount: number; isActive: boolean }>(
+    `/loans/${adjustableLoan.id}/reconcile`,
+    'POST',
+    {
+      actualBalance: 720,
+      reconciliationDate: '2026-07-19',
+      notes: 'Saldo confirmado con el acreedor',
+    },
+  )
+  assert.equal(reconciledLoan.remainingAmount, 720)
+  assert.equal(reconciledLoan.isActive, true)
+  const balanceAfterLoanReconciliation = request<Array<{ id: number; currentAmount: number }>>('/instruments')
+    .find((item) => item.id === debit.id)?.currentAmount
+  assert.equal(balanceAfterLoanReconciliation, balanceBeforeLoanReconciliation)
+  const reconciledPayments = request<Array<{ principal: number | null; isPaid: boolean }>>(
+    `/loans/${adjustableLoan.id}/payments`,
+  )
+  assert.equal(reconciledPayments.filter((payment) => !payment.isPaid).reduce(
+    (total, payment) => total + (payment.principal ?? 0),
+    0,
+  ), 720)
+  const loanReconciliationRecord = getDatabase().prepare(`
+    SELECT previous_remaining_cents, actual_remaining_cents, reconciliation_date, notes
+    FROM loan_reconciliations WHERE loan_id = ?
+  `).get(adjustableLoan.id) as {
+    previous_remaining_cents: number
+    actual_remaining_cents: number
+    reconciliation_date: string
+    notes: string | null
+  }
+  assert.deepEqual(loanReconciliationRecord, {
+    previous_remaining_cents: 100000,
+    actual_remaining_cents: 72000,
+    reconciliation_date: '2026-07-19',
+    notes: 'Saldo confirmado con el acreedor',
+  })
+  const duplicateLoanReconciliationError = requestFailure(
+    `/loans/${adjustableLoan.id}/reconcile`,
+    'POST',
+    { actualBalance: 720, reconciliationDate: '2026-07-19' },
+  )
+  assert.match(duplicateLoanReconciliationError, /ya coincide/)
+  const settledLoan = request<{ remainingAmount: number; isActive: boolean }>(
+    `/loans/${adjustableLoan.id}/reconcile`,
+    'POST',
+    { actualBalance: 0, reconciliationDate: '2026-07-19' },
+  )
+  assert.equal(settledLoan.remainingAmount, 0)
+  assert.equal(settledLoan.isActive, false)
+  assert.equal(request<Array<{ isPaid: boolean }>>(`/loans/${adjustableLoan.id}/payments`).length, 0)
+
   const payrollLoan = request<{ id: number }>('/loans', 'POST', {
     name: 'Prestamo descontado de nomina',
     currencyId: 1,
@@ -916,6 +1002,50 @@ try {
   assert.equal(balanceAfterPayrollPayment, balanceBeforePayrollPayment)
   assert.ok(payrollPayment.loan.remainingAmount < 400)
   assert.equal(payrollPayment.payment.affectsInstrumentBalance, false)
+
+  const paginatedTransactionIds: number[] = []
+  for (let index = 1; index <= 11; index += 1) {
+    const transaction = request<{ id: number }>('/transactions', 'POST', {
+      instrumentId: debit.id,
+      categoryId: category.id,
+      currencyId: 1,
+      type: 'expense',
+      amount: 1,
+      description: `Movimiento paginado ${index}`,
+      transactionDate: `2026-10-${String(index).padStart(2, '0')}`,
+      isMsi: false,
+      affectsBalance: true,
+    })
+    paginatedTransactionIds.push(transaction.id)
+  }
+  const paginatedFirstPage = request<{
+    transactions: Array<{ id: number; description: string | null }>
+    page: number
+    pageSize: number
+    total: number
+    totalPages: number
+  }>('/transactions?search=Movimiento%20paginado&page=1')
+  assert.equal(paginatedFirstPage.transactions.length, 10)
+  assert.equal(paginatedFirstPage.page, 1)
+  assert.equal(paginatedFirstPage.pageSize, 10)
+  assert.equal(paginatedFirstPage.total, 11)
+  assert.equal(paginatedFirstPage.totalPages, 2)
+  const paginatedSecondPage = request<{
+    transactions: Array<{ id: number; description: string | null }>
+    page: number
+  }>('/transactions?search=Movimiento%20paginado&page=2')
+  assert.equal(paginatedSecondPage.transactions.length, 1)
+  assert.equal(paginatedSecondPage.page, 2)
+  assert.equal(paginatedSecondPage.transactions[0]?.description, 'Movimiento paginado 1')
+  const categorySearchPage = request<{ total: number }>('/transactions?search=Alimentos&page=1')
+  assert.ok(categorySearchPage.total >= 11)
+  const instrumentSearchPage = request<{ total: number }>('/transactions?search=Cuenta%20principal&page=1')
+  assert.ok(instrumentSearchPage.total >= 11)
+  const invalidPageError = requestFailure('/transactions?page=0', 'GET', {})
+  assert.match(invalidPageError, /page debe ser un entero positivo/)
+  for (const transactionId of paginatedTransactionIds) {
+    request(`/transactions/${transactionId}`, 'DELETE')
+  }
 
   const exportedCsv = exportTransactionsCsv()
   const importedCsv = importTransactionsCsv(exportedCsv)

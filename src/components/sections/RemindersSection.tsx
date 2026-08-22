@@ -1,5 +1,5 @@
 import { type SyntheticEvent } from 'react'
-import { getReminderTypeLabel } from '../../app/appHelpers'
+import { formatIsoDate, getReminderTypeLabel } from '../../app/appHelpers'
 import type { Reminder, ReminderInput, ReminderType } from '../../types/domain'
 import { NumberInput } from '../NumberInput'
 
@@ -165,7 +165,7 @@ export function RemindersSection({
             {!isRemindersLoading ? reminders.map((reminder) => (
               <article className="reminder-item" key={reminder.id}>
                 <div className="reminder-item__content">
-                  <div className="reminder-item__meta"><time dateTime={reminder.reminderDate}>{reminder.reminderDate}</time><span>{getReminderTypeLabel(reminder.type)}</span></div>
+                  <div className="reminder-item__meta"><time dateTime={reminder.reminderDate}>{formatIsoDate(reminder.reminderDate)}</time><span>{getReminderTypeLabel(reminder.type)}</span></div>
                   <h4>{reminder.title}</h4>
                   {reminder.description ? <p>{reminder.description}</p> : null}
                 </div>

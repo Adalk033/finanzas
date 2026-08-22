@@ -9,6 +9,12 @@ type InstrumentGroup = {
   instruments: FinancialInstrument[]
 }
 
+const instrumentTypeLabels: Record<InstrumentType, string> = {
+  credit_card: 'Tarjeta de crédito',
+  debit_card: 'Tarjeta de débito',
+  account: 'Cuenta bancaria',
+}
+
 type InstrumentsSectionProps = {
   hasConfig: boolean
   editingInstrumentId: number | null
@@ -343,7 +349,7 @@ export function InstrumentsSection({
                     {group.instruments.map((instrument) => (
                       <tr key={instrument.id}>
                         <td>{instrument.name}{instrument.isActive ? '' : ' · Archivado'}</td>
-                        <td>{instrument.type}</td>
+                        <td>{instrumentTypeLabels[instrument.type]}</td>
                         <td>
                           {instrument.type === 'credit_card'
                             ? `Corte ${instrument.cutOffDay ?? '-'} / Pago ${instrument.paymentDueDay ?? '-'} / Limite ${formatCurrency(instrument.creditLimit)} / Saldo ${formatCurrency(instrument.currentBalance)}`

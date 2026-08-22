@@ -169,6 +169,16 @@ const SCHEMA = `
     UNIQUE(loan_id, installment_num)
   );
 
+  CREATE TABLE IF NOT EXISTS loan_reconciliations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    loan_id INTEGER NOT NULL REFERENCES loans(id) ON DELETE CASCADE,
+    previous_remaining_cents INTEGER NOT NULL CHECK (previous_remaining_cents >= 0),
+    actual_remaining_cents INTEGER NOT NULL CHECK (actual_remaining_cents >= 0),
+    reconciliation_date TEXT NOT NULL,
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
   CREATE TABLE IF NOT EXISTS transfers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     source_instrument_id INTEGER NOT NULL REFERENCES financial_instruments(id),
@@ -319,10 +329,13 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_instruments_bank ON financial_instruments(bank_id);
   CREATE INDEX IF NOT EXISTS idx_transactions_instrument_date ON transactions(instrument_id, transaction_date);
   CREATE INDEX IF NOT EXISTS idx_transactions_category_date ON transactions(category_id, transaction_date);
+  CREATE INDEX IF NOT EXISTS idx_transactions_date_id ON transactions(transaction_date DESC, id DESC);
   CREATE INDEX IF NOT EXISTS idx_family_expenses_date ON family_expenses(expense_date);
   CREATE INDEX IF NOT EXISTS idx_family_expenses_category_date ON family_expenses(category_id, expense_date);
   CREATE INDEX IF NOT EXISTS idx_transfers_instruments_date ON transfers(source_instrument_id, destination_instrument_id, transfer_date);
   CREATE INDEX IF NOT EXISTS idx_loan_payments_loan ON loan_payments(loan_id, installment_num);
+  CREATE INDEX IF NOT EXISTS idx_loan_reconciliations_loan_date
+    ON loan_reconciliations(loan_id, reconciliation_date DESC, id DESC);
   CREATE INDEX IF NOT EXISTS idx_reminders_pending ON reminders(is_dismissed, is_read, reminder_date);
   CREATE INDEX IF NOT EXISTS idx_recurring_incomes_due ON recurring_incomes(is_active, next_payment);
 `

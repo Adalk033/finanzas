@@ -41,6 +41,7 @@ export type AppSection =
   | 'categories'
   | 'transactions'
   | 'creditCards'
+  | 'debitCards'
   | 'transfers'
   | 'subscriptions'
   | 'fixedExpenses'
@@ -399,6 +400,14 @@ export function formatCurrency(amount: number | null): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(amount)
+}
+
+export function formatIsoDate(value: string | null | undefined): string {
+  if (!value) {
+    return '-'
+  }
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : value
 }
 
 export function getCategoryTypeLabel(type: CategoryType): string {

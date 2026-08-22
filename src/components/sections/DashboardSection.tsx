@@ -15,9 +15,10 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { DASHBOARD_BALANCE_CHART_COLORS, DASHBOARD_CHART_COLORS, formatCurrency } from '../../app/appHelpers'
+import { DASHBOARD_BALANCE_CHART_COLORS, DASHBOARD_CHART_COLORS, formatCurrency, formatIsoDate } from '../../app/appHelpers'
 import type {
   DashboardBalanceEvolution,
+  DashboardBalanceEvolutionPeriod,
   DashboardCashFlowPoint,
   DashboardExpenseByCategory,
   DashboardExpensePeriod,
@@ -34,12 +35,14 @@ type DashboardSectionProps = {
   dashboardSummary: DashboardSummary
   dashboardExpensesByCategory: DashboardExpenseByCategory[]
   dashboardExpensePeriod: DashboardExpensePeriod
+  dashboardBalanceEvolutionPeriod: DashboardBalanceEvolutionPeriod
   dashboardCashFlow: DashboardCashFlowPoint[]
   dashboardBalanceEvolution: DashboardBalanceEvolution
   dashboardFutureExpenses: DashboardFutureExpensePoint[]
   dashboardUpcomingCommitments: DashboardUpcomingCommitments
   onReload: () => void
   onDashboardExpensePeriodChange: (period: DashboardExpensePeriod) => Promise<void>
+  onDashboardBalanceEvolutionPeriodChange: (period: DashboardBalanceEvolutionPeriod) => Promise<void>
 }
 
 const DASHBOARD_EXPENSE_PERIOD_OPTIONS: Array<{ value: DashboardExpensePeriod; label: string }> = [
@@ -49,19 +52,17 @@ const DASHBOARD_EXPENSE_PERIOD_OPTIONS: Array<{ value: DashboardExpensePeriod; l
   { value: 'last_year', label: 'Ultimo año' },
 ]
 
+const DASHBOARD_BALANCE_EVOLUTION_PERIOD_OPTIONS: Array<{ value: DashboardBalanceEvolutionPeriod; label: string }> = [
+  { value: 'one_month', label: '1 mes' },
+  { value: 'three_months', label: '3 meses' },
+  { value: 'six_months', label: '6 meses' },
+]
+
 const COMMITMENT_TYPE_LABELS: Record<DashboardUpcomingCommitment['type'], string> = {
   subscription: 'Suscripcion',
   fixed_expense: 'Gasto fijo',
   loan_payment: 'Prestamo',
   card_payment: 'Tarjeta',
-}
-
-function formatCommitmentDate(date: string): string {
-  return new Intl.DateTimeFormat('es-MX', {
-    day: 'numeric',
-    month: 'short',
-    timeZone: 'UTC',
-  }).format(new Date(`${date}T00:00:00Z`))
 }
 
 export function DashboardSection({
@@ -71,14 +72,20 @@ export function DashboardSection({
   dashboardSummary,
   dashboardExpensesByCategory,
   dashboardExpensePeriod,
+  dashboardBalanceEvolutionPeriod,
   dashboardCashFlow,
   dashboardBalanceEvolution,
   dashboardFutureExpenses,
   dashboardUpcomingCommitments,
   onReload,
   onDashboardExpensePeriodChange,
+  onDashboardBalanceEvolutionPeriodChange,
 }: DashboardSectionProps) {
   const nextMonthProjection = dashboardFutureExpenses[0]
+  const balanceEvolutionPoints = dashboardBalanceEvolution.points.map((point) => ({
+    ...point,
+    label: formatIsoDate(point.date),
+  }))
 
   return (
     <section className="card dashboard-page">
@@ -161,7 +168,7 @@ export function DashboardSection({
           <div className="dashboard-commitments__list">
             {dashboardUpcomingCommitments.items.slice(0, 6).map((commitment) => (
               <div key={commitment.id} className="dashboard-commitment">
-                <time className="dashboard-commitment__date" dateTime={commitment.date}>{formatCommitmentDate(commitment.date)}</time>
+                <time className="dashboard-commitment__date" dateTime={commitment.date}>{formatIsoDate(commitment.date)}</time>
                 <div className="dashboard-commitment__details">
                   <p className="dashboard-commitment__name">{commitment.name}</p>
                   <p className="dashboard-commitment__meta">
@@ -244,17 +251,33 @@ export function DashboardSection({
         </article>
 
         <article className="mini-card">
-          <header className="mini-card__header">
+          <header className="mini-card__header dashboard-balance-evolution-header">
             <h3 className="mini-card__title">Evolucion de saldo por cuenta</h3>
+            <nav className="dashboard-balance-evolution-periods" aria-label="Periodo de evolucion de saldo por cuenta">
+              {DASHBOARD_BALANCE_EVOLUTION_PERIOD_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  className={dashboardBalanceEvolutionPeriod === option.value ? 'dashboard-balance-evolution-periods__item--active' : ''}
+                  type="button"
+                  disabled={isDashboardLoading}
+                  aria-pressed={dashboardBalanceEvolutionPeriod === option.value}
+                  onClick={() => {
+                    void onDashboardBalanceEvolutionPeriodChange(option.value)
+                  }}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </nav>
           </header>
           {dashboardBalanceEvolution.series.length === 0 ? (
             <p className="card__subtitle">No hay cuentas de debito/cuenta para graficar.</p>
           ) : (
             <div className="chart-box">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={dashboardBalanceEvolution.points}>
+                <LineChart data={balanceEvolutionPoints}>
                   <CartesianGrid strokeDasharray="2 4" stroke="var(--color-chart-grid)" strokeOpacity={0.72} />
-                  <XAxis dataKey="month" stroke="var(--color-chart-axis)" tick={{ fill: 'var(--color-chart-label)', fontSize: 11 }} tickLine={false} />
+                  <XAxis dataKey="label" minTickGap={24} stroke="var(--color-chart-axis)" tick={{ fill: 'var(--color-chart-label)', fontSize: 11 }} tickLine={false} />
                   <YAxis stroke="var(--color-chart-axis)" tick={{ fill: 'var(--color-chart-label)', fontSize: 11 }} tickLine={false} />
                   <Tooltip />
                   <Legend />

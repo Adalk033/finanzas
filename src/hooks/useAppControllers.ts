@@ -5,6 +5,7 @@ import { useInstrumentsController } from './useInstrumentsController'
 import { useBanksController } from './useBanksController'
 import { useCategoriesController } from './useCategoriesController'
 import { useCreditCardsController } from './useCreditCardsController'
+import { useDebitCardsController } from './useDebitCardsController'
 import { useLoansController } from './useLoansController'
 import { useSubscriptionsController } from './useSubscriptionsController'
 import { useFixedExpensesController } from './useFixedExpensesController'
@@ -29,6 +30,12 @@ export function useAppControllers() {
   const familyExpensesController = useFamilyExpensesController(categoriesController.categories)
 
   const creditCardsController = useCreditCardsController({
+    instruments: instrumentsController.instruments,
+    categories: categoriesController.categories,
+    loadInstruments: instrumentsController.loadInstruments,
+  })
+
+  const debitCardsController = useDebitCardsController({
     instruments: instrumentsController.instruments,
     categories: categoriesController.categories,
     loadInstruments: instrumentsController.loadInstruments,
@@ -75,6 +82,7 @@ export function useAppControllers() {
     loadTransactions: transactionsController.loadTransactions,
     loadStatements: creditCardsController.loadStatements,
     loadTransfers: creditCardsController.loadTransfers,
+    loadDebitCardMovements: debitCardsController.loadDebitCardMovements,
     loadSubscriptions: subscriptionsController.loadSubscriptions,
     loadRecurringIncomes: recurringIncomesController.loadRecurringIncomes,
     loadFixedExpenses: fixedExpensesController.loadFixedExpenses,
@@ -98,6 +106,7 @@ export function useAppControllers() {
     banksController,
     categoriesController,
     creditCardsController,
+    debitCardsController,
     loansController,
     subscriptionsController,
     fixedExpensesController,

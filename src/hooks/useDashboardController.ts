@@ -3,10 +3,12 @@ import { apiClient } from '../api/client'
 import { EMPTY_DASHBOARD_SUMMARY, EMPTY_DASHBOARD_UPCOMING_COMMITMENTS } from '../app/appHelpers'
 import type {
   DashboardBalanceEvolution,
+  DashboardBalanceEvolutionPeriod,
   DashboardCashFlowPoint,
   DashboardExpenseByCategory,
   DashboardExpensePeriod,
   DashboardFutureExpensePoint,
+  DashboardPreferences,
   DashboardUpcomingCommitments,
   DashboardSummary,
 } from '../types/domain'
@@ -15,6 +17,7 @@ export function useDashboardController() {
   const [dashboardSummary, setDashboardSummary] = useState<DashboardSummary>(EMPTY_DASHBOARD_SUMMARY)
   const [dashboardExpensesByCategory, setDashboardExpensesByCategory] = useState<DashboardExpenseByCategory[]>([])
   const [dashboardExpensePeriod, setDashboardExpensePeriod] = useState<DashboardExpensePeriod>('current_month')
+  const [dashboardBalanceEvolutionPeriod, setDashboardBalanceEvolutionPeriod] = useState<DashboardBalanceEvolutionPeriod>('one_month')
   const [dashboardCashFlow, setDashboardCashFlow] = useState<DashboardCashFlowPoint[]>([])
   const [dashboardBalanceEvolution, setDashboardBalanceEvolution] = useState<DashboardBalanceEvolution>({
     series: [],
@@ -27,21 +30,25 @@ export function useDashboardController() {
   const [isDashboardLoading, setIsDashboardLoading] = useState(false)
   const [dashboardError, setDashboardError] = useState('')
 
-  const loadDashboard = async (expensePeriod?: DashboardExpensePeriod): Promise<void> => {
+  const loadDashboard = async (preferences?: DashboardPreferences): Promise<void> => {
     setIsDashboardLoading(true)
     setDashboardError('')
 
-    let selectedExpensePeriod = expensePeriod
-    if (!selectedExpensePeriod) {
+    let selectedPreferences = preferences
+    if (!selectedPreferences) {
       const preferencesResult = await apiClient.getDashboardPreferences()
       if (!preferencesResult.success) {
         setDashboardError(preferencesResult.error ?? 'No se pudieron cargar las preferencias del dashboard.')
         setIsDashboardLoading(false)
         return
       }
-      selectedExpensePeriod = preferencesResult.data?.expensePeriod ?? 'current_month'
-      setDashboardExpensePeriod(selectedExpensePeriod)
+      selectedPreferences = preferencesResult.data ?? {
+        expensePeriod: 'current_month',
+        balanceEvolutionPeriod: 'one_month',
+      }
     }
+    setDashboardExpensePeriod(selectedPreferences.expensePeriod)
+    setDashboardBalanceEvolutionPeriod(selectedPreferences.balanceEvolutionPeriod)
 
     const [
       summaryResult,
@@ -52,7 +59,7 @@ export function useDashboardController() {
       upcomingCommitmentsResult,
     ] = await Promise.all([
       apiClient.getDashboardSummary(),
-      apiClient.getDashboardExpensesByCategory(selectedExpensePeriod),
+      apiClient.getDashboardExpensesByCategory(selectedPreferences.expensePeriod),
       apiClient.getDashboardCashFlow(),
       apiClient.getDashboardBalanceEvolution(),
       apiClient.getDashboardFutureExpenses(),
@@ -108,6 +115,7 @@ export function useDashboardController() {
     dashboardSummary,
     dashboardExpensesByCategory,
     dashboardExpensePeriod,
+    dashboardBalanceEvolutionPeriod,
     dashboardCashFlow,
     dashboardBalanceEvolution,
     dashboardFutureExpenses,
@@ -116,18 +124,26 @@ export function useDashboardController() {
     dashboardError,
     loadDashboard,
     setDashboardExpensePeriod: async (period: DashboardExpensePeriod): Promise<void> => {
-      const previousPeriod = dashboardExpensePeriod
-      setDashboardExpensePeriod(period)
       setIsDashboardLoading(true)
       setDashboardError('')
-      const preferencesResult = await apiClient.updateDashboardPreferences(period)
+      const preferencesResult = await apiClient.updateDashboardPreferences({ expensePeriod: period })
       if (!preferencesResult.success) {
-        setDashboardExpensePeriod(previousPeriod)
         setDashboardError(preferencesResult.error ?? 'No se pudo guardar el periodo de gastos.')
         setIsDashboardLoading(false)
         return
       }
-      await loadDashboard(period)
+      await loadDashboard(preferencesResult.data)
+    },
+    setDashboardBalanceEvolutionPeriod: async (period: DashboardBalanceEvolutionPeriod): Promise<void> => {
+      setIsDashboardLoading(true)
+      setDashboardError('')
+      const preferencesResult = await apiClient.updateDashboardPreferences({ balanceEvolutionPeriod: period })
+      if (!preferencesResult.success) {
+        setDashboardError(preferencesResult.error ?? 'No se pudo guardar el periodo de evolucion de saldo.')
+        setIsDashboardLoading(false)
+        return
+      }
+      await loadDashboard(preferencesResult.data)
     },
   }
 }

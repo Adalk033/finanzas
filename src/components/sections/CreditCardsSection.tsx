@@ -1,5 +1,5 @@
 import { useState, type SyntheticEvent } from 'react'
-import { formatCurrency, MSI_OPTIONS } from '../../app/appHelpers'
+import { formatCurrency, formatIsoDate, MSI_OPTIONS } from '../../app/appHelpers'
 import type {
   Category,
   CreditCardStatement,
@@ -59,16 +59,6 @@ type CreditCardsSectionProps = {
   onDeletePayment: (transferId: number) => void
 }
 
-function formatDate(value: string | null): string {
-  if (!value) return '-'
-  const date = new Date(`${value}T00:00:00`)
-  return new Intl.DateTimeFormat('es-MX', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  }).format(date)
-}
-
 function getStatementStatus(statement: CreditCardStatement | null): {
   label: string
   modifier: string
@@ -113,7 +103,7 @@ function MovementTable({
           {!isLoading && movements.length === 0 ? <tr><td colSpan={5}>{emptyMessage}</td></tr> : null}
           {!isLoading ? movements.map((movement) => (
             <tr key={movement.id}>
-              <td>{formatDate(movement.transactionDate)}</td>
+              <td>{formatIsoDate(movement.transactionDate)}</td>
               <td>{movement.description ?? 'Sin descripción'}</td>
               <td>
                 {movement.categoryName ?? 'Sin categoría'}
@@ -257,7 +247,7 @@ export function CreditCardsSection({
                   </div>
                   <div>
                     <span>Fecha límite</span>
-                    <strong>{formatDate(currentStatement?.paymentDueDate ?? null)}</strong>
+                    <strong>{formatIsoDate(currentStatement?.paymentDueDate)}</strong>
                   </div>
                 </div>
               </article>
@@ -515,8 +505,8 @@ export function CreditCardsSection({
                     <article className="mini-card">
                       <h3 className="mini-card__title">Próximo pago</h3>
                       <dl className="credit-card-detail-list">
-                        <div><dt>Corte</dt><dd>{formatDate(currentStatement?.cutOffDate ?? null)}</dd></div>
-                        <div><dt>Fecha límite</dt><dd>{formatDate(currentStatement?.paymentDueDate ?? null)}</dd></div>
+                        <div><dt>Corte</dt><dd>{formatIsoDate(currentStatement?.cutOffDate)}</dd></div>
+                        <div><dt>Fecha límite</dt><dd>{formatIsoDate(currentStatement?.paymentDueDate)}</dd></div>
                         <div><dt>Pago mínimo</dt><dd>{formatCurrency(currentStatement?.minimumPayment ?? null)}</dd></div>
                         <div><dt>Sin intereses</dt><dd>{formatCurrency(currentStatement?.noInterestPayment ?? null)}</dd></div>
                         <div><dt>Pendiente</dt><dd>{formatCurrency(currentStatement?.outstandingAmount ?? 0)}</dd></div>
@@ -554,7 +544,7 @@ export function CreditCardsSection({
                             ? <tr><td colSpan={5}>No hay pagos registrados.</td></tr>
                             : selectedCardPayments.map((payment) => (
                               <tr key={payment.id}>
-                                <td>{formatDate(payment.transferDate)}</td>
+                                <td>{formatIsoDate(payment.transferDate)}</td>
                                 <td>{payment.sourceInstrumentName ?? '-'}</td>
                                 <td>{payment.description ?? 'Abono a tarjeta'}</td>
                                 <td className="table__amount table__amount--positive">{formatCurrency(payment.amount)}</td>
@@ -588,7 +578,7 @@ export function CreditCardsSection({
                             : activeMsiPurchases.map((purchase) => (
                               <tr key={purchase.id}>
                                 <td>{purchase.description ?? 'Compra MSI'}</td>
-                                <td>{formatDate(purchase.transactionDate)}</td>
+                                <td>{formatIsoDate(purchase.transactionDate)}</td>
                                 <td className="table__amount">{formatCurrency(purchase.amount)}</td>
                                 <td className="table__amount">{formatCurrency(purchase.msiMonthlyAmount)}</td>
                                 <td>{purchase.msiRemaining ?? purchase.msiMonths} de {purchase.msiMonths}</td>
@@ -623,8 +613,8 @@ export function CreditCardsSection({
                               const status = getStatementStatus(statement)
                               return (
                                 <tr key={statement.id}>
-                                  <td>{formatDate(statement.cutOffDate)}</td>
-                                  <td>{formatDate(statement.paymentDueDate)}</td>
+                                  <td>{formatIsoDate(statement.cutOffDate)}</td>
+                                  <td>{formatIsoDate(statement.paymentDueDate)}</td>
                                   <td className="table__amount">{formatCurrency(statement.totalAmount)}</td>
                                   <td className="table__amount">{formatCurrency(statement.paidAmount ?? 0)}</td>
                                   <td><span className={`status-pill status-pill--${status.modifier}`}>{status.label}</span></td>
@@ -700,7 +690,7 @@ export function CreditCardsSection({
 
                     {selectedStatementDetail ? (
                       <div className="statement-movements">
-                        <h4>Movimientos del corte {formatDate(selectedStatementDetail.cutOffDate)}</h4>
+                        <h4>Movimientos del corte {formatIsoDate(selectedStatementDetail.cutOffDate)}</h4>
                         <MovementTable
                           movements={statementMovements}
                           isLoading={isStatementMovementsLoading}
