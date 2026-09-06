@@ -237,8 +237,8 @@ export function DashboardSection({
                 <BarChart data={dashboardCashFlow}>
                   <CartesianGrid strokeDasharray="2 4" stroke="var(--color-chart-grid)" strokeOpacity={0.72} />
                   <XAxis dataKey="month" stroke="var(--color-chart-axis)" tick={{ fill: 'var(--color-chart-label)', fontSize: 11 }} tickLine={false} />
-                  <YAxis stroke="var(--color-chart-axis)" tick={{ fill: 'var(--color-chart-label)', fontSize: 11 }} tickLine={false} />
-                  <Tooltip />
+                  <YAxis width={100} tickFormatter={formatCurrency} stroke="var(--color-chart-axis)" tick={{ fill: 'var(--color-chart-label)', fontSize: 11 }} tickLine={false} />
+                  <Tooltip formatter={(value) => typeof value === 'number' ? formatCurrency(value) : '-'} />
                   <Legend />
                   <Bar dataKey="income" fill="var(--color-chart-income)" fillOpacity={0.88} name="Ingresos" />
                   <Bar dataKey="expense" fill="var(--color-chart-expense)" fillOpacity={0.88} name="Gasto reconocido" />

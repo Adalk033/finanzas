@@ -276,6 +276,52 @@ try {
   assert.equal(zeroOpeningStatement.totalAmount, 0)
   request(`/instruments/${openingCredit.id}`, 'DELETE')
 
+  getDatabase().exec('SAVEPOINT cash_flow_precision')
+  try {
+    const now = new Date()
+    const transactionDate = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, '0'),
+      String(now.getDate()).padStart(2, '0'),
+    ].join('-')
+    for (const entry of [
+      { instrumentId: debit.id, type: 'income', amount: 0.3 },
+      { instrumentId: debit.id, type: 'expense', amount: 0.1 },
+      { instrumentId: credit.id, type: 'expense', amount: 0.1 },
+    ]) {
+      request('/transactions', 'POST', {
+        ...entry,
+        categoryId: category.id,
+        currencyId: 1,
+        description: 'Prueba de precision monetaria',
+        transactionDate,
+        isMsi: false,
+      })
+    }
+    request('/transfers', 'POST', {
+      sourceInstrumentId: debit.id,
+      destinationInstrumentId: credit.id,
+      amount: 0.1,
+      currencyId: 1,
+      transferDate: transactionDate,
+      type: 'card_payment',
+    })
+    const cashFlow = request<Array<{
+      income: number
+      expense: number
+      debtPayments: number
+      netCashFlow: number
+    }>>('/dashboard/charts/cash-flow').at(-1)
+    assert.ok(cashFlow)
+    assert.equal(cashFlow.income, 0.3)
+    assert.equal(cashFlow.expense, 0.2)
+    assert.equal(cashFlow.debtPayments, 0.1)
+    assert.equal(cashFlow.netCashFlow, 0.1)
+  } finally {
+    getDatabase().exec('ROLLBACK TO cash_flow_precision')
+    getDatabase().exec('RELEASE cash_flow_precision')
+  }
+
   request('/transactions', 'POST', {
     instrumentId: debit.id,
     categoryId: category.id,
@@ -297,6 +343,76 @@ try {
     isMsi: true,
     msiMonths: 6,
   })
+
+  getDatabase().exec('SAVEPOINT move_to_family')
+  try {
+    const readBalances = () => request<Array<{
+      id: number; currentAmount: number | null; currentBalance: number | null; availableCredit: number | null
+    }>>('/instruments').map(({ id, currentAmount, currentBalance, availableCredit }) => ({
+      id, currentAmount, currentBalance, availableCredit,
+    }))
+    for (const scenario of [
+      { instrumentId: debit.id, affectsBalance: true, isMsi: false },
+      { instrumentId: credit.id, affectsBalance: true, isMsi: true },
+      { instrumentId: credit.id, affectsBalance: false, isMsi: false },
+    ]) {
+      const balancesBefore = readBalances()
+      const movement = request<{ id: number }>('/transactions', 'POST', {
+        ...scenario,
+        currencyId: 1,
+        categoryId: category.id,
+        type: 'expense',
+        amount: 123.45,
+        description: 'Gasto para Familia',
+        transactionDate: '2026-07-18',
+        notes: 'Conservar esta nota',
+        msiMonths: scenario.isMsi ? 6 : null,
+      })
+      const moved = request<{
+        id: number; amount: number; description: string; notes: string; expenseDate: string; categoryId: number
+      }>(`/transactions/${movement.id}/move-to-family`, 'POST')
+      assert.equal(moved.amount, 123.45)
+      assert.equal(moved.description, 'Gasto para Familia')
+      assert.equal(moved.notes, 'Conservar esta nota')
+      assert.equal(moved.expenseDate, '2026-07-18')
+      assert.equal(moved.categoryId, category.id)
+      assert.equal(request<Array<{ id: number }>>('/transactions').some((item) => item.id === movement.id), false)
+      assert.deepEqual(readBalances(), balancesBefore)
+      requestFailure(`/transactions/${movement.id}/move-to-family`, 'POST', {})
+      assert.equal(request<Array<{ id: number }>>('/family-expenses?month=2026-07').length, 1)
+      request(`/family-expenses/${moved.id}`, 'DELETE')
+    }
+    const income = request<{ id: number }>('/transactions', 'POST', {
+      instrumentId: debit.id, currencyId: 1, type: 'income', amount: 10,
+      transactionDate: '2026-07-18', isMsi: false,
+    })
+    const balancesBeforeRejection = request('/instruments')
+    assert.match(requestFailure(`/transactions/${income.id}/move-to-family`, 'POST', {}), /gastos manuales/)
+    assert.match(requestFailure(`/transactions/${debitOpening.id}/move-to-family`, 'POST', {}), /gastos manuales/)
+    assert.deepEqual(request('/instruments'), balancesBeforeRejection)
+    assert.equal(request<Array<{ id: number }>>('/family-expenses?month=2026-07').length, 0)
+
+    const rollbackMovement = request<{ id: number }>('/transactions', 'POST', {
+      instrumentId: debit.id, currencyId: 1, type: 'expense', amount: 20,
+      transactionDate: '2026-07-18', isMsi: false,
+    })
+    const balancesBeforeRollback = request('/instruments')
+    getDatabase().exec(`
+      CREATE TEMP TRIGGER reject_family_move BEFORE DELETE ON transactions
+      BEGIN SELECT RAISE(ABORT, 'forced rollback'); END;
+    `)
+    try {
+      requestFailure(`/transactions/${rollbackMovement.id}/move-to-family`, 'POST', {})
+      assert.deepEqual(request('/instruments'), balancesBeforeRollback)
+      assert.equal(request<Array<{ id: number }>>('/family-expenses?month=2026-07').length, 0)
+      assert.ok(request<Array<{ id: number }>>('/transactions').some((item) => item.id === rollbackMovement.id))
+    } finally {
+      getDatabase().exec('DROP TRIGGER reject_family_move')
+    }
+  } finally {
+    getDatabase().exec('ROLLBACK TO move_to_family')
+    getDatabase().exec('RELEASE move_to_family')
+  }
 
   const balancesBeforeFamilyExpenses = request<Array<{
     id: number

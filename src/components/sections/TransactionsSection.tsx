@@ -55,6 +55,7 @@ type TransactionsSectionProps = {
   onTransactionSubmit: (event: SyntheticEvent<HTMLFormElement>) => Promise<boolean>
   onTransactionEdit: (transaction: Transaction) => void
   onTransactionDelete: (transactionId: number) => void
+  onMoveTransactionToFamily: (transaction: Transaction) => Promise<void>
   onResetTransactionForm: () => void
   onFiltersChange: (nextFilters: TransactionFilters) => void
   onSearchChange: (search: string) => void
@@ -101,6 +102,7 @@ export function TransactionsSection({
   onTransactionSubmit,
   onTransactionEdit,
   onTransactionDelete,
+  onMoveTransactionToFamily,
   onResetTransactionForm,
   onFiltersChange,
   onSearchChange,
@@ -111,6 +113,7 @@ export function TransactionsSection({
   onPageChange,
   onReload,
 }: TransactionsSectionProps) {
+  const [movingTransactionId, setMovingTransactionId] = useState<number | null>(null)
   const [isTransactionFormOpen, setIsTransactionFormOpen] = useState(editingTransactionId !== null)
   const [isCardPaymentFormOpen, setIsCardPaymentFormOpen] = useState(false)
   const [isFiltersFormOpen, setIsFiltersFormOpen] = useState(false)
@@ -688,6 +691,23 @@ export function TransactionsSection({
                       <span>Gestionado desde el instrumento</span>
                     ) : (
                       <div className="table__actions">
+                        {transaction.type === 'expense' && transaction.sourceType === null ? (
+                          <button
+                            className="button button--secondary"
+                            type="button"
+                            disabled={movingTransactionId !== null}
+                            onClick={async () => {
+                              setMovingTransactionId(transaction.id)
+                              try {
+                                await onMoveTransactionToFamily(transaction)
+                              } finally {
+                                setMovingTransactionId(null)
+                              }
+                            }}
+                          >
+                            {movingTransactionId === transaction.id ? 'Trasladando…' : 'Pasar a Familia'}
+                          </button>
+                        ) : null}
                         <button className="button button--secondary" type="button" onClick={() => onTransactionEdit(transaction)}>
                           Editar
                         </button>

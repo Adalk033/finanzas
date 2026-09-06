@@ -1365,6 +1365,29 @@ function deleteTransaction(db: Database.Database, id: number): { id: number } {
   return { id }
 }
 
+function moveTransactionToFamily(db: Database.Database, id: number): Record<string, unknown> {
+  return db.transaction(() => {
+    const row = requireEntity(db, 'transactions', id)
+    if (row.type !== 'expense' || row.source_type != null) {
+      throw new ValidationError('Solo se pueden pasar a Familia los gastos manuales.')
+    }
+    if (toNumber(row.currency_id) !== 1) {
+      throw new ValidationError('Los gastos de Familia deben estar en MXN.')
+    }
+    const expense = saveFamilyExpense(db, {
+      categoryId: row.category_id,
+      subcategoryId: row.subcategory_id,
+      amount: fromCents(row.amount_cents),
+      description: row.description || 'Gasto trasladado de Movimientos',
+      expenseDate: row.transaction_date,
+      notes: row.notes,
+    })
+    // Both records and the balance reversal must commit together.
+    deleteTransaction(db, id)
+    return expense
+  })()
+}
+
 function familyExpenseSelect(where = ''): string {
   return `
     SELECT fe.*, c.name AS category_name, s.name AS subcategory_name
@@ -3859,16 +3882,16 @@ function getDashboardCashFlow(db: Database.Database): Record<string, unknown>[] 
           WHERE p.is_paid = 1 AND p.affects_instrument_balance = 1 AND l.instrument_id IS NOT NULL
             AND p.paid_date >= ? AND p.paid_date < ?) AS total
     `).get(start, end, start, end) as { total: number }
-    const income = toNumber(row.income) / 100
-    const expense = toNumber(row.expense) / 100
-    const debtPayments = toNumber(debt.total) / 100
-    const cashExpenses = toNumber(row.cash_expenses) / 100
+    const incomeCents = toNumber(row.income)
+    const expenseCents = toNumber(row.expense)
+    const debtPaymentsCents = toNumber(debt.total)
+    const cashExpensesCents = toNumber(row.cash_expenses)
     return {
       month: label,
-      income,
-      expense,
-      debtPayments,
-      netCashFlow: income - cashExpenses - debtPayments,
+      income: incomeCents / 100,
+      expense: expenseCents / 100,
+      debtPayments: debtPaymentsCents / 100,
+      netCashFlow: (incomeCents - cashExpensesCents - debtPaymentsCents) / 100,
     }
   })
 }
@@ -4196,6 +4219,10 @@ function routeRequest(
   )
   if (subcategoryResult !== undefined) return subcategoryResult
 
+  const transactionToFamily = path.match(/^\/transactions\/(\d+)\/move-to-family$/)
+  if (transactionToFamily && method === 'POST') {
+    return moveTransactionToFamily(db, requireId(transactionToFamily))
+  }
   if (path === '/transactions' && method === 'GET') return listTransactions(db, url)
   const transactionResult = entityRoute(
     '/transactions',
