@@ -117,3 +117,7 @@ Despues de cada implementacion verificar:
 - Ausencia de nuevas dependencias no autorizadas.
 - Scripts de instalacion de dependencias bloqueados por pnpm.
 - Ausencia de comunicacion de red para datos financieros.
+
+
+## Rules
+- Dont run pnpm run check
