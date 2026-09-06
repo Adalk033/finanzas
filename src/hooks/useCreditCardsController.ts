@@ -10,6 +10,7 @@ import type {
   CreditCardStatement,
   CreditCardStatementUpdateInput,
   FinancialInstrument,
+  ReconciliationInput,
   Transaction,
   TransactionInput,
   Transfer,
@@ -296,6 +297,29 @@ export function useCreditCardsController({
     await Promise.all([loadInstruments(), loadStatements(), loadTransfers()])
   }
 
+  const reconcileCreditCard = async (payload: ReconciliationInput): Promise<boolean> => {
+    if (resolvedSelectedCardId < 1) {
+      setActionError('Selecciona una tarjeta de crédito.')
+      return false
+    }
+
+    setActionError('')
+    setActionMessage('')
+    const result = await apiClient.reconcileInstrument(resolvedSelectedCardId, payload)
+    if (!result.success) {
+      setActionError(result.error ?? 'No se pudo conciliar el saldo de la tarjeta.')
+      return false
+    }
+
+    setActionMessage('Saldo conciliado mediante un ajuste auditable.')
+    await Promise.all([
+      loadInstruments(),
+      loadStatements(),
+      loadCardMovements(resolvedSelectedCardId),
+    ])
+    return true
+  }
+
   const loadStatementMovements = async (statement: CreditCardStatement): Promise<void> => {
     setIsStatementMovementsLoading(true)
     setStatementError('')
@@ -470,6 +494,7 @@ export function useCreditCardsController({
     setPaymentAmount,
     resetCardPaymentForm,
     handleCardPaymentSubmit,
+    reconcileCreditCard,
     setStatementUpdateForm,
     loadStatements,
     loadTransfers,

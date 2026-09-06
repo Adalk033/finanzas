@@ -541,8 +541,10 @@ export interface DashboardFutureExpensePoint {
   subscriptions: number
   fixedExpenses: number
   loanPayments: number
-  creditCardInstallments: number
+  creditCardPayments: number
+  recurringIncome: number
   total: number
+  projectedAvailable: number
 }
 
 export type DashboardUpcomingCommitmentType = 'subscription' | 'fixed_expense' | 'loan_payment' | 'card_payment'

@@ -4,18 +4,15 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
   Legend,
   Line,
   LineChart,
-  Pie,
-  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts'
-import { DASHBOARD_BALANCE_CHART_COLORS, DASHBOARD_CHART_COLORS, formatCurrency, formatIsoDate } from '../../app/appHelpers'
+import { DASHBOARD_BALANCE_CHART_COLORS, formatCurrency, formatIsoDate } from '../../app/appHelpers'
 import type {
   DashboardBalanceEvolution,
   DashboardBalanceEvolutionPeriod,
@@ -212,14 +209,30 @@ export function DashboardSection({
           ) : (
             <div className="chart-box">
               <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={dashboardExpensesByCategory} dataKey="total" nameKey="category" outerRadius={90} label>
-                    {dashboardExpensesByCategory.map((entry, index) => (
-                      <Cell key={`${entry.category}-${index}`} fill={DASHBOARD_CHART_COLORS[index % DASHBOARD_CHART_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
+                <BarChart
+                  data={dashboardExpensesByCategory}
+                  layout="vertical"
+                  margin={{ top: 8, right: 16, left: 8, bottom: 8 }}
+                >
+                  <CartesianGrid strokeDasharray="2 4" stroke="var(--color-chart-grid)" strokeOpacity={0.72} horizontal={false} />
+                  <XAxis
+                    type="number"
+                    tickFormatter={formatCurrency}
+                    stroke="var(--color-chart-axis)"
+                    tick={{ fill: 'var(--color-chart-label)', fontSize: 11 }}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="category"
+                    width={112}
+                    stroke="var(--color-chart-axis)"
+                    tick={{ fill: 'var(--color-chart-label)', fontSize: 11 }}
+                    tickLine={false}
+                  />
+                  <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                  <Bar dataKey="total" fill="var(--color-chart-expense)" fillOpacity={0.88} name="Gasto" />
+                </BarChart>
               </ResponsiveContainer>
             </div>
           )}
@@ -300,28 +313,31 @@ export function DashboardSection({
 
         <article className="mini-card">
           <header className="mini-card__header">
-            <h3 className="mini-card__title">Proyeccion de gastos futuros</h3>
+            <h3 className="mini-card__title">Compromisos y disponible proyectado</h3>
             {nextMonthProjection ? (
               <p className="mini-card__subtitle">
-                Proximo mes: {nextMonthProjection.month} · {formatCurrency(nextMonthProjection.total)} estimados
+                Proximo mes: {nextMonthProjection.month} · {formatCurrency(nextMonthProjection.total)} de compromisos · {formatCurrency(nextMonthProjection.projectedAvailable)} disponibles despues
               </p>
             ) : null}
+            <p className="mini-card__subtitle">Las barras muestran salidas de efectivo programadas; la línea incluye ingresos recurrentes registrados.</p>
           </header>
           {dashboardFutureExpenses.length === 0 ? (
-            <p className="card__subtitle">No hay proyecciones disponibles por ahora.</p>
+            <p className="card__subtitle">No hay compromisos programados para proyectar.</p>
           ) : (
             <div className="chart-box">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={dashboardFutureExpenses}>
                   <CartesianGrid strokeDasharray="2 4" stroke="var(--color-chart-grid)" strokeOpacity={0.72} />
                   <XAxis dataKey="month" stroke="var(--color-chart-axis)" tick={{ fill: 'var(--color-chart-label)', fontSize: 11 }} tickLine={false} />
-                  <YAxis stroke="var(--color-chart-axis)" tick={{ fill: 'var(--color-chart-label)', fontSize: 11 }} tickLine={false} />
-                  <Tooltip />
+                  <YAxis yAxisId="commitments" width={100} tickFormatter={formatCurrency} stroke="var(--color-chart-axis)" tick={{ fill: 'var(--color-chart-label)', fontSize: 11 }} tickLine={false} />
+                  <YAxis yAxisId="available" orientation="right" width={100} tickFormatter={formatCurrency} stroke="var(--color-chart-net)" tick={{ fill: 'var(--color-chart-label)', fontSize: 11 }} tickLine={false} />
+                  <Tooltip formatter={(value) => typeof value === 'number' ? formatCurrency(value) : '-'} />
                   <Legend />
-                  <Area type="monotone" dataKey="subscriptions" stackId="1" stroke="var(--color-chart-net)" fill="var(--color-chart-net)" fillOpacity={0.18} strokeWidth={2.2} name="Suscripciones" />
-                  <Area type="monotone" dataKey="fixedExpenses" stackId="1" stroke="var(--color-chart-series-2)" fill="var(--color-chart-series-2)" fillOpacity={0.18} strokeWidth={2.2} name="Gastos fijos" />
-                  <Area type="monotone" dataKey="loanPayments" stackId="1" stroke="var(--color-chart-debt)" fill="var(--color-chart-debt)" fillOpacity={0.18} strokeWidth={2.2} name="Pagos prestamos" />
-                  <Area type="monotone" dataKey="creditCardInstallments" stackId="1" stroke="var(--color-chart-expense)" fill="var(--color-chart-expense)" fillOpacity={0.18} strokeWidth={2.2} name="Mensualidades MSI" />
+                  <Area yAxisId="commitments" type="monotone" dataKey="subscriptions" stackId="1" stroke="var(--color-chart-net)" fill="var(--color-chart-net)" fillOpacity={0.18} strokeWidth={2.2} name="Suscripciones" />
+                  <Area yAxisId="commitments" type="monotone" dataKey="fixedExpenses" stackId="1" stroke="var(--color-chart-series-2)" fill="var(--color-chart-series-2)" fillOpacity={0.18} strokeWidth={2.2} name="Gastos fijos" />
+                  <Area yAxisId="commitments" type="monotone" dataKey="loanPayments" stackId="1" stroke="var(--color-chart-debt)" fill="var(--color-chart-debt)" fillOpacity={0.18} strokeWidth={2.2} name="Pagos de prestamos" />
+                  <Area yAxisId="commitments" type="monotone" dataKey="creditCardPayments" stackId="1" stroke="var(--color-chart-expense)" fill="var(--color-chart-expense)" fillOpacity={0.18} strokeWidth={2.2} name="Pagos de tarjeta" />
+                  <Line yAxisId="available" type="monotone" dataKey="projectedAvailable" stroke="var(--color-chart-net)" strokeWidth={2.8} dot name="Disponible proyectado" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>

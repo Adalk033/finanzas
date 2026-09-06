@@ -5,6 +5,7 @@ import type {
   CreditCardStatement,
   CreditCardStatementUpdateInput,
   FinancialInstrument,
+  ReconciliationInput,
   Transaction,
   TransactionInput,
   Transfer,
@@ -13,7 +14,7 @@ import type {
 import { NumberInput } from '../NumberInput'
 
 type CardTab = 'summary' | 'movements' | 'msi' | 'statements'
-type ActionPanel = 'purchase' | 'payment' | null
+type ActionPanel = 'purchase' | 'payment' | 'reconciliation' | null
 
 type CreditCardsSectionProps = {
   hasConfig: boolean
@@ -50,6 +51,7 @@ type CreditCardsSectionProps = {
   onSetPaymentAmount: (amount: number | null) => void
   onPaymentSubmit: (event: SyntheticEvent<HTMLFormElement>) => void
   onResetPayment: () => void
+  onReconcile: (payload: ReconciliationInput) => Promise<boolean>
   onStatementUpdateFormChange: (form: CreditCardStatementUpdateInput) => void
   onLoadStatementMovements: (statement: CreditCardStatement) => void
   onStartStatementEdit: (statement: CreditCardStatement) => void
@@ -154,6 +156,7 @@ export function CreditCardsSection({
   onSetPaymentAmount,
   onPaymentSubmit,
   onResetPayment,
+  onReconcile,
   onStatementUpdateFormChange,
   onLoadStatementMovements,
   onStartStatementEdit,
@@ -164,10 +167,35 @@ export function CreditCardsSection({
 }: CreditCardsSectionProps) {
   const [activeTab, setActiveTab] = useState<CardTab>('summary')
   const [actionPanel, setActionPanel] = useState<ActionPanel>(null)
+  const [reconciliationBalance, setReconciliationBalance] = useState('')
+  const [reconciliationDate, setReconciliationDate] = useState(todayIso)
+  const [reconciliationNotes, setReconciliationNotes] = useState('Conciliación manual')
   const statementStatus = getStatementStatus(currentStatement)
 
   const handleActionToggle = (nextPanel: Exclude<ActionPanel, null>): void => {
     setActionPanel((current) => current === nextPanel ? null : nextPanel)
+  }
+
+  const startReconciliation = (): void => {
+    if (selectedCard === null) return
+    setReconciliationBalance(String(selectedCard.currentBalance ?? 0))
+    setReconciliationDate(todayIso())
+    setReconciliationNotes('Conciliación manual')
+    setActionPanel('reconciliation')
+  }
+
+  const submitReconciliation = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault()
+    const actualBalance = Number(reconciliationBalance)
+    if (!Number.isFinite(actualBalance) || actualBalance < 0) return
+    const didReconcile = await onReconcile({
+      actualBalance,
+      reconciliationDate,
+      notes: reconciliationNotes,
+    })
+    if (didReconcile) {
+      setActionPanel(null)
+    }
   }
 
   return (
@@ -266,6 +294,20 @@ export function CreditCardsSection({
                   onClick={() => handleActionToggle('payment')}
                 >
                   {actionPanel === 'payment' ? 'Cerrar abono' : 'Abonar a tarjeta'}
+                </button>
+                <button
+                  className="button button--secondary"
+                  type="button"
+                  disabled={!hasConfig}
+                  onClick={() => {
+                    if (actionPanel === 'reconciliation') {
+                      setActionPanel(null)
+                    } else {
+                      startReconciliation()
+                    }
+                  }}
+                >
+                  {actionPanel === 'reconciliation' ? 'Cerrar conciliación' : 'Conciliar saldo'}
                 </button>
               </div>
 
@@ -475,6 +517,55 @@ export function CreditCardsSection({
                       </button>
                       <button className="button button--secondary" type="button" onClick={onResetPayment}>
                         Limpiar
+                      </button>
+                    </div>
+                  </form>
+                </article>
+              ) : null}
+
+              {actionPanel === 'reconciliation' ? (
+                <article className="credit-card-form-panel">
+                  <header>
+                    <h3>Conciliar saldo</h3>
+                    <p>Registra la deuda real indicada por el banco para crear un ajuste auditable y conservar el historial de la tarjeta.</p>
+                  </header>
+                  <form className="form-grid credit-card-form-panel__form" onSubmit={(event) => { void submitReconciliation(event) }}>
+                    <label className="form-grid__field" htmlFor="creditReconciliationBalance">Saldo real de la deuda</label>
+                    <input
+                      id="creditReconciliationBalance"
+                      className="form-grid__input"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={reconciliationBalance}
+                      onChange={(event) => setReconciliationBalance(event.target.value)}
+                      required
+                    />
+
+                    <label className="form-grid__field" htmlFor="creditReconciliationDate">Fecha de conciliación</label>
+                    <input
+                      id="creditReconciliationDate"
+                      className="form-grid__input"
+                      type="date"
+                      value={reconciliationDate}
+                      onChange={(event) => setReconciliationDate(event.target.value)}
+                      required
+                    />
+
+                    <label className="form-grid__field" htmlFor="creditReconciliationNotes">Notas</label>
+                    <input
+                      id="creditReconciliationNotes"
+                      className="form-grid__input"
+                      type="text"
+                      maxLength={2000}
+                      value={reconciliationNotes}
+                      onChange={(event) => setReconciliationNotes(event.target.value)}
+                    />
+
+                    <div className="form-grid__actions">
+                      <button className="button button--primary" type="submit">Aplicar conciliación</button>
+                      <button className="button button--secondary" type="button" onClick={() => setActionPanel(null)}>
+                        Cancelar
                       </button>
                     </div>
                   </form>
@@ -707,4 +798,13 @@ export function CreditCardsSection({
       )}
     </section>
   )
+}
+
+function todayIso(): string {
+  const now = new Date()
+  return [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0'),
+  ].join('-')
 }

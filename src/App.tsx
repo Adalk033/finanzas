@@ -349,6 +349,7 @@ export function App() {
               onSetPaymentAmount={creditCardsController.setPaymentAmount}
               onPaymentSubmit={creditCardsController.handleCardPaymentSubmit}
               onResetPayment={creditCardsController.resetCardPaymentForm}
+              onReconcile={creditCardsController.reconcileCreditCard}
               onStatementUpdateFormChange={creditCardsController.setStatementUpdateForm}
               onLoadStatementMovements={(statement) => {
                 void creditCardsController.loadStatementMovements(statement)

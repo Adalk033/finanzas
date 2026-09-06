@@ -4043,60 +4043,150 @@ function getMonthlyObligationsCents(db: Database.Database): number {
 }
 
 function getDashboardFutureExpenses(db: Database.Database): Record<string, unknown>[] {
-  return monthSequence(6, false).map(({ start, label }) => {
-    const end = addMonths(start, 1)
-    const subscriptions = db.prepare(`
-      SELECT COALESCE(SUM(CASE
-        WHEN billing_cycle = 'weekly' THEN amount_cents * 52 / 12
-        WHEN billing_cycle = 'yearly' AND next_billing >= ? AND next_billing < ? THEN amount_cents
-        WHEN billing_cycle = 'monthly' THEN amount_cents
-        ELSE 0
-      END), 0) AS total
-      FROM subscriptions WHERE is_active = 1
-    `).get(start, end) as { total: number }
-    const fixed = db.prepare(`
-      SELECT COALESCE(SUM(estimated_amount_cents), 0) AS total
-      FROM fixed_expenses WHERE is_active = 1
-    `).get() as { total: number }
-    const loans = db.prepare(`
-      SELECT COALESCE(SUM(p.amount_cents), 0) AS total
-    FROM loan_payments p JOIN loans l ON l.id = p.loan_id
-      WHERE p.is_paid = 0 AND l.is_active = 1 AND l.affects_instrument_balance = 1
-        AND p.payment_date >= ? AND p.payment_date < ?
-    `).get(start, end) as { total: number }
-    const msiRows = db.prepare(`
-      SELECT amount_cents, msi_months, msi_monthly_amount_cents, msi_start_date
-      FROM transactions
-      WHERE is_msi = 1 AND msi_start_date IS NOT NULL
-    `).all() as Array<{
-      amount_cents: number
-      msi_months: number
-      msi_monthly_amount_cents: number
-      msi_start_date: string
-    }>
-    const pointDate = new Date(`${start}T00:00:00Z`)
-    let creditCardInstallmentsCents = 0
-    for (const msi of msiRows) {
-      const msiDate = new Date(`${msi.msi_start_date}T00:00:00Z`)
-      const elapsed = (pointDate.getUTCFullYear() - msiDate.getUTCFullYear()) * 12
-        + pointDate.getUTCMonth() - msiDate.getUTCMonth()
-      if (elapsed >= 0 && elapsed < msi.msi_months) {
-        creditCardInstallmentsCents += elapsed === msi.msi_months - 1
-          ? msi.amount_cents - msi.msi_monthly_amount_cents * (msi.msi_months - 1)
-          : msi.msi_monthly_amount_cents
-      }
+  const months = monthSequence(6, false)
+  const subscriptions = db.prepare(`
+    SELECT s.amount_cents, s.billing_cycle, s.billing_day, s.next_billing, i.type AS instrument_type
+    FROM subscriptions s
+    JOIN financial_instruments i ON i.id = s.instrument_id
+    WHERE s.is_active = 1
+  `).all() as Array<{
+    amount_cents: number
+    billing_cycle: string
+    billing_day: number | null
+    next_billing: string
+    instrument_type: string
+  }>
+  const fixedExpenses = db.prepare(`
+    SELECT f.id, f.estimated_amount_cents, f.payment_day, i.type AS instrument_type
+    FROM fixed_expenses f
+    LEFT JOIN financial_instruments i ON i.id = f.instrument_id
+    WHERE f.is_active = 1 AND f.payment_day IS NOT NULL
+  `).all() as Array<{
+    id: number
+    estimated_amount_cents: number
+    payment_day: number
+    instrument_type: string | null
+  }>
+  const paidFixedExpenseAmount = db.prepare(`
+    SELECT COALESCE(SUM(amount_cents), 0) AS total_cents
+    FROM fixed_expense_payments
+    WHERE fixed_expense_id = ?
+      AND period_month = ?
+      AND period_year = ?
+      AND is_paid = 1
+  `)
+  const loanPayments = db.prepare(`
+    SELECT p.payment_date, p.amount_cents
+    FROM loan_payments p
+    JOIN loans l ON l.id = p.loan_id
+    WHERE p.is_paid = 0 AND l.is_active = 1 AND l.affects_instrument_balance = 1
+  `).all() as Array<{ payment_date: string; amount_cents: number }>
+  const cardPayments = db.prepare(`
+    SELECT st.payment_due_date,
+           MAX(st.total_amount_cents - COALESCE(st.paid_amount_cents, 0), 0) AS amount_cents
+    FROM credit_card_statements st
+    WHERE st.is_paid = 0
+      AND st.total_amount_cents > COALESCE(st.paid_amount_cents, 0)
+    GROUP BY st.id
+  `).all() as Array<{ payment_due_date: string; amount_cents: number }>
+  const recurringIncomes = db.prepare(`
+    SELECT r.amount_cents, r.frequency, r.payment_day, r.second_payment_day, r.next_payment
+    FROM recurring_incomes r
+    JOIN financial_instruments i ON i.id = r.instrument_id
+    WHERE r.is_active = 1 AND i.type IN ('account', 'debit_card')
+  `).all() as Array<{
+    amount_cents: number
+    frequency: string
+    payment_day: number | null
+    second_payment_day: number | null
+    next_payment: string
+  }>
+  let projectedAvailableCents = Math.round(getDashboardSummary(db).totalAvailable * 100)
+
+  const recurringAmountInMonth = (
+    amountCents: number,
+    firstDate: string,
+    frequency: string,
+    paymentDay: number | null,
+    secondPaymentDay: number | null,
+    start: string,
+    end: string,
+  ): number => {
+    let occurrence = firstDate
+    let total = 0
+    let iterations = 0
+    while (occurrence < start && iterations < 120) {
+      occurrence = nextRecurringIncomeDate(occurrence, frequency, paymentDay, secondPaymentDay)
+      iterations += 1
     }
-    const subscriptionAmount = Math.round(subscriptions.total) / 100
-    const fixedAmount = fixed.total / 100
-    const loanAmount = loans.total / 100
-    const creditCardInstallments = creditCardInstallmentsCents / 100
+    while (occurrence >= start && occurrence < end && iterations < 180) {
+      total += toNumber(amountCents)
+      occurrence = nextRecurringIncomeDate(occurrence, frequency, paymentDay, secondPaymentDay)
+      iterations += 1
+    }
+    return total
+  }
+
+  return months.map(({ start, label }) => {
+    const end = addMonths(start, 1)
+    const subscriptionCents = subscriptions.reduce((total, subscription) => {
+      if (subscription.instrument_type === 'credit_card') return total
+      return total + recurringAmountInMonth(
+        subscription.amount_cents,
+        subscription.next_billing,
+        subscription.billing_cycle,
+        toNullableNumber(subscription.billing_day),
+        null,
+        start,
+        end,
+      )
+    }, 0)
+    const fixedExpenseCents = fixedExpenses.reduce((total, expense) => {
+      if (expense.instrument_type === 'credit_card' || expense.instrument_type === null) return total
+      const paymentDate = nextMonthlyDateOnOrAfter(start, toNumber(expense.payment_day))
+      if (paymentDate >= end) return total
+      const paid = paidFixedExpenseAmount.get(
+        expense.id,
+        Number(paymentDate.slice(5, 7)),
+        Number(paymentDate.slice(0, 4)),
+      ) as { total_cents: number }
+      return total + Math.max(toNumber(expense.estimated_amount_cents) - toNumber(paid.total_cents), 0)
+    }, 0)
+    const loanPaymentCents = loanPayments.reduce(
+      (total, payment) => payment.payment_date >= start && payment.payment_date < end
+        ? total + toNumber(payment.amount_cents)
+        : total,
+      0,
+    )
+    const cardPaymentCents = cardPayments.reduce(
+      (total, payment) => payment.payment_due_date >= start && payment.payment_due_date < end
+        ? total + toNumber(payment.amount_cents)
+        : total,
+      0,
+    )
+    const recurringIncomeCents = recurringIncomes.reduce(
+      (total, income) => total + recurringAmountInMonth(
+        income.amount_cents,
+        income.next_payment,
+        income.frequency,
+        toNullableNumber(income.payment_day),
+        toNullableNumber(income.second_payment_day),
+        start,
+        end,
+      ),
+      0,
+    )
+    const totalCents = subscriptionCents + fixedExpenseCents + loanPaymentCents + cardPaymentCents
+    projectedAvailableCents += recurringIncomeCents - totalCents
     return {
       month: label,
-      subscriptions: subscriptionAmount,
-      fixedExpenses: fixedAmount,
-      loanPayments: loanAmount,
-      creditCardInstallments,
-      total: subscriptionAmount + fixedAmount + loanAmount + creditCardInstallments,
+      subscriptions: subscriptionCents / 100,
+      fixedExpenses: fixedExpenseCents / 100,
+      loanPayments: loanPaymentCents / 100,
+      creditCardPayments: cardPaymentCents / 100,
+      recurringIncome: recurringIncomeCents / 100,
+      total: totalCents / 100,
+      projectedAvailable: projectedAvailableCents / 100,
     }
   })
 }
