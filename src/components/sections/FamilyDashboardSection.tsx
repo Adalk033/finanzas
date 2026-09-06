@@ -2,15 +2,12 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
-  Pie,
-  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts'
-import { DASHBOARD_CHART_COLORS, formatCurrency } from '../../app/appHelpers'
+import { formatCurrency } from '../../app/appHelpers'
 import type { FamilyDashboard } from '../../types/domain'
 
 type FamilyDashboardSectionProps = {
@@ -88,14 +85,30 @@ export function FamilyDashboardSection({
           ) : (
             <div className="chart-box">
               <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={dashboard.expensesByCategory} dataKey="total" nameKey="category" outerRadius={90} label>
-                    {dashboard.expensesByCategory.map((entry, index) => (
-                      <Cell key={`${entry.category}-${index}`} fill={DASHBOARD_CHART_COLORS[index % DASHBOARD_CHART_COLORS.length]} />
-                    ))}
-                  </Pie>
+                <BarChart
+                  data={dashboard.expensesByCategory}
+                  layout="vertical"
+                  margin={{ top: 8, right: 16, left: 8, bottom: 8 }}
+                >
+                  <CartesianGrid strokeDasharray="2 4" stroke="var(--color-chart-grid)" strokeOpacity={0.72} horizontal={false} />
+                  <XAxis
+                    type="number"
+                    tickFormatter={formatCurrency}
+                    stroke="var(--color-chart-axis)"
+                    tick={{ fill: 'var(--color-chart-label)', fontSize: 11 }}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="category"
+                    width={112}
+                    stroke="var(--color-chart-axis)"
+                    tick={{ fill: 'var(--color-chart-label)', fontSize: 11 }}
+                    tickLine={false}
+                  />
                   <Tooltip formatter={(value) => formatCurrency(Number(value))} />
-                </PieChart>
+                  <Bar dataKey="total" fill="var(--color-chart-expense)" fillOpacity={0.88} name="Gasto familiar" />
+                </BarChart>
               </ResponsiveContainer>
             </div>
           )}

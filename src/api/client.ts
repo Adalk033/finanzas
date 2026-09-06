@@ -583,6 +583,8 @@ export const apiClient = {
       method: 'PUT',
       body: JSON.stringify(sanitizeTransactionPayload(payload)),
     }),
+  moveTransactionToFamily: (id: number) =>
+    request<FamilyExpense>(`${ENDPOINTS.TRANSACTIONS}/${id}/move-to-family`, { method: 'POST' }),
   deleteTransaction: (id: number) =>
     request<{ id: number }>(`${ENDPOINTS.TRANSACTIONS}/${id}`, {
       method: 'DELETE',

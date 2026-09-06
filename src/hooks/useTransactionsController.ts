@@ -389,6 +389,19 @@ export function useTransactionsController({
     void loadTransactions(nextFilters, 1)
   }
 
+  const handleMoveTransactionToFamily = async (id: number): Promise<void> => {
+    setTransactionError('')
+    setTransactionMessage('')
+    const result = await apiClient.moveTransactionToFamily(id)
+    if (!result.success) {
+      setTransactionError(result.error ?? 'No se pudo pasar el gasto a Familia.')
+      return
+    }
+    if (editingTransactionId === id) resetTransactionForm()
+    setTransactionMessage('Gasto trasladado a Familia sin duplicarlo. Se revirtió su impacto en el saldo personal.')
+    await Promise.all([loadInstruments(), loadTransactions()])
+  }
+
   const changeTransactionPage = (page: number): void => {
     clearTransactionSearchTimeout()
     void loadTransactions(transactionFilters, page)
@@ -432,6 +445,7 @@ export function useTransactionsController({
     handleTransactionTypeChange,
     handleTransactionSubmit,
     handleTransactionDelete,
+    handleMoveTransactionToFamily,
     handleTransactionFiltersSubmit,
     clearTransactionFilters,
     changeTransactionPage,

@@ -28,12 +28,13 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    label: 'Planificacion',
+    label: 'Cuentas y deudas',
     items: [
-      { key: 'budgets', label: 'Presupuestos' },
-      { key: 'fixedExpenses', label: 'Gastos fijos' },
-      { key: 'subscriptions', label: 'Suscripciones' },
-      { key: 'reminders', label: 'Recordatorios', showPendingBadge: true },
+      { key: 'creditCards', label: 'Tarjetas de crédito' },
+      { key: 'debitCards', label: 'Tarjetas de débito' },
+      { key: 'transfers', label: 'Transferencias' },
+      { key: 'loans', label: 'Prestamos' },
+      { key: 'instruments', label: 'Instrumentos' },
     ],
   },
   {
@@ -44,13 +45,12 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    label: 'Cuentas y deudas',
+    label: 'Planificacion',
     items: [
-      { key: 'creditCards', label: 'Tarjetas de crédito' },
-      { key: 'debitCards', label: 'Tarjetas de débito' },
-      { key: 'transfers', label: 'Transferencias' },
-      { key: 'loans', label: 'Prestamos' },
-      { key: 'instruments', label: 'Instrumentos' },
+      { key: 'budgets', label: 'Presupuestos' },
+      { key: 'fixedExpenses', label: 'Gastos fijos' },
+      { key: 'subscriptions', label: 'Suscripciones' },
+      { key: 'reminders', label: 'Recordatorios', showPendingBadge: true },
     ],
   },
   {
