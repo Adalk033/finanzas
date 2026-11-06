@@ -1,3 +1,4 @@
+import { ActionButton } from '../ActionButton'
 import { FormModal } from '../FormModal'
 import { useState, type SyntheticEvent } from 'react'
 import { formatCurrency, formatIsoDate, MSI_OPTIONS } from '../../app/appHelpers'
@@ -206,9 +207,7 @@ export function CreditCardsSection({
           <h2 className="card__title">Tarjetas de crédito</h2>
           <p className="card__subtitle">Consulta lo que debes, registra compras y abona desde tus cuentas de débito.</p>
         </div>
-        <button className="button button--secondary" type="button" onClick={onReload}>
-          Actualizar
-        </button>
+        <ActionButton className="button button--secondary" type="button" onClick={onReload} icon="refresh" label="Actualizar" />
       </header>
 
       {creditCardInstruments.length === 0 ? (
@@ -282,21 +281,21 @@ export function CreditCardsSection({
               </article>
 
               <div className="credit-card-actions">
-                <button
+                <ActionButton
                   className="button button--primary"
                   type="button"
                   onClick={() => handleActionToggle('purchase')}
-                >
-                  {actionPanel === 'purchase' ? 'Cerrar compra' : 'Registrar compra'}
-                </button>
-                <button
+                  icon={actionPanel === 'purchase' ? 'close' : 'plus'}
+                  label={actionPanel === 'purchase' ? 'Cerrar compra' : 'Registrar compra'}
+                />
+                <ActionButton
                   className="button button--secondary"
                   type="button"
                   onClick={() => handleActionToggle('payment')}
-                >
-                  {actionPanel === 'payment' ? 'Cerrar abono' : 'Abonar a tarjeta'}
-                </button>
-                <button
+                  icon={actionPanel === 'payment' ? 'close' : 'payment'}
+                  label={actionPanel === 'payment' ? 'Cerrar abono' : 'Abonar a tarjeta'}
+                />
+                <ActionButton
                   className="button button--secondary"
                   type="button"
                   disabled={!hasConfig}
@@ -307,9 +306,9 @@ export function CreditCardsSection({
                       startReconciliation()
                     }
                   }}
-                >
-                  {actionPanel === 'reconciliation' ? 'Cerrar conciliación' : 'Conciliar saldo'}
-                </button>
+                  icon="balance"
+                  label={actionPanel === 'reconciliation' ? 'Cerrar conciliación' : 'Conciliar saldo'}
+                />
               </div>
 
               {actionError ? <p className="message message--error">{actionError}</p> : null}
@@ -426,12 +425,8 @@ export function CreditCardsSection({
                     ) : null}
 
                     <div className="form-grid__actions">
-                      <button className="button button--primary" type="submit" disabled={!hasConfig}>
-                        Guardar compra
-                      </button>
-                      <button className="button button--secondary" type="button" onClick={onResetPurchase}>
-                        Limpiar
-                      </button>
+                      <ActionButton className="button button--primary" type="submit" disabled={!hasConfig} icon="save" label="Guardar compra" />
+                      <ActionButton className="button button--secondary" type="button" onClick={onResetPurchase} icon="reset" label="Limpiar" />
                     </div>
                   </form>
                 </FormModal>
@@ -447,22 +442,22 @@ export function CreditCardsSection({
                     <p className="message message--error">No tienes una cuenta de débito en la misma moneda que esta tarjeta.</p>
                   ) : null}
                   <div className="payment-presets">
-                    <button type="button" onClick={() => onSetPaymentAmount(currentStatement?.minimumPayment ?? null)}>
-                      <span>Mínimo</span>
-                      <strong>{formatCurrency(currentStatement?.minimumPayment ?? null)}</strong>
-                    </button>
-                    <button type="button" onClick={() => onSetPaymentAmount(currentStatement?.noInterestPayment ?? null)}>
-                      <span>Sin intereses</span>
-                      <strong>{formatCurrency(currentStatement?.noInterestPayment ?? null)}</strong>
-                    </button>
-                    <button type="button" onClick={() => onSetPaymentAmount(currentStatement?.outstandingAmount ?? null)}>
-                      <span>Estado pendiente</span>
-                      <strong>{formatCurrency(currentStatement?.outstandingAmount ?? null)}</strong>
-                    </button>
-                    <button type="button" onClick={() => onSetPaymentAmount(selectedCard.currentBalance)}>
-                      <span>Saldo total</span>
-                      <strong>{formatCurrency(selectedCard.currentBalance)}</strong>
-                    </button>
+                    <ActionButton type="button" onClick={() => onSetPaymentAmount(currentStatement?.minimumPayment ?? null)}
+                      icon="minimum"
+                      label={`Mínimo: ${formatCurrency(currentStatement?.minimumPayment ?? null)}`}
+                    />
+                    <ActionButton type="button" onClick={() => onSetPaymentAmount(currentStatement?.noInterestPayment ?? null)}
+                      icon="shield"
+                      label={`Sin intereses: ${formatCurrency(currentStatement?.noInterestPayment ?? null)}`}
+                    />
+                    <ActionButton type="button" onClick={() => onSetPaymentAmount(currentStatement?.outstandingAmount ?? null)}
+                      icon="statement"
+                      label={`Estado pendiente: ${formatCurrency(currentStatement?.outstandingAmount ?? null)}`}
+                    />
+                    <ActionButton type="button" onClick={() => onSetPaymentAmount(selectedCard.currentBalance)}
+                      icon="wallet"
+                      label={`Saldo total: ${formatCurrency(selectedCard.currentBalance)}`}
+                    />
                   </div>
                   <form className="form-grid credit-card-form-panel__form" onSubmit={onPaymentSubmit}>
                     <label className="form-grid__field" htmlFor="cardPaymentSource">Cuenta de débito origen</label>
@@ -513,12 +508,11 @@ export function CreditCardsSection({
                     />
 
                     <div className="form-grid__actions">
-                      <button className="button button--primary" type="submit" disabled={!hasConfig || paymentSourceInstruments.length === 0}>
-                        Aplicar abono
-                      </button>
-                      <button className="button button--secondary" type="button" onClick={onResetPayment}>
-                        Limpiar
-                      </button>
+                      <ActionButton className="button button--primary" type="submit" disabled={!hasConfig || paymentSourceInstruments.length === 0}
+                        icon="payment"
+                        label="Aplicar abono"
+                      />
+                      <ActionButton className="button button--secondary" type="button" onClick={onResetPayment} icon="reset" label="Limpiar" />
                     </div>
                   </form>
                 </FormModal>
@@ -564,10 +558,11 @@ export function CreditCardsSection({
                     />
 
                     <div className="form-grid__actions">
-                      <button className="button button--primary" type="submit">Aplicar conciliación</button>
-                      <button className="button button--secondary" type="button" onClick={() => setActionPanel(null)}>
-                        Cancelar
-                      </button>
+                      <ActionButton className="button button--primary" type="submit" icon="balance" label="Aplicar conciliación" />
+                      <ActionButton className="button button--secondary" type="button" onClick={() => setActionPanel(null)}
+                        icon="close"
+                        label="Cancelar"
+                      />
                     </div>
                   </form>
                 </FormModal>
@@ -641,9 +636,10 @@ export function CreditCardsSection({
                                 <td>{payment.description ?? 'Abono a tarjeta'}</td>
                                 <td className="table__amount table__amount--positive">{formatCurrency(payment.amount)}</td>
                                 <td>
-                                  <button className="button button--danger" type="button" onClick={() => onDeletePayment(payment.id)}>
-                                    Eliminar
-                                  </button>
+                                  <ActionButton className="button button--danger" type="button" onClick={() => onDeletePayment(payment.id)}
+                                    icon="trash"
+                                    label="Eliminar"
+                                  />
                                 </td>
                               </tr>
                             ))}
@@ -712,12 +708,14 @@ export function CreditCardsSection({
                                   <td><span className={`status-pill status-pill--${status.modifier}`}>{status.label}</span></td>
                                   <td>
                                     <div className="table__actions">
-                                      <button className="button button--secondary" type="button" onClick={() => onLoadStatementMovements(statement)}>
-                                        Detalle
-                                      </button>
-                                      <button className="button button--secondary" type="button" onClick={() => onStartStatementEdit(statement)}>
-                                        Ajustar
-                                      </button>
+                                      <ActionButton className="button button--secondary" type="button" onClick={() => onLoadStatementMovements(statement)}
+                                        icon="eye"
+                                        label="Detalle"
+                                      />
+                                      <ActionButton className="button button--secondary" type="button" onClick={() => onStartStatementEdit(statement)}
+                                        icon="edit"
+                                        label="Ajustar"
+                                      />
                                     </div>
                                   </td>
                                 </tr>
@@ -771,12 +769,14 @@ export function CreditCardsSection({
                             })}
                           />
                           <div className="form-grid__actions">
-                            <button className="button button--primary" type="button" onClick={onSaveStatementUpdate}>
-                              Guardar ajustes
-                            </button>
-                            <button className="button button--secondary" type="button" onClick={onCancelStatementUpdate}>
-                              Cancelar
-                            </button>
+                            <ActionButton className="button button--primary" type="button" onClick={onSaveStatementUpdate}
+                              icon="save"
+                              label="Guardar ajustes"
+                            />
+                            <ActionButton className="button button--secondary" type="button" onClick={onCancelStatementUpdate}
+                              icon="close"
+                              label="Cancelar"
+                            />
                           </div>
                         </div>
                       </FormModal>

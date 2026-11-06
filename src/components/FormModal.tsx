@@ -1,3 +1,4 @@
+import { ActionButton } from './ActionButton'
 import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import './FormModal.css'
@@ -67,9 +68,7 @@ export function FormModal({ title, children, onClose, error, message }: FormModa
     >
       <header className="form-modal__header">
         <h2 className="form-modal__title" id={titleId}>{title}</h2>
-        <button className="button button--secondary" type="button" onClick={onClose} aria-label={`Cerrar: ${title}`}>
-          Cerrar
-        </button>
+        <ActionButton className="button button--secondary" type="button" onClick={onClose} icon="close" label={`Cerrar: ${title}`} />
       </header>
       <div className="form-modal__body">
         {error ? <p className="message message--error" role="alert">{error}</p> : null}

@@ -1,3 +1,4 @@
+import { ActionButton } from '../ActionButton'
 import { FormModal } from '../FormModal'
 import { useState, type SyntheticEvent } from 'react'
 import { formatCurrency, formatIsoDate } from '../../app/appHelpers'
@@ -119,20 +120,19 @@ export function LoansSection({
 
       <div className="section-stack">
         <div className="section-toolbar">
-            <button className="button button--primary" type="button" onClick={() => {
+            <ActionButton className="button button--primary" type="button" onClick={() => {
               if (editingLoanId !== null) {
                 onReset()
                 setIsLoanFormOpen(false)
                 return
               }
               setIsLoanFormOpen((value) => !value)
-            }}>
-              {isLoanFormVisible ? 'Ocultar formulario' : 'Nuevo prestamo'}
-            </button>
+            }}
+              icon={isLoanFormVisible ? 'close' : 'plus'}
+              label={isLoanFormVisible ? 'Ocultar formulario' : 'Nuevo prestamo'}
+            />
             <div className="section-toolbar__spacer" />
-            <button className="button button--secondary" type="button" onClick={onReload}>
-              Recargar
-            </button>
+            <ActionButton className="button button--secondary" type="button" onClick={onReload} icon="refresh" label="Recargar" />
           </div>
 
           {isLoanFormVisible ? (
@@ -359,21 +359,21 @@ export function LoansSection({
                 />
 
                 <div className="form-grid__actions">
-                  <button className="button button--primary" type="submit" disabled={!hasConfig}>
-                    {editingLoanId === null ? 'Crear prestamo' : 'Guardar cambios'}
-                  </button>
-                  <button className="button button--secondary" type="button" onClick={onReset}>
-                    Limpiar
-                  </button>
+                  <ActionButton className="button button--primary" type="submit" disabled={!hasConfig}
+                    icon="save"
+                    label={editingLoanId === null ? 'Crear prestamo' : 'Guardar cambios'}
+                  />
+                  <ActionButton className="button button--secondary" type="button" onClick={onReset} icon="reset" label="Limpiar" />
                 </div>
               </form>
             </FormModal>
           ) : null}
 
         <div className="section-toolbar">
-            <button className="button button--primary" type="button" onClick={() => setIsRegisterFormOpen((value) => !value)}>
-              {isRegisterFormOpen ? 'Ocultar formulario' : 'Registrar cuota'}
-            </button>
+            <ActionButton className="button button--primary" type="button" onClick={() => setIsRegisterFormOpen((value) => !value)}
+              icon={isRegisterFormOpen ? 'close' : 'payment'}
+              label={isRegisterFormOpen ? 'Ocultar formulario' : 'Registrar cuota'}
+            />
           </div>
 
           {isRegisterFormOpen ? (
@@ -445,13 +445,13 @@ export function LoansSection({
                 />
 
                 <div className="form-grid__actions">
-                  <button
+                  <ActionButton
                     className="button button--primary"
                     type="submit"
                     disabled={!hasConfig || isLoanPaymentsLoading || !loanPayments.some((payment) => payment.installmentNum === selectedInstallment && !payment.isPaid)}
-                  >
-                    {selectedLoan?.affectsInstrumentBalance === false ? 'Registrar descuento' : 'Registrar pago'}
-                  </button>
+                    icon="payment"
+                    label={selectedLoan?.affectsInstrumentBalance === false ? 'Registrar descuento' : 'Registrar pago'}
+                  />
                 </div>
               </form>
             </FormModal>
@@ -498,10 +498,11 @@ export function LoansSection({
             />
 
             <div className="form-grid__actions">
-              <button className="button button--primary" type="submit">Aplicar conciliacion</button>
-              <button className="button button--secondary" type="button" onClick={() => setReconciliationLoan(null)}>
-                Cancelar
-              </button>
+              <ActionButton className="button button--primary" type="submit" icon="balance" label="Aplicar conciliacion" />
+              <ActionButton className="button button--secondary" type="button" onClick={() => setReconciliationLoan(null)}
+                icon="close"
+                label="Cancelar"
+              />
             </div>
           </form>
         </FormModal>
@@ -557,20 +558,24 @@ export function LoansSection({
                       <td>{loan.remainingAmount === 0 ? 'Liquidado' : `${loan.paidInstallments}/${loan.totalInstallments}`}</td>
                       <td>
                         <div className="table__actions">
-                          <button className="button button--secondary" type="button" onClick={() => onLoadLoanPayments(loan.id)}>
-                            Ver detalle
-                          </button>
-                          <button className="button button--secondary" type="button" onClick={() => onEditLoan(loan)}>
-                            Editar
-                          </button>
+                          <ActionButton className="button button--secondary" type="button" onClick={() => onLoadLoanPayments(loan.id)}
+                            icon="eye"
+                            label="Ver detalle"
+                          />
+                          <ActionButton className="button button--secondary" type="button" onClick={() => onEditLoan(loan)}
+                            icon="edit"
+                            label="Editar"
+                          />
                           {loan.isActive ? (
-                            <button className="button button--secondary" type="button" onClick={() => startReconciliation(loan)}>
-                              Conciliar saldo
-                            </button>
+                            <ActionButton className="button button--secondary" type="button" onClick={() => startReconciliation(loan)}
+                              icon="balance"
+                              label="Conciliar saldo"
+                            />
                           ) : null}
-                          <button className="button button--danger" type="button" onClick={() => onDeleteLoan(loan.id)}>
-                            Eliminar
-                          </button>
+                          <ActionButton className="button button--danger" type="button" onClick={() => onDeleteLoan(loan.id)}
+                            icon="trash"
+                            label="Eliminar"
+                          />
                         </div>
                       </td>
                     </tr>
@@ -629,22 +634,22 @@ export function LoansSection({
                         <td>{payment.isPaid ? `Pagada${payment.paidDate ? ` ${formatIsoDate(payment.paidDate)}` : ''}${payment.affectsInstrumentBalance ? '' : ' · Descontada del ingreso'}` : 'Pendiente'}</td>
                         <td>
                           <div className="table__actions">
-                            <button
+                            <ActionButton
                               className="button button--primary"
                               type="button"
                               disabled={payment.isPaid}
                               onClick={() => { setSelectedInstallment(payment.installmentNum); setIsRegisterFormOpen(true) }}
-                            >
-                              {selectedLoan.affectsInstrumentBalance ? 'Pagar' : 'Registrar descuento'}
-                            </button>
+                              icon="payment"
+                              label={selectedLoan.affectsInstrumentBalance ? 'Pagar' : 'Registrar descuento'}
+                            />
                             {payment.isPaid ? (
-                              <button
+                              <ActionButton
                                 className="button button--danger"
                                 type="button"
                                 onClick={() => onUndoInstallment(payment.installmentNum)}
-                              >
-                                Revertir
-                              </button>
+                                icon="undo"
+                                label="Revertir"
+                              />
                             ) : null}
                           </div>
                         </td>

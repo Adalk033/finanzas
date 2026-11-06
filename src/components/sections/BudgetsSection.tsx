@@ -1,3 +1,4 @@
+import { ActionButton } from '../ActionButton'
 import { FormModal } from '../FormModal'
 import { useState, type SyntheticEvent } from 'react'
 import { formatCurrency, formatIsoDate, getBudgetStatusLabel } from '../../app/appHelpers'
@@ -90,16 +91,17 @@ export function BudgetsSection({
       {budgetError ? <p className="message message--error">{budgetError}</p> : null}
 
       <div className="section-toolbar">
-        <button className="button button--primary" type="button" onClick={() => {
+        <ActionButton className="button button--primary" type="button" onClick={() => {
           if (editingBudgetId !== null) {
             onReset()
             setIsFormOpen(false)
             return
           }
           setIsFormOpen((value) => !value)
-        }}>
-          {isFormVisible ? 'Ocultar formulario' : 'Nuevo presupuesto'}
-        </button>
+        }}
+          icon={isFormVisible ? 'close' : 'plus'}
+          label={isFormVisible ? 'Ocultar formulario' : 'Nuevo presupuesto'}
+        />
       </div>
 
       <div className="section-stack">
@@ -176,12 +178,11 @@ export function BudgetsSection({
             />
 
                 <div className="form-grid__actions">
-                  <button className="button button--primary" type="submit" disabled={!hasConfig || isBudgetsLoading}>
-                    {editingBudgetId === null ? 'Guardar presupuesto' : 'Actualizar presupuesto'}
-                  </button>
-                  <button className="button button--secondary" type="button" onClick={onReset}>
-                    Limpiar
-                  </button>
+                  <ActionButton className="button button--primary" type="submit" disabled={!hasConfig || isBudgetsLoading}
+                    icon={editingBudgetId === null ? 'save' : 'refresh'}
+                    label={editingBudgetId === null ? 'Guardar presupuesto' : 'Actualizar presupuesto'}
+                  />
+                  <ActionButton className="button button--secondary" type="button" onClick={onReset} icon="reset" label="Limpiar" />
                 </div>
               </form>
             </FormModal>
@@ -193,7 +194,7 @@ export function BudgetsSection({
           </header>
 
           <div className="section-toolbar">
-            <button className="button button--secondary" type="button" onClick={() => setIsFiltersOpen(true)}>Filtros</button>
+            <ActionButton className="button button--secondary" type="button" onClick={() => setIsFiltersOpen(true)} icon="filter" label="Filtros" />
           </div>
           {isFiltersOpen ? (
             <FormModal title="Filtros de presupuestos" onClose={() => setIsFiltersOpen(false)} error={budgetError}>
@@ -225,14 +226,14 @@ export function BudgetsSection({
             />
 
             <div className="form-grid__actions">
-              <button
+              <ActionButton
                 className="button button--secondary"
                 type="button"
                 disabled={!hasConfig || isBudgetsLoading}
                 onClick={onApplyFilter}
-              >
-                {isBudgetsLoading ? 'Cargando...' : 'Aplicar filtro'}
-              </button>
+                icon="filter"
+                label={isBudgetsLoading ? 'Cargando...' : 'Aplicar filtro'}
+              />
             </div>
           </div>
             </FormModal>
@@ -287,24 +288,24 @@ export function BudgetsSection({
                       </td>
                       <td>
                         <div className="table__actions">
-                          <button
+                          <ActionButton
                             className="button button--secondary"
                             type="button"
                             onClick={() => {
                               onEditBudget(budget)
                             }}
-                          >
-                            Editar
-                          </button>
-                          <button
+                            icon="edit"
+                            label="Editar"
+                          />
+                          <ActionButton
                             className="button button--danger"
                             type="button"
                             onClick={() => {
                               onDeleteBudget(budget.id)
                             }}
-                          >
-                            Eliminar
-                          </button>
+                            icon="trash"
+                            label="Eliminar"
+                          />
                         </div>
                       </td>
                     </tr>
@@ -322,7 +323,10 @@ export function BudgetsSection({
           <p className="mini-card__subtitle">Da seguimiento a tu fondo de emergencia y objetivos personales.</p>
         </header>
         <div className="section-toolbar">
-          <button className="button button--primary" type="button" onClick={() => { onSavingsGoalReset(); setIsSavingsGoalFormOpen(true) }}>Nueva meta de ahorro</button>
+          <ActionButton className="button button--primary" type="button" onClick={() => { onSavingsGoalReset(); setIsSavingsGoalFormOpen(true) }}
+            icon="plus"
+            label="Nueva meta de ahorro"
+          />
         </div>
         {isSavingsGoalFormOpen || editingSavingsGoalId !== null ? (
           <FormModal title={editingSavingsGoalId === null ? "Nueva meta de ahorro" : "Editar meta de ahorro"} onClose={() => { onSavingsGoalReset(); setIsSavingsGoalFormOpen(false) }} error={savingsGoalError} message={savingsGoalMessage}>
@@ -341,8 +345,11 @@ export function BudgetsSection({
             {goalInstruments.map((instrument) => <option key={instrument.id} value={instrument.id}>{instrument.name}</option>)}
           </select>
           <div className="form-grid__actions">
-            <button className="button button--primary" type="submit" disabled={!hasConfig}>{editingSavingsGoalId === null ? 'Crear meta' : 'Guardar meta'}</button>
-            <button className="button button--secondary" type="button" onClick={onSavingsGoalReset}>Limpiar</button>
+            <ActionButton className="button button--primary" type="submit" disabled={!hasConfig}
+              icon="save"
+              label={editingSavingsGoalId === null ? 'Crear meta' : 'Guardar meta'}
+            />
+            <ActionButton className="button button--secondary" type="button" onClick={onSavingsGoalReset} icon="reset" label="Limpiar" />
           </div>
         </form>
           </FormModal>
@@ -361,8 +368,14 @@ export function BudgetsSection({
                   <td>{goal.progressPercent}%</td>
                   <td>{formatIsoDate(goal.targetDate)}</td>
                   <td><div className="table__actions">
-                    <button className="button button--secondary" type="button" onClick={() => onSavingsGoalEdit(goal)}>Editar</button>
-                    <button className="button button--danger" type="button" onClick={() => onSavingsGoalDelete(goal.id)}>Archivar</button>
+                    <ActionButton className="button button--secondary" type="button" onClick={() => onSavingsGoalEdit(goal)}
+                      icon="edit"
+                      label="Editar"
+                    />
+                    <ActionButton className="button button--danger" type="button" onClick={() => onSavingsGoalDelete(goal.id)}
+                      icon="archive"
+                      label="Archivar"
+                    />
                   </div></td>
                 </tr>
               ))}

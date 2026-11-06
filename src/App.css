@@ -997,8 +997,8 @@ input[type='month']::-webkit-calendar-picker-indicator {
 }
 
 .payment-presets {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--space-1);
   margin-bottom: var(--space-3);
 }
@@ -1729,7 +1729,7 @@ input[type='month']::-webkit-calendar-picker-indicator {
   .table__actions,
   .category-card__actions,
   .credit-card-actions {
-    flex-direction: column;
+    flex-direction: row;
   }
 
   .category-card__header {
@@ -2352,7 +2352,7 @@ input[type='month']::-webkit-calendar-picker-indicator {
   }
 
   .debit-card-actions {
-    flex-direction: column;
+    flex-direction: row;
   }
 
   .loan-reconciliation .loan-reconciliation__form {

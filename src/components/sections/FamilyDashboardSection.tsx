@@ -1,3 +1,4 @@
+import { ActionButton } from '../ActionButton'
 import {
   Bar,
   BarChart,
@@ -36,9 +37,10 @@ export function FamilyDashboardSection({
           <h2 className="card__title">Inicio de Familia</h2>
           <p className="card__subtitle">Resumen mensual de gastos familiares, separado de tus instrumentos personales.</p>
         </div>
-        <button className="button button--secondary dashboard-header__reload" type="button" disabled={!hasConfig || isLoading} onClick={onReload}>
-          {isLoading ? 'Cargando...' : 'Recargar'}
-        </button>
+        <ActionButton className="button button--secondary dashboard-header__reload" type="button" disabled={!hasConfig || isLoading} onClick={onReload}
+          icon="refresh"
+          label={isLoading ? 'Cargando...' : 'Recargar'}
+        />
       </header>
 
       <div className="family-month-filter">

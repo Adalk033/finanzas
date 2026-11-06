@@ -1,3 +1,4 @@
+import { ActionButton } from '../ActionButton'
 import { FormModal } from '../FormModal'
 import { useState, type SyntheticEvent } from 'react'
 import { formatCurrency, formatIsoDate } from '../../app/appHelpers'
@@ -161,23 +162,26 @@ export function TransactionsSection({
       </header>
 
       <div className="section-toolbar">
-        <button className="button button--primary" type="button" onClick={() => {
+        <ActionButton className="button button--primary" type="button" onClick={() => {
           if (editingTransactionId !== null) {
             handleCancelTransactionForm()
             return
           }
           setIsTransactionFormOpen((value) => !value)
-        }}>
-          {isTransactionFormVisible ? 'Ocultar formulario' : 'Nueva transaccion'}
-        </button>
-        <button className="button button--secondary" type="button" onClick={() => setIsCardPaymentFormOpen((value) => !value)}>
-          {isCardPaymentFormOpen ? 'Ocultar abono' : 'Abonar a tarjeta'}
-        </button>
-        <button className="button button--secondary" type="button" onClick={() => setIsFiltersFormOpen((value) => !value)}>
-          {isFiltersFormOpen ? 'Ocultar filtros' : 'Filtros'}
-        </button>
+        }}
+          icon={isTransactionFormVisible ? 'close' : 'plus'}
+          label={isTransactionFormVisible ? 'Ocultar formulario' : 'Nueva transaccion'}
+        />
+        <ActionButton className="button button--secondary" type="button" onClick={() => setIsCardPaymentFormOpen((value) => !value)}
+          icon={isCardPaymentFormOpen ? 'close' : 'payment'}
+          label={isCardPaymentFormOpen ? 'Ocultar abono' : 'Abonar a tarjeta'}
+        />
+        <ActionButton className="button button--secondary" type="button" onClick={() => setIsFiltersFormOpen((value) => !value)}
+          icon="filter"
+          label={isFiltersFormOpen ? 'Ocultar filtros' : 'Filtros'}
+        />
         <div className="section-toolbar__spacer" />
-        <button className="button button--secondary" type="button" onClick={onReload}>Recargar</button>
+        <ActionButton className="button button--secondary" type="button" onClick={onReload} icon="refresh" label="Recargar" />
       </div>
 
       {isCardPaymentFormOpen ? (
@@ -265,16 +269,14 @@ export function TransactionsSection({
             />
 
             <div className="form-grid__actions">
-              <button
+              <ActionButton
                 className="button button--primary"
                 type="submit"
                 disabled={!hasConfig || creditCardInstruments.length === 0 || compatibleCardPaymentSources.length === 0}
-              >
-                Aplicar abono
-              </button>
-              <button className="button button--secondary" type="button" onClick={onResetCardPayment}>
-                Limpiar
-              </button>
+                icon="payment"
+                label="Aplicar abono"
+              />
+              <ActionButton className="button button--secondary" type="button" onClick={onResetCardPayment} icon="reset" label="Limpiar" />
             </div>
           </form>
 
@@ -489,17 +491,17 @@ export function TransactionsSection({
               ) : null}
 
               <div className="transaction-form__actions">
-                <button className="button button--primary" type="submit" disabled={!hasConfig || instruments.length === 0}>
-                  {editingTransactionId === null ? 'Crear transaccion' : 'Guardar cambios'}
-                </button>
+                <ActionButton className="button button--primary" type="submit" disabled={!hasConfig || instruments.length === 0}
+                  icon="save"
+                  label={editingTransactionId === null ? 'Crear transaccion' : 'Guardar cambios'}
+                />
                 {editingTransactionId === null ? (
-                  <button className="button button--secondary" type="button" onClick={onResetTransactionForm}>
-                    Limpiar
-                  </button>
+                  <ActionButton className="button button--secondary" type="button" onClick={onResetTransactionForm} icon="reset" label="Limpiar" />
                 ) : null}
-                <button className="button button--secondary" type="button" onClick={handleCancelTransactionForm}>
-                  {editingTransactionId === null ? 'Cancelar' : 'Cancelar edicion'}
-                </button>
+                <ActionButton className="button button--secondary" type="button" onClick={handleCancelTransactionForm}
+                  icon="close"
+                  label={editingTransactionId === null ? 'Cancelar' : 'Cancelar edicion'}
+                />
               </div>
             </form>
           </div>
@@ -601,12 +603,8 @@ export function TransactionsSection({
         </label>
 
             <div className="form-grid__actions">
-              <button className="button button--primary" type="submit" disabled={!hasConfig}>
-                Aplicar filtros
-              </button>
-              <button className="button button--secondary" type="button" onClick={onClearFilters}>
-                Limpiar filtros
-              </button>
+              <ActionButton className="button button--primary" type="submit" disabled={!hasConfig} icon="filter" label="Aplicar filtros" />
+              <ActionButton className="button button--secondary" type="button" onClick={onClearFilters} icon="reset" label="Limpiar filtros" />
             </div>
         </form>
       </div>
@@ -687,7 +685,7 @@ export function TransactionsSection({
                     ) : (
                       <div className="table__actions">
                         {transaction.type === 'expense' && transaction.sourceType === null ? (
-                          <button
+                          <ActionButton
                             className="button button--secondary"
                             type="button"
                             disabled={duplicatingTransactionId !== null}
@@ -699,16 +697,18 @@ export function TransactionsSection({
                                 setDuplicatingTransactionId(null)
                               }
                             }}
-                          >
-                            {duplicatingTransactionId === transaction.id ? 'Duplicando…' : 'Duplicar en Familia'}
-                          </button>
+                            icon="copy"
+                            label={duplicatingTransactionId === transaction.id ? 'Duplicando…' : 'Duplicar en Familia'}
+                          />
                         ) : null}
-                        <button className="button button--secondary" type="button" onClick={() => onTransactionEdit(transaction)}>
-                          Editar
-                        </button>
-                        <button className="button button--danger" type="button" onClick={() => onTransactionDelete(transaction.id)}>
-                          Eliminar
-                        </button>
+                        <ActionButton className="button button--secondary" type="button" onClick={() => onTransactionEdit(transaction)}
+                          icon="edit"
+                          label="Editar"
+                        />
+                        <ActionButton className="button button--danger" type="button" onClick={() => onTransactionDelete(transaction.id)}
+                          icon="trash"
+                          label="Eliminar"
+                        />
                       </div>
                     )}
                   </td>
@@ -726,25 +726,25 @@ export function TransactionsSection({
             : `Mostrando ${firstVisibleTransaction}-${lastVisibleTransaction} de ${transactionPagination.total} movimientos.`}
         </p>
         <nav className="transaction-pagination__controls" aria-label="Paginación de movimientos">
-          <button
+          <ActionButton
             className="button button--secondary"
             type="button"
             disabled={isTransactionsLoading || transactionPagination.page <= 1}
             onClick={() => onPageChange(transactionPagination.page - 1)}
-          >
-            Anterior
-          </button>
+            icon="previous"
+            label="Anterior"
+          />
           <span className="transaction-pagination__status">
             Página {transactionPagination.page} de {transactionPagination.totalPages}
           </span>
-          <button
+          <ActionButton
             className="button button--secondary"
             type="button"
             disabled={isTransactionsLoading || transactionPagination.page >= transactionPagination.totalPages}
             onClick={() => onPageChange(transactionPagination.page + 1)}
-          >
-            Siguiente
-          </button>
+            icon="next"
+            label="Siguiente"
+          />
         </nav>
       </div>
 

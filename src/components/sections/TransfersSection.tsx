@@ -1,3 +1,4 @@
+import { ActionButton } from '../ActionButton'
 import { FormModal } from '../FormModal'
 import { useState, type SyntheticEvent } from 'react'
 import { formatCurrency, formatIsoDate } from '../../app/appHelpers'
@@ -69,14 +70,15 @@ export function TransfersSection({
             Mueve dinero entre tus cuentas. Los pagos de tarjeta se registran directamente desde Tarjetas.
           </p>
         </div>
-        <button className="button button--secondary" type="button" onClick={onReload}>
-          Actualizar
-        </button>
+        <ActionButton className="button button--secondary" type="button" onClick={onReload} icon="refresh" label="Actualizar" />
       </header>
 
       <div className="section-stack">
         <div className="section-toolbar">
-          <button className="button button--primary" type="button" onClick={() => { onReset(); setIsFormOpen(true) }}>Nueva transferencia</button>
+          <ActionButton className="button button--primary" type="button" onClick={() => { onReset(); setIsFormOpen(true) }}
+            icon="plus"
+            label="Nueva transferencia"
+          />
         </div>
         {isFormOpen || editingTransferId !== null ? (
           <FormModal title={editingTransferId === null ? "Nueva transferencia" : "Editar transferencia"} onClose={() => { onReset(); setIsFormOpen(false) }} error={error} message={message}>
@@ -189,12 +191,14 @@ export function TransfersSection({
             />
 
             <div className="form-grid__actions">
-              <button className="button button--primary" type="submit" disabled={!hasConfig}>
-                {editingTransferId === null ? 'Registrar transferencia' : 'Guardar cambios'}
-              </button>
-              <button className="button button--secondary" type="button" onClick={onReset}>
-                {editingTransferId === null ? 'Limpiar' : 'Cancelar'}
-              </button>
+              <ActionButton className="button button--primary" type="submit" disabled={!hasConfig}
+                icon={editingTransferId === null ? 'plus' : 'save'}
+                label={editingTransferId === null ? 'Registrar transferencia' : 'Guardar cambios'}
+              />
+              <ActionButton className="button button--secondary" type="button" onClick={onReset}
+                icon={editingTransferId === null ? 'reset' : 'close'}
+                label={editingTransferId === null ? 'Limpiar' : 'Cancelar'}
+              />
             </div>
           </form>
           </FormModal>
@@ -243,12 +247,14 @@ export function TransfersSection({
                     <td className="table__amount">{formatCurrency(transfer.amount)}</td>
                     <td>
                       <div className="table__actions">
-                        <button className="button button--secondary" type="button" onClick={() => onEdit(transfer)}>
-                          Editar
-                        </button>
-                        <button className="button button--danger" type="button" onClick={() => onDelete(transfer.id)}>
-                          Eliminar
-                        </button>
+                        <ActionButton className="button button--secondary" type="button" onClick={() => onEdit(transfer)}
+                          icon="edit"
+                          label="Editar"
+                        />
+                        <ActionButton className="button button--danger" type="button" onClick={() => onDelete(transfer.id)}
+                          icon="trash"
+                          label="Eliminar"
+                        />
                       </div>
                     </td>
                   </tr>

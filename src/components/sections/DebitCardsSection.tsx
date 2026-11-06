@@ -1,3 +1,4 @@
+import { ActionButton } from '../ActionButton'
 import { FormModal } from '../FormModal'
 import { useState, type SyntheticEvent } from 'react'
 import { formatCurrency, formatIsoDate } from '../../app/appHelpers'
@@ -106,9 +107,7 @@ export function DebitCardsSection({
           <h2 className="card__title">Tarjetas de débito</h2>
           <p className="card__subtitle">Consulta el saldo disponible y concilia cada tarjeta sin pasar por Instrumentos.</p>
         </div>
-        <button className="button button--secondary" type="button" disabled={!hasConfig} onClick={onReload}>
-          Actualizar
-        </button>
+        <ActionButton className="button button--secondary" type="button" disabled={!hasConfig} onClick={onReload} icon="refresh" label="Actualizar" />
       </header>
 
       {debitCardInstruments.length === 0 ? (
@@ -172,15 +171,15 @@ export function DebitCardsSection({
               </article>
 
               <div className="debit-card-actions">
-                <button
+                <ActionButton
                   className="button button--primary"
                   type="button"
                   disabled={!hasConfig}
                   onClick={() => setActionPanel((current) => current === 'movement' ? null : 'movement')}
-                >
-                  {actionPanel === 'movement' ? 'Cerrar movimiento' : 'Registrar movimiento'}
-                </button>
-                <button
+                  icon={actionPanel === 'movement' ? 'close' : 'plus'}
+                  label={actionPanel === 'movement' ? 'Cerrar movimiento' : 'Registrar movimiento'}
+                />
+                <ActionButton
                   className="button button--secondary"
                   type="button"
                   disabled={!hasConfig}
@@ -191,9 +190,9 @@ export function DebitCardsSection({
                       startReconciliation()
                     }
                   }}
-                >
-                  {actionPanel === 'reconciliation' ? 'Cerrar conciliación' : 'Conciliar saldo'}
-                </button>
+                  icon="balance"
+                  label={actionPanel === 'reconciliation' ? 'Cerrar conciliación' : 'Conciliar saldo'}
+                />
               </div>
 
               {actionPanel === 'movement' ? (
@@ -302,17 +301,17 @@ export function DebitCardsSection({
                     />
 
                     <div className="form-grid__actions">
-                      <button className="button button--primary" type="submit">Guardar movimiento</button>
-                      <button
+                      <ActionButton className="button button--primary" type="submit" icon="save" label="Guardar movimiento" />
+                      <ActionButton
                         className="button button--secondary"
                         type="button"
                         onClick={() => {
                           onResetMovement()
                           setActionPanel(null)
                         }}
-                      >
-                        Cancelar
-                      </button>
+                        icon="close"
+                        label="Cancelar"
+                      />
                     </div>
                   </form>
                 </FormModal>
@@ -362,10 +361,11 @@ export function DebitCardsSection({
                     />
 
                     <div className="form-grid__actions">
-                      <button className="button button--primary" type="submit">Aplicar conciliación</button>
-                      <button className="button button--secondary" type="button" onClick={() => setActionPanel(null)}>
-                        Cancelar
-                      </button>
+                      <ActionButton className="button button--primary" type="submit" icon="balance" label="Aplicar conciliación" />
+                      <ActionButton className="button button--secondary" type="button" onClick={() => setActionPanel(null)}
+                        icon="close"
+                        label="Cancelar"
+                      />
                     </div>
                   </form>
                 </FormModal>

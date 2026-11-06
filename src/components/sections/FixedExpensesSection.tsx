@@ -1,3 +1,4 @@
+import { ActionButton } from '../ActionButton'
 import { FormModal } from '../FormModal'
 import { useState, type SyntheticEvent } from 'react'
 import { formatCurrency, formatIsoDate } from '../../app/appHelpers'
@@ -80,20 +81,19 @@ export function FixedExpensesSection({
 
       <div className="section-stack">
         <div className="section-toolbar">
-            <button className="button button--primary" type="button" onClick={() => {
+            <ActionButton className="button button--primary" type="button" onClick={() => {
               if (editingFixedExpenseId !== null) {
                 onResetFixedExpenseEditor()
                 setIsExpenseFormOpen(false)
                 return
               }
               setIsExpenseFormOpen((value) => !value)
-            }}>
-              {isExpenseFormVisible ? 'Ocultar formulario' : 'Nuevo gasto fijo'}
-            </button>
+            }}
+              icon={isExpenseFormVisible ? 'close' : 'plus'}
+              label={isExpenseFormVisible ? 'Ocultar formulario' : 'Nuevo gasto fijo'}
+            />
             <div className="section-toolbar__spacer" />
-            <button className="button button--secondary" type="button" onClick={onReloadFixedExpenses}>
-              Recargar
-            </button>
+            <ActionButton className="button button--secondary" type="button" onClick={onReloadFixedExpenses} icon="refresh" label="Recargar" />
           </div>
 
           {isExpenseFormVisible ? (
@@ -205,19 +205,18 @@ export function FixedExpensesSection({
                 />
 
                 <div className="form-grid__actions">
-                  <button className="button button--primary" type="submit" disabled={!hasConfig}>
-                    {editingFixedExpenseId === null ? 'Crear gasto fijo' : 'Guardar cambios'}
-                  </button>
-                  <button className="button button--secondary" type="button" onClick={onResetFixedExpenseEditor}>
-                    Limpiar
-                  </button>
+                  <ActionButton className="button button--primary" type="submit" disabled={!hasConfig}
+                    icon="save"
+                    label={editingFixedExpenseId === null ? 'Crear gasto fijo' : 'Guardar cambios'}
+                  />
+                  <ActionButton className="button button--secondary" type="button" onClick={onResetFixedExpenseEditor} icon="reset" label="Limpiar" />
                 </div>
               </form>
             </FormModal>
           ) : null}
 
         <div className="section-toolbar">
-            <button className="button button--primary" type="button" onClick={() => {
+            <ActionButton className="button button--primary" type="button" onClick={() => {
               if (selectedFixedExpenseId !== null) {
                 onResetFixedExpensePaymentForm()
                 onSelectFixedExpense(null)
@@ -225,9 +224,10 @@ export function FixedExpensesSection({
                 return
               }
               setIsPaymentFormOpen((value) => !value)
-            }}>
-              {isPaymentFormVisible ? 'Ocultar formulario' : 'Nuevo pago'}
-            </button>
+            }}
+              icon={isPaymentFormVisible ? 'close' : 'plus'}
+              label={isPaymentFormVisible ? 'Ocultar formulario' : 'Nuevo pago'}
+            />
           </div>
 
           {isPaymentFormVisible ? (
@@ -306,12 +306,14 @@ export function FixedExpensesSection({
                 />
 
                 <div className="form-grid__actions">
-                  <button className="button button--primary" type="submit" disabled={!selectedFixedExpenseId}>
-                    Registrar pago
-                  </button>
-                  <button className="button button--secondary" type="button" onClick={onResetFixedExpensePaymentForm}>
-                    Limpiar
-                  </button>
+                  <ActionButton className="button button--primary" type="submit" disabled={!selectedFixedExpenseId}
+                    icon="payment"
+                    label="Registrar pago"
+                  />
+                  <ActionButton className="button button--secondary" type="button" onClick={onResetFixedExpensePaymentForm}
+                    icon="reset"
+                    label="Limpiar"
+                  />
                 </div>
               </form>
             </FormModal>
@@ -365,12 +367,14 @@ export function FixedExpensesSection({
                       <td>{expense.paymentDay ?? '-'}</td>
                       <td>
                         <div className="table__actions">
-                          <button className="button button--secondary" type="button" onClick={() => onEditFixedExpense(expense)}>
-                            Editar
-                          </button>
-                          <button className="button button--danger" type="button" onClick={() => onDeleteFixedExpense(expense.id)}>
-                            Eliminar
-                          </button>
+                          <ActionButton className="button button--secondary" type="button" onClick={() => onEditFixedExpense(expense)}
+                            icon="edit"
+                            label="Editar"
+                          />
+                          <ActionButton className="button button--danger" type="button" onClick={() => onDeleteFixedExpense(expense.id)}
+                            icon="trash"
+                            label="Eliminar"
+                          />
                         </div>
                       </td>
                     </tr>
@@ -424,9 +428,10 @@ export function FixedExpensesSection({
                         <td>{payment.isPaid ? 'Pagado' : 'Pendiente'}</td>
                         <td>
                           <div className="table__actions">
-                            <button className="button button--danger" type="button" onClick={() => onDeleteFixedExpensePayment(payment.fixedExpenseId, payment.id)}>
-                              Eliminar
-                            </button>
+                            <ActionButton className="button button--danger" type="button" onClick={() => onDeleteFixedExpensePayment(payment.fixedExpenseId, payment.id)}
+                              icon="trash"
+                              label="Eliminar"
+                            />
                           </div>
                         </td>
                       </tr>

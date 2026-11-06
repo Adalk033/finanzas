@@ -1,3 +1,4 @@
+import { ActionButton } from '../ActionButton'
 import { FormModal } from '../FormModal'
 import { useState, type SyntheticEvent } from 'react'
 import { getCategoryTypeLabel } from '../../app/appHelpers'
@@ -87,20 +88,22 @@ export function CategoriesSection({
           </header>
 
           <div className="section-toolbar">
-            <button className="button button--primary" type="button" onClick={() => {
+            <ActionButton className="button button--primary" type="button" onClick={() => {
               if (editingCategoryId !== null) {
                 onCategoryReset()
                 setIsCategoryFormOpen(false)
                 return
               }
               setIsCategoryFormOpen((value) => !value)
-            }}>
-              {isCategoryFormVisible ? 'Ocultar formulario' : 'Nueva categoria'}
-            </button>
+            }}
+              icon={isCategoryFormVisible ? 'close' : 'plus'}
+              label={isCategoryFormVisible ? 'Ocultar formulario' : 'Nueva categoria'}
+            />
             <div className="section-toolbar__spacer" />
-            <button className="button button--secondary" type="button" disabled={!hasConfig} onClick={onReload}>
-              Recargar
-            </button>
+            <ActionButton className="button button--secondary" type="button" disabled={!hasConfig} onClick={onReload}
+              icon="refresh"
+              label="Recargar"
+            />
           </div>
 
           {isCategoryFormVisible ? (
@@ -130,12 +133,11 @@ export function CategoriesSection({
                 </select>
 
                 <div className="form-grid__actions">
-                  <button className="button button--primary" type="submit" disabled={!hasConfig}>
-                    {editingCategoryId === null ? 'Crear categoria' : 'Guardar cambios'}
-                  </button>
-                  <button className="button button--secondary" type="button" onClick={onCategoryReset}>
-                    Limpiar
-                  </button>
+                  <ActionButton className="button button--primary" type="submit" disabled={!hasConfig}
+                    icon="save"
+                    label={editingCategoryId === null ? 'Crear categoria' : 'Guardar cambios'}
+                  />
+                  <ActionButton className="button button--secondary" type="button" onClick={onCategoryReset} icon="reset" label="Limpiar" />
                 </div>
               </form>
             </FormModal>
@@ -152,20 +154,22 @@ export function CategoriesSection({
           </header>
 
           <div className="section-toolbar">
-            <button className="button button--primary" type="button" onClick={() => {
+            <ActionButton className="button button--primary" type="button" onClick={() => {
               if (editingSubcategoryId !== null) {
                 onSubcategoryReset()
                 setIsSubcategoryFormOpen(false)
                 return
               }
               setIsSubcategoryFormOpen((value) => !value)
-            }}>
-              {isSubcategoryFormVisible ? 'Ocultar formulario' : 'Nueva subcategoria'}
-            </button>
+            }}
+              icon={isSubcategoryFormVisible ? 'close' : 'plus'}
+              label={isSubcategoryFormVisible ? 'Ocultar formulario' : 'Nueva subcategoria'}
+            />
             <div className="section-toolbar__spacer" />
-            <button className="button button--secondary" type="button" disabled={!hasConfig} onClick={onReload}>
-              Recargar
-            </button>
+            <ActionButton className="button button--secondary" type="button" disabled={!hasConfig} onClick={onReload}
+              icon="refresh"
+              label="Recargar"
+            />
           </div>
 
           {isSubcategoryFormVisible ? (
@@ -207,12 +211,11 @@ export function CategoriesSection({
                 />
 
                 <div className="form-grid__actions">
-                  <button className="button button--primary" type="submit" disabled={!hasConfig || categories.length === 0}>
-                    {editingSubcategoryId === null ? 'Crear subcategoria' : 'Guardar cambios'}
-                  </button>
-                  <button className="button button--secondary" type="button" onClick={onSubcategoryReset}>
-                    Limpiar
-                  </button>
+                  <ActionButton className="button button--primary" type="submit" disabled={!hasConfig || categories.length === 0}
+                    icon="save"
+                    label={editingSubcategoryId === null ? 'Crear subcategoria' : 'Guardar cambios'}
+                  />
+                  <ActionButton className="button button--secondary" type="button" onClick={onSubcategoryReset} icon="reset" label="Limpiar" />
                 </div>
               </form>
             </FormModal>
@@ -264,12 +267,14 @@ export function CategoriesSection({
                         <td>{subcategory.iconName ?? '-'}</td>
                         <td>
                           <div className="table__actions">
-                            <button className="button button--secondary" type="button" onClick={() => onEditSubcategory(subcategory)}>
-                              Editar
-                            </button>
-                            <button className="button button--danger" type="button" onClick={() => onDeleteSubcategory(subcategory.id)}>
-                              Eliminar
-                            </button>
+                            <ActionButton className="button button--secondary" type="button" onClick={() => onEditSubcategory(subcategory)}
+                              icon="edit"
+                              label="Editar"
+                            />
+                            <ActionButton className="button button--danger" type="button" onClick={() => onDeleteSubcategory(subcategory.id)}
+                              icon="trash"
+                              label="Eliminar"
+                            />
                           </div>
                         </td>
                       </tr>
@@ -279,12 +284,14 @@ export function CategoriesSection({
               </div>
 
               <div className="category-card__actions">
-                <button className="button button--secondary" type="button" onClick={() => onEditCategory(category)}>
-                  Editar categoria
-                </button>
-                <button className="button button--danger" type="button" disabled={!category.canDelete} onClick={() => onDeleteCategory(category.id)}>
-                  Eliminar categoria
-                </button>
+                <ActionButton className="button button--secondary" type="button" onClick={() => onEditCategory(category)}
+                  icon="edit"
+                  label="Editar categoria"
+                />
+                <ActionButton className="button button--danger" type="button" disabled={!category.canDelete} onClick={() => onDeleteCategory(category.id)}
+                  icon="trash"
+                  label="Eliminar categoria"
+                />
               </div>
             </article>
           ))

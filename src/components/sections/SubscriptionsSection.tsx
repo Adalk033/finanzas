@@ -1,3 +1,4 @@
+import { ActionButton } from '../ActionButton'
 import { FormModal } from '../FormModal'
 import { useState, type SyntheticEvent } from 'react'
 import { formatCurrency, formatIsoDate } from '../../app/appHelpers'
@@ -108,20 +109,19 @@ export function SubscriptionsSection({
 
       <div className="section-stack">
         <div className="section-toolbar">
-            <button className="button button--primary" type="button" onClick={() => {
+            <ActionButton className="button button--primary" type="button" onClick={() => {
               if (editingSubscriptionId !== null) {
                 onReset()
                 setIsFormOpen(false)
                 return
               }
               setIsFormOpen((value) => !value)
-            }}>
-              {isFormVisible ? 'Ocultar formulario' : 'Nueva suscripcion'}
-            </button>
+            }}
+              icon={isFormVisible ? 'close' : 'plus'}
+              label={isFormVisible ? 'Ocultar formulario' : 'Nueva suscripcion'}
+            />
             <div className="section-toolbar__spacer" />
-            <button className="button button--secondary" type="button" onClick={onReload}>
-              Recargar
-            </button>
+            <ActionButton className="button button--secondary" type="button" onClick={onReload} icon="refresh" label="Recargar" />
           </div>
 
           {isFormVisible ? (
@@ -241,12 +241,11 @@ export function SubscriptionsSection({
                 />
 
                 <div className="form-grid__actions">
-                  <button className="button button--primary" type="submit" disabled={!hasConfig || instruments.length === 0}>
-                    {editingSubscriptionId === null ? 'Crear suscripcion' : 'Guardar cambios'}
-                  </button>
-                  <button className="button button--secondary" type="button" onClick={onReset}>
-                    Limpiar
-                  </button>
+                  <ActionButton className="button button--primary" type="submit" disabled={!hasConfig || instruments.length === 0}
+                    icon="save"
+                    label={editingSubscriptionId === null ? 'Crear suscripcion' : 'Guardar cambios'}
+                  />
+                  <ActionButton className="button button--secondary" type="button" onClick={onReset} icon="reset" label="Limpiar" />
                 </div>
               </form>
             </FormModal>
@@ -309,12 +308,14 @@ export function SubscriptionsSection({
                   <td>{formatIsoDate(subscription.nextBilling)}</td>
                   <td>
                     <div className="table__actions">
-                      <button className="button button--secondary" type="button" onClick={() => onEdit(subscription)}>
-                        Editar
-                      </button>
-                      <button className="button button--danger" type="button" onClick={() => onDelete(subscription.id)}>
-                        Eliminar
-                      </button>
+                      <ActionButton className="button button--secondary" type="button" onClick={() => onEdit(subscription)}
+                        icon="edit"
+                        label="Editar"
+                      />
+                      <ActionButton className="button button--danger" type="button" onClick={() => onDelete(subscription.id)}
+                        icon="trash"
+                        label="Eliminar"
+                      />
                     </div>
                   </td>
                 </tr>
@@ -332,7 +333,10 @@ export function SubscriptionsSection({
           </p>
         </header>
         <div className="section-toolbar">
-          <button className="button button--primary" type="button" onClick={() => { onRecurringIncomeReset(); setIsRecurringIncomeFormOpen(true) }}>Nuevo ingreso recurrente</button>
+          <ActionButton className="button button--primary" type="button" onClick={() => { onRecurringIncomeReset(); setIsRecurringIncomeFormOpen(true) }}
+            icon="plus"
+            label="Nuevo ingreso recurrente"
+          />
         </div>
         {isRecurringIncomeFormOpen || editingRecurringIncomeId !== null ? (
           <FormModal title={editingRecurringIncomeId === null ? "Nuevo ingreso recurrente" : "Editar ingreso recurrente"} onClose={() => { onRecurringIncomeReset(); setIsRecurringIncomeFormOpen(false) }} error={recurringIncomeError} message={recurringIncomeMessage}>
@@ -460,12 +464,11 @@ export function SubscriptionsSection({
             required
           />
           <div className="form-grid__actions">
-            <button className="button button--primary" type="submit" disabled={!hasConfig}>
-              {editingRecurringIncomeId === null ? 'Crear ingreso recurrente' : 'Guardar cambios'}
-            </button>
-            <button className="button button--secondary" type="button" onClick={onRecurringIncomeReset}>
-              Limpiar
-            </button>
+            <ActionButton className="button button--primary" type="submit" disabled={!hasConfig}
+              icon="save"
+              label={editingRecurringIncomeId === null ? 'Crear ingreso recurrente' : 'Guardar cambios'}
+            />
+            <ActionButton className="button button--secondary" type="button" onClick={onRecurringIncomeReset} icon="reset" label="Limpiar" />
           </div>
         </form>
           </FormModal>
@@ -489,8 +492,14 @@ export function SubscriptionsSection({
                   <td>{formatIsoDate(income.nextPayment)}</td>
                   <td>
                     <div className="table__actions">
-                      <button className="button button--secondary" type="button" onClick={() => onRecurringIncomeEdit(income)}>Editar</button>
-                      <button className="button button--danger" type="button" onClick={() => onRecurringIncomeDelete(income.id)}>Archivar</button>
+                      <ActionButton className="button button--secondary" type="button" onClick={() => onRecurringIncomeEdit(income)}
+                        icon="edit"
+                        label="Editar"
+                      />
+                      <ActionButton className="button button--danger" type="button" onClick={() => onRecurringIncomeDelete(income.id)}
+                        icon="archive"
+                        label="Archivar"
+                      />
                     </div>
                   </td>
                 </tr>

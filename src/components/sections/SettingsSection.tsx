@@ -1,3 +1,4 @@
+import { ActionButton } from '../ActionButton'
 import { useState } from 'react'
 import { getLocalDatabaseBridge } from '../../app/localDatabaseBridge'
 import type { DatabaseInfo } from '../../types/config'
@@ -55,30 +56,34 @@ export function SettingsSection({
       </header>
 
       <div className="section-toolbar">
-        <button
+        <ActionButton
           className="button button--secondary"
           type="button"
           disabled={isLoading}
           onClick={onRefresh}
-        >
-          {isLoading ? 'Verificando...' : 'Actualizar estado'}
-        </button>
-        <button className="button button--secondary" type="button" disabled={isActionRunning} onClick={() => void runFileAction('backup')}>
-          Crear respaldo
-        </button>
-        <button className="button button--secondary" type="button" disabled={isActionRunning} onClick={() => {
+          icon="refresh"
+          label={isLoading ? 'Verificando...' : 'Actualizar estado'}
+        />
+        <ActionButton className="button button--secondary" type="button" disabled={isActionRunning} onClick={() => void runFileAction('backup')}
+          icon="backup"
+          label="Crear respaldo"
+        />
+        <ActionButton className="button button--secondary" type="button" disabled={isActionRunning} onClick={() => {
           if (window.confirm('La restauracion reemplazara los datos actuales. Se conservara una copia de seguridad automatica. ¿Continuar?')) {
             void runFileAction('restore')
           }
-        }}>
-          Restaurar respaldo
-        </button>
-        <button className="button button--secondary" type="button" disabled={isActionRunning} onClick={() => void runFileAction('exportCsv')}>
-          Exportar CSV
-        </button>
-        <button className="button button--secondary" type="button" disabled={isActionRunning} onClick={() => void runFileAction('importCsv')}>
-          Importar CSV
-        </button>
+        }}
+          icon="undo"
+          label="Restaurar respaldo"
+        />
+        <ActionButton className="button button--secondary" type="button" disabled={isActionRunning} onClick={() => void runFileAction('exportCsv')}
+          icon="download"
+          label="Exportar CSV"
+        />
+        <ActionButton className="button button--secondary" type="button" disabled={isActionRunning} onClick={() => void runFileAction('importCsv')}
+          icon="upload"
+          label="Importar CSV"
+        />
       </div>
 
       {info ? (

@@ -1,3 +1,4 @@
+import { ActionButton } from '../ActionButton'
 import {
   Area,
   AreaChart,
@@ -92,9 +93,10 @@ export function DashboardSection({
           <h2 className="card__title"></h2>
           <p className="card__subtitle"></p>
         </div>
-        <button className="button button--secondary dashboard-header__reload" type="button" disabled={!hasConfig || isDashboardLoading} onClick={onReload}>
-          {isDashboardLoading ? 'Cargando...' : 'Recargar'}
-        </button>
+        <ActionButton className="button button--secondary dashboard-header__reload" type="button" disabled={!hasConfig || isDashboardLoading} onClick={onReload}
+          icon="refresh"
+          label={isDashboardLoading ? 'Cargando...' : 'Recargar'}
+        />
       </header>
 
       {!hasConfig ? <p className="message message--info">Abre la aplicacion de escritorio para acceder a tus datos locales.</p> : null}
