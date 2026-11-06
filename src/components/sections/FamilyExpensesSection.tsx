@@ -1,3 +1,4 @@
+import { FormModal } from '../FormModal'
 import { useState, type SyntheticEvent } from 'react'
 import { formatCurrency, formatIsoDate } from '../../app/appHelpers'
 import type {
@@ -99,13 +100,9 @@ export function FamilyExpensesSection({
         <button className="button button--secondary" type="button" onClick={onReload}>Recargar</button>
       </div>
 
-      <div className="transaction-layout">
-        <section className="mini-card">
-          <header className="mini-card__header">
-            <h3 className="mini-card__title">{editingId === null ? 'Nuevo gasto familiar' : 'Editar gasto familiar'}</h3>
-          </header>
-          {isFormVisible ? (
-            <div className="section-panel">
+      <div className="section-stack">
+        {isFormVisible ? (
+            <FormModal title={editingId === null ? "Nuevo gasto familiar" : "Editar gasto familiar"} onClose={() => { onReset(); setIsFormOpen(false) }} error={error} message={message}>
               <form className="form-grid" onSubmit={onSubmit}>
                 <label className="form-grid__field" htmlFor="familyExpenseDescription">Descripcion</label>
                 <input
@@ -192,16 +189,11 @@ export function FamilyExpensesSection({
                   </button>
                 </div>
               </form>
-            </div>
+            </FormModal>
           ) : null}
-        </section>
 
-        <section className="mini-card">
-          <header className="mini-card__header">
-            <h3 className="mini-card__title">Filtros del mes</h3>
-          </header>
-          {areFiltersOpen ? (
-            <div className="section-panel">
+        {areFiltersOpen ? (
+            <FormModal title="Filtros del mes" onClose={() => setAreFiltersOpen(false)} error={error}>
               <form className="form-grid" onSubmit={onFiltersSubmit}>
                 <label className="form-grid__field" htmlFor="familyExpenseFilterCategory">Categoria</label>
                 <select
@@ -233,9 +225,8 @@ export function FamilyExpensesSection({
                   <button className="button button--secondary" type="button" onClick={onClearFilters}>Limpiar</button>
                 </div>
               </form>
-            </div>
+            </FormModal>
           ) : null}
-        </section>
       </div>
 
       {error ? <p className="message message--error">{error}</p> : null}

@@ -286,10 +286,10 @@ export function App() {
               onTransactionTypeChange={transactionsController.handleTransactionTypeChange}
               onTransactionSubmit={transactionsController.handleTransactionSubmit}
               onTransactionEdit={transactionsController.startTransactionEdit}
-              onMoveTransactionToFamily={async (transaction) => {
+              onDuplicateTransactionToFamily={async (transaction) => {
                 const msiNote = transaction.isMsi ? ' En Familia se registrará el importe total, sin calendario MSI.' : ''
-                if (window.confirm(`¿Pasar este gasto a Familia? Se quitará de Movimientos y se revertirá su impacto en el saldo personal. Familia no afecta tus cuentas ni tarjetas.${msiNote}`)) {
-                  await transactionsController.handleMoveTransactionToFamily(transaction.id)
+                if (window.confirm(`¿Duplicar este gasto en Familia? El movimiento original y su impacto en el saldo se conservarán. La copia en Familia no afecta tus cuentas ni tarjetas.${msiNote}`)) {
+                  await transactionsController.handleDuplicateTransactionToFamily(transaction.id)
                 }
               }}
               onTransactionDelete={(transactionId) => {

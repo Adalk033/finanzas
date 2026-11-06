@@ -1,3 +1,4 @@
+import { FormModal } from '../FormModal'
 import { useState, type SyntheticEvent } from 'react'
 import { getCategoryTypeLabel } from '../../app/appHelpers'
 import type {
@@ -103,7 +104,7 @@ export function CategoriesSection({
           </div>
 
           {isCategoryFormVisible ? (
-            <div className="section-panel">
+            <FormModal title={editingCategoryId === null ? "Nueva categoría" : "Editar categoría"} onClose={() => { onCategoryReset(); setIsCategoryFormOpen(false) }} error={categoryError} message={categoryMessage}>
               <form className="form-grid" onSubmit={onCategorySubmit}>
                 <label className="form-grid__field" htmlFor="categoryName">Nombre</label>
                 <input
@@ -137,7 +138,7 @@ export function CategoriesSection({
                   </button>
                 </div>
               </form>
-            </div>
+            </FormModal>
           ) : null}
 
           {categoryError ? <p className="message message--error">{categoryError}</p> : null}
@@ -168,7 +169,7 @@ export function CategoriesSection({
           </div>
 
           {isSubcategoryFormVisible ? (
-            <div className="section-panel">
+            <FormModal title={editingSubcategoryId === null ? "Nueva subcategoría" : "Editar subcategoría"} onClose={() => { onSubcategoryReset(); setIsSubcategoryFormOpen(false) }} error={subcategoryError} message={subcategoryMessage}>
               <form className="form-grid" onSubmit={onSubcategorySubmit}>
                 <label className="form-grid__field" htmlFor="subcategoryCategory">Categoria</label>
                 <select
@@ -214,7 +215,7 @@ export function CategoriesSection({
                   </button>
                 </div>
               </form>
-            </div>
+            </FormModal>
           ) : null}
 
           {subcategoryError ? <p className="message message--error">{subcategoryError}</p> : null}

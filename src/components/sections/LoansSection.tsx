@@ -1,3 +1,4 @@
+import { FormModal } from '../FormModal'
 import { useState, type SyntheticEvent } from 'react'
 import { formatCurrency, formatIsoDate } from '../../app/appHelpers'
 import type {
@@ -73,6 +74,7 @@ export function LoansSection({
 }: LoansSectionProps) {
   const [isLoanFormOpen, setIsLoanFormOpen] = useState(editingLoanId !== null)
   const [isRegisterFormOpen, setIsRegisterFormOpen] = useState(false)
+  const [selectedInstallment, setSelectedInstallment] = useState<number | null>(null)
   const [reconciliationLoan, setReconciliationLoan] = useState<Loan | null>(null)
   const [reconciliationBalance, setReconciliationBalance] = useState('')
   const [reconciliationDate, setReconciliationDate] = useState('')
@@ -115,14 +117,8 @@ export function LoansSection({
         <p className="card__subtitle">Gestion de prestamos, tabla de amortizacion y registro de cuotas pagadas.</p>
       </header>
 
-      <div className="transaction-layout">
-        <section className="mini-card">
-          <header className="mini-card__header">
-            <h3 className="mini-card__title">Nuevo prestamo</h3>
-            <p className="mini-card__subtitle">Configura tipo de pago fijo o variable y genera su calendario.</p>
-          </header>
-
-          <div className="section-toolbar">
+      <div className="section-stack">
+        <div className="section-toolbar">
             <button className="button button--primary" type="button" onClick={() => {
               if (editingLoanId !== null) {
                 onReset()
@@ -140,7 +136,8 @@ export function LoansSection({
           </div>
 
           {isLoanFormVisible ? (
-            <div className="section-panel">
+            <FormModal title={editingLoanId === null ? "Nuevo préstamo" : "Editar préstamo"} onClose={() => { onReset(); setIsLoanFormOpen(false) }} error={loanError} message={loanMessage}>
+              <p className="mini-card__subtitle">Configura tipo de pago fijo o variable y genera su calendario.</p>
               <form className="form-grid" onSubmit={onSubmit}>
                 <label className="form-grid__field" htmlFor="loanName">Nombre</label>
                 <input
@@ -370,25 +367,53 @@ export function LoansSection({
                   </button>
                 </div>
               </form>
-            </div>
+            </FormModal>
           ) : null}
-        </section>
 
-        <section className="mini-card">
-          <header className="mini-card__header">
-            <h3 className="mini-card__title">Registro de cuota</h3>
-            <p className="mini-card__subtitle">Selecciona un prestamo y registra cuotas pendientes.</p>
-          </header>
-
-          <div className="section-toolbar">
+        <div className="section-toolbar">
             <button className="button button--primary" type="button" onClick={() => setIsRegisterFormOpen((value) => !value)}>
               {isRegisterFormOpen ? 'Ocultar formulario' : 'Registrar cuota'}
             </button>
           </div>
 
           {isRegisterFormOpen ? (
-            <div className="section-panel">
-              <form className="form-grid" onSubmit={(event) => event.preventDefault()}>
+            <FormModal title="Registrar cuota" onClose={() => setIsRegisterFormOpen(false)} error={loanError} message={loanMessage}>
+              <p className="mini-card__subtitle">Selecciona un préstamo y la cuota pendiente que deseas registrar.</p>
+              <form className="form-grid" onSubmit={(event) => {
+                event.preventDefault()
+                if (selectedInstallment !== null) onPayInstallment(selectedInstallment)
+              }}>
+                <label className="form-grid__field" htmlFor="loanRegisterLoan">Préstamo</label>
+                <select
+                  id="loanRegisterLoan"
+                  className="form-grid__input"
+                  value={selectedLoan?.id ?? ''}
+                  disabled={isLoanPaymentsLoading}
+                  onChange={(event) => {
+                    setSelectedInstallment(null)
+                    onLoadLoanPayments(Number(event.target.value))
+                  }}
+                  required
+                >
+                  <option value="" disabled>Selecciona un préstamo</option>
+                  {loans.map((loan) => <option key={loan.id} value={loan.id}>{loan.name}</option>)}
+                </select>
+                <label className="form-grid__field" htmlFor="loanRegisterInstallment">Cuota pendiente</label>
+                <select
+                  id="loanRegisterInstallment"
+                  className="form-grid__input"
+                  value={selectedInstallment ?? ''}
+                  disabled={selectedLoan === null || isLoanPaymentsLoading}
+                  onChange={(event) => setSelectedInstallment(Number(event.target.value))}
+                  required
+                >
+                  <option value="" disabled>Selecciona una cuota</option>
+                  {loanPayments.filter((payment) => !payment.isPaid).map((payment) => (
+                    <option key={payment.id} value={payment.installmentNum}>
+                      Cuota {payment.installmentNum} · {formatIsoDate(payment.paymentDate)} · {formatCurrency(payment.amount)}
+                    </option>
+                  ))}
+                </select>
                 <label className="form-grid__field" htmlFor="loanRegisterPaidDate">Fecha de pago</label>
                 <input
                   id="loanRegisterPaidDate"
@@ -419,18 +444,23 @@ export function LoansSection({
                   placeholder="Comprobante o comentario"
                 />
 
-                <p className="card__subtitle form-grid__help">
-                  Usa el boton Pagar de la tabla para registrar cada cuota pendiente con esta configuracion.
-                </p>
+                <div className="form-grid__actions">
+                  <button
+                    className="button button--primary"
+                    type="submit"
+                    disabled={!hasConfig || isLoanPaymentsLoading || !loanPayments.some((payment) => payment.installmentNum === selectedInstallment && !payment.isPaid)}
+                  >
+                    {selectedLoan?.affectsInstrumentBalance === false ? 'Registrar descuento' : 'Registrar pago'}
+                  </button>
+                </div>
               </form>
-            </div>
+            </FormModal>
           ) : null}
-        </section>
       </div>
 
       {reconciliationLoan !== null ? (
-        <section className="loan-reconciliation">
-          <header className="loan-reconciliation__header">
+        <FormModal title="Conciliar saldo pendiente" onClose={() => setReconciliationLoan(null)} error={loanError} message={loanMessage}>
+          <header className="loan-reconciliation__header form-modal__intro">
             <h3 className="loan-reconciliation__title">Conciliar saldo pendiente · {reconciliationLoan.name}</h3>
             <p className="loan-reconciliation__description">Captura el saldo real indicado por el acreedor. La app no modifica tu cuenta vinculada y recalcula las cuotas futuras.</p>
           </header>
@@ -474,7 +504,7 @@ export function LoansSection({
               </button>
             </div>
           </form>
-        </section>
+        </FormModal>
       ) : null}
 
       {loanError ? <p className="message message--error">{loanError}</p> : null}
@@ -603,7 +633,7 @@ export function LoansSection({
                               className="button button--primary"
                               type="button"
                               disabled={payment.isPaid}
-                              onClick={() => onPayInstallment(payment.installmentNum)}
+                              onClick={() => { setSelectedInstallment(payment.installmentNum); setIsRegisterFormOpen(true) }}
                             >
                               {selectedLoan.affectsInstrumentBalance ? 'Pagar' : 'Registrar descuento'}
                             </button>

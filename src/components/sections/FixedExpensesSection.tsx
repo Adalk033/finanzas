@@ -1,3 +1,4 @@
+import { FormModal } from '../FormModal'
 import { useState, type SyntheticEvent } from 'react'
 import { formatCurrency, formatIsoDate } from '../../app/appHelpers'
 import type {
@@ -77,14 +78,8 @@ export function FixedExpensesSection({
         <p className="card__subtitle">Gestión de gastos recurrentes, pagos y abonos asociados a cada instrumento.</p>
       </header>
 
-      <div className="transaction-layout">
-        <section className="mini-card">
-          <header className="mini-card__header">
-            <h3 className="mini-card__title">Nuevo gasto fijo</h3>
-            <p className="mini-card__subtitle">Renta, luz, agua, internet y otros compromisos.</p>
-          </header>
-
-          <div className="section-toolbar">
+      <div className="section-stack">
+        <div className="section-toolbar">
             <button className="button button--primary" type="button" onClick={() => {
               if (editingFixedExpenseId !== null) {
                 onResetFixedExpenseEditor()
@@ -102,7 +97,8 @@ export function FixedExpensesSection({
           </div>
 
           {isExpenseFormVisible ? (
-            <div className="section-panel">
+            <FormModal title={editingFixedExpenseId === null ? "Nuevo gasto fijo" : "Editar gasto fijo"} onClose={() => { onResetFixedExpenseEditor(); setIsExpenseFormOpen(false) }} error={fixedExpenseError} message={fixedExpenseMessage}>
+              <p className="mini-card__subtitle">Renta, luz, agua, internet y otros compromisos.</p>
               <form className="form-grid" onSubmit={onFixedExpenseSubmit}>
                 <label className="form-grid__field" htmlFor="fixedExpenseName">Nombre</label>
                 <input
@@ -217,17 +213,10 @@ export function FixedExpensesSection({
                   </button>
                 </div>
               </form>
-            </div>
+            </FormModal>
           ) : null}
-        </section>
 
-        <section className="mini-card">
-          <header className="mini-card__header">
-            <h3 className="mini-card__title">Registrar pago o abono</h3>
-            <p className="mini-card__subtitle">Puedes registrar varios pagos para un mismo periodo; cada uno se carga al instrumento del gasto fijo.</p>
-          </header>
-
-          <div className="section-toolbar">
+        <div className="section-toolbar">
             <button className="button button--primary" type="button" onClick={() => {
               if (selectedFixedExpenseId !== null) {
                 onResetFixedExpensePaymentForm()
@@ -242,7 +231,8 @@ export function FixedExpensesSection({
           </div>
 
           {isPaymentFormVisible ? (
-            <div className="section-panel">
+            <FormModal title="Registrar pago de gasto fijo" onClose={() => { onResetFixedExpensePaymentForm(); onSelectFixedExpense(null); setIsPaymentFormOpen(false) }} error={fixedExpenseError} message={fixedExpenseMessage}>
+              <p className="mini-card__subtitle">Puedes registrar varios pagos para un mismo periodo; cada uno se carga al instrumento del gasto fijo.</p>
               <form className="form-grid" onSubmit={onFixedExpensePaymentSubmit}>
                 <label className="form-grid__field" htmlFor="fixedExpenseSelected">Gasto fijo</label>
                 <select
@@ -324,9 +314,8 @@ export function FixedExpensesSection({
                   </button>
                 </div>
               </form>
-            </div>
+            </FormModal>
           ) : null}
-        </section>
       </div>
 
       {fixedExpenseError ? <p className="message message--error">{fixedExpenseError}</p> : null}

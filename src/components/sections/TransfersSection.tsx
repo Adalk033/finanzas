@@ -1,4 +1,5 @@
-import type { SyntheticEvent } from 'react'
+import { FormModal } from '../FormModal'
+import { useState, type SyntheticEvent } from 'react'
 import { formatCurrency, formatIsoDate } from '../../app/appHelpers'
 import type {
   FinancialInstrument,
@@ -54,6 +55,7 @@ export function TransfersSection({
   onEdit,
   onDelete,
 }: TransfersSectionProps) {
+  const [isFormOpen, setIsFormOpen] = useState(false)
   const visibleTransfers = transfers.filter(
     (transfer) => transfer.type === 'inter_account' || transfer.type === 'other',
   )
@@ -72,17 +74,15 @@ export function TransfersSection({
         </button>
       </header>
 
-      <div className="transfers__layout">
-        <article className="mini-card">
-          <header className="mini-card__header">
-            <h3 className="mini-card__title">
-              {editingTransferId === null ? 'Nueva transferencia' : 'Editar transferencia'}
-            </h3>
-            <p className="mini-card__subtitle">
+      <div className="section-stack">
+        <div className="section-toolbar">
+          <button className="button button--primary" type="button" onClick={() => { onReset(); setIsFormOpen(true) }}>Nueva transferencia</button>
+        </div>
+        {isFormOpen || editingTransferId !== null ? (
+          <FormModal title={editingTransferId === null ? "Nueva transferencia" : "Editar transferencia"} onClose={() => { onReset(); setIsFormOpen(false) }} error={error} message={message}>
+              <p className="mini-card__subtitle">
               El saldo se descuenta del origen y se aplica al destino en una sola operación.
             </p>
-          </header>
-
           <form className="form-grid" onSubmit={onSubmit}>
             <label className="form-grid__field" htmlFor="transferType">Tipo</label>
             <select
@@ -197,10 +197,11 @@ export function TransfersSection({
               </button>
             </div>
           </form>
+          </FormModal>
+        ) : null}
 
           {error ? <p className="message message--error">{error}</p> : null}
           {message ? <p className="message message--success">{message}</p> : null}
-        </article>
 
         <article className="mini-card">
           <header className="mini-card__header">

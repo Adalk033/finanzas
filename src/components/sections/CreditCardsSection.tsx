@@ -1,3 +1,4 @@
+import { FormModal } from '../FormModal'
 import { useState, type SyntheticEvent } from 'react'
 import { formatCurrency, formatIsoDate, MSI_OPTIONS } from '../../app/appHelpers'
 import type {
@@ -315,8 +316,8 @@ export function CreditCardsSection({
               {actionMessage ? <p className="message message--success">{actionMessage}</p> : null}
 
               {actionPanel === 'purchase' ? (
-                <article className="credit-card-form-panel">
-                  <header>
+                <FormModal title="Registrar compra" onClose={() => setActionPanel(null)} error={actionError} message={actionMessage}>
+                  <header className="form-modal__intro">
                     <h3>Registrar compra</h3>
                     <p>La compra se aplicará directamente al saldo de {selectedCard.name}.</p>
                   </header>
@@ -433,12 +434,12 @@ export function CreditCardsSection({
                       </button>
                     </div>
                   </form>
-                </article>
+                </FormModal>
               ) : null}
 
               {actionPanel === 'payment' ? (
-                <article className="credit-card-form-panel">
-                  <header>
+                <FormModal title="Abonar a tarjeta" onClose={() => setActionPanel(null)} error={actionError} message={actionMessage}>
+                  <header className="form-modal__intro">
                     <h3>Registrar abono</h3>
                     <p>Puedes abonar cualquier monto desde una cuenta o tarjeta de débito. El saldo de ambos instrumentos se actualizará en una sola operación.</p>
                   </header>
@@ -520,12 +521,12 @@ export function CreditCardsSection({
                       </button>
                     </div>
                   </form>
-                </article>
+                </FormModal>
               ) : null}
 
               {actionPanel === 'reconciliation' ? (
-                <article className="credit-card-form-panel">
-                  <header>
+                <FormModal title="Conciliar saldo" onClose={() => setActionPanel(null)} error={actionError} message={actionMessage}>
+                  <header className="form-modal__intro">
                     <h3>Conciliar saldo</h3>
                     <p>Registra la deuda real indicada por el banco para crear un ajuste auditable y conservar el historial de la tarjeta.</p>
                   </header>
@@ -569,7 +570,7 @@ export function CreditCardsSection({
                       </button>
                     </div>
                   </form>
-                </article>
+                </FormModal>
               ) : null}
 
               <nav className="credit-card-tabs" aria-label="Detalle de tarjeta">
@@ -727,8 +728,10 @@ export function CreditCardsSection({
                     </div>
 
                     {editingStatementId !== null ? (
-                      <div className="credit-card-statement-edit">
-                        <h4>Ajustar datos del estado bancario</h4>
+                      <FormModal title="Ajustar estado bancario" onClose={onCancelStatementUpdate} error={statementError} message={statementMessage}>
+                        <header className="form-modal__intro">
+                          <h4>Ajustar datos del estado bancario</h4>
+                        </header>
                         <div className="form-grid">
                           <label className="form-grid__field" htmlFor="statementDueDate">Fecha límite</label>
                           <input
@@ -776,7 +779,7 @@ export function CreditCardsSection({
                             </button>
                           </div>
                         </div>
-                      </div>
+                      </FormModal>
                     ) : null}
 
                     {selectedStatementDetail ? (

@@ -1365,11 +1365,11 @@ function deleteTransaction(db: Database.Database, id: number): { id: number } {
   return { id }
 }
 
-function moveTransactionToFamily(db: Database.Database, id: number): Record<string, unknown> {
+function duplicateTransactionToFamily(db: Database.Database, id: number): Record<string, unknown> {
   return db.transaction(() => {
     const row = requireEntity(db, 'transactions', id)
     if (row.type !== 'expense' || row.source_type != null) {
-      throw new ValidationError('Solo se pueden pasar a Familia los gastos manuales.')
+      throw new ValidationError('Solo se pueden duplicar en Familia los gastos manuales.')
     }
     if (toNumber(row.currency_id) !== 1) {
       throw new ValidationError('Los gastos de Familia deben estar en MXN.')
@@ -1378,12 +1378,10 @@ function moveTransactionToFamily(db: Database.Database, id: number): Record<stri
       categoryId: row.category_id,
       subcategoryId: row.subcategory_id,
       amount: fromCents(row.amount_cents),
-      description: row.description || 'Gasto trasladado de Movimientos',
+      description: row.description || 'Gasto duplicado de Movimientos',
       expenseDate: row.transaction_date,
       notes: row.notes,
     })
-    // Both records and the balance reversal must commit together.
-    deleteTransaction(db, id)
     return expense
   })()
 }
@@ -4309,9 +4307,9 @@ function routeRequest(
   )
   if (subcategoryResult !== undefined) return subcategoryResult
 
-  const transactionToFamily = path.match(/^\/transactions\/(\d+)\/move-to-family$/)
+  const transactionToFamily = path.match(/^\/transactions\/(\d+)\/duplicate-to-family$/)
   if (transactionToFamily && method === 'POST') {
-    return moveTransactionToFamily(db, requireId(transactionToFamily))
+    return duplicateTransactionToFamily(db, requireId(transactionToFamily))
   }
   if (path === '/transactions' && method === 'GET') return listTransactions(db, url)
   const transactionResult = entityRoute(

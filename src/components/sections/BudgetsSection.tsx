@@ -1,3 +1,4 @@
+import { FormModal } from '../FormModal'
 import { useState, type SyntheticEvent } from 'react'
 import { formatCurrency, formatIsoDate, getBudgetStatusLabel } from '../../app/appHelpers'
 import type {
@@ -73,6 +74,8 @@ export function BudgetsSection({
   onSavingsGoalEdit,
   onSavingsGoalDelete,
 }: BudgetsSectionProps) {
+  const [isSavingsGoalFormOpen, setIsSavingsGoalFormOpen] = useState(false)
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false)
   const [isFormOpen, setIsFormOpen] = useState(editingBudgetId !== null)
   const isFormVisible = isFormOpen || editingBudgetId !== null
 
@@ -99,14 +102,9 @@ export function BudgetsSection({
         </button>
       </div>
 
-      <div className="phase8-layout">
-        <article className="mini-card">
-          <header className="mini-card__header">
-            <h3 className="mini-card__title">{editingBudgetId === null ? 'Nuevo presupuesto' : 'Editar presupuesto'}</h3>
-          </header>
-
-          {isFormVisible ? (
-            <div className="section-panel">
+      <div className="section-stack">
+        {isFormVisible ? (
+            <FormModal title={editingBudgetId === null ? "Nuevo presupuesto" : "Editar presupuesto"} onClose={() => { onReset(); setIsFormOpen(false) }} error={budgetError} message={budgetMessage}>
               <form className="form-grid" onSubmit={onSubmit}>
             <label className="form-grid__field" htmlFor="budgetCategory">Categoria</label>
             <select
@@ -186,16 +184,20 @@ export function BudgetsSection({
                   </button>
                 </div>
               </form>
-            </div>
+            </FormModal>
           ) : null}
-        </article>
 
         <article className="mini-card">
           <header className="mini-card__header">
             <h3 className="mini-card__title">Listado y progreso</h3>
           </header>
 
-          <div className="form-grid form-grid--inline">
+          <div className="section-toolbar">
+            <button className="button button--secondary" type="button" onClick={() => setIsFiltersOpen(true)}>Filtros</button>
+          </div>
+          {isFiltersOpen ? (
+            <FormModal title="Filtros de presupuestos" onClose={() => setIsFiltersOpen(false)} error={budgetError}>
+              <div className="form-grid form-grid--inline">
             <label className="form-grid__field" htmlFor="budgetFilterMonth">Mes filtro</label>
             <NumberInput
               id="budgetFilterMonth"
@@ -233,6 +235,8 @@ export function BudgetsSection({
               </button>
             </div>
           </div>
+            </FormModal>
+          ) : null}
 
           <div className="table-wrap">
             <table className="table">
@@ -317,7 +321,12 @@ export function BudgetsSection({
           <h3 className="mini-card__title">Metas de ahorro</h3>
           <p className="mini-card__subtitle">Da seguimiento a tu fondo de emergencia y objetivos personales.</p>
         </header>
-        <form className="form-grid" onSubmit={onSavingsGoalSubmit}>
+        <div className="section-toolbar">
+          <button className="button button--primary" type="button" onClick={() => { onSavingsGoalReset(); setIsSavingsGoalFormOpen(true) }}>Nueva meta de ahorro</button>
+        </div>
+        {isSavingsGoalFormOpen || editingSavingsGoalId !== null ? (
+          <FormModal title={editingSavingsGoalId === null ? "Nueva meta de ahorro" : "Editar meta de ahorro"} onClose={() => { onSavingsGoalReset(); setIsSavingsGoalFormOpen(false) }} error={savingsGoalError} message={savingsGoalMessage}>
+          <form className="form-grid" onSubmit={onSavingsGoalSubmit}>
           <label className="form-grid__field" htmlFor="goalName">Meta</label>
           <input id="goalName" className="form-grid__input" value={savingsGoalForm.name} onChange={(event) => onSavingsGoalFormChange({ ...savingsGoalForm, name: event.target.value })} required />
           <label className="form-grid__field" htmlFor="goalTarget">Monto objetivo</label>
@@ -336,6 +345,8 @@ export function BudgetsSection({
             <button className="button button--secondary" type="button" onClick={onSavingsGoalReset}>Limpiar</button>
           </div>
         </form>
+          </FormModal>
+        ) : null}
         {savingsGoalError ? <p className="message message--error">{savingsGoalError}</p> : null}
         {savingsGoalMessage ? <p className="message message--success">{savingsGoalMessage}</p> : null}
         <div className="table-wrap">

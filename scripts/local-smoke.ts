@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import assert from 'node:assert/strict'
+import { mock } from 'node:test'
 import Database from 'better-sqlite3'
 import {
   backupLocalDb,
@@ -158,6 +159,9 @@ function requestFailure(
   return response.error ?? ''
 }
 
+// Keep relative dashboard periods aligned with the dated financial fixtures.
+mock.timers.enable({ apis: ['Date'], now: new Date('2026-07-18T12:00:00Z') })
+
 try {
   verifyDeprecatedBankColumnsMigration()
   verifyFixedExpensePaymentsMigration()
@@ -291,7 +295,7 @@ try {
     ]) {
       request('/transactions', 'POST', {
         ...entry,
-        categoryId: category.id,
+        categoryId: entry.type === 'income' ? null : category.id,
         currencyId: 1,
         description: 'Prueba de precision monetaria',
         transactionDate,
@@ -344,7 +348,7 @@ try {
     msiMonths: 6,
   })
 
-  getDatabase().exec('SAVEPOINT move_to_family')
+  getDatabase().exec('SAVEPOINT duplicate_to_family')
   try {
     const readBalances = () => request<Array<{
       id: number; currentAmount: number | null; currentBalance: number | null; availableCredit: number | null
@@ -356,7 +360,6 @@ try {
       { instrumentId: credit.id, affectsBalance: true, isMsi: true },
       { instrumentId: credit.id, affectsBalance: false, isMsi: false },
     ]) {
-      const balancesBefore = readBalances()
       const movement = request<{ id: number }>('/transactions', 'POST', {
         ...scenario,
         currencyId: 1,
@@ -368,27 +371,31 @@ try {
         notes: 'Conservar esta nota',
         msiMonths: scenario.isMsi ? 6 : null,
       })
-      const moved = request<{
+      const balancesBeforeCopy = readBalances()
+      const transactionsBeforeCopy = request('/transactions')
+      const copied = request<{
         id: number; amount: number; description: string; notes: string; expenseDate: string; categoryId: number
-      }>(`/transactions/${movement.id}/move-to-family`, 'POST')
-      assert.equal(moved.amount, 123.45)
-      assert.equal(moved.description, 'Gasto para Familia')
-      assert.equal(moved.notes, 'Conservar esta nota')
-      assert.equal(moved.expenseDate, '2026-07-18')
-      assert.equal(moved.categoryId, category.id)
-      assert.equal(request<Array<{ id: number }>>('/transactions').some((item) => item.id === movement.id), false)
-      assert.deepEqual(readBalances(), balancesBefore)
-      requestFailure(`/transactions/${movement.id}/move-to-family`, 'POST', {})
+      }>(`/transactions/${movement.id}/duplicate-to-family`, 'POST')
+      assert.equal(copied.amount, 123.45)
+      assert.equal(copied.description, 'Gasto para Familia')
+      assert.equal(copied.notes, 'Conservar esta nota')
+      assert.equal(copied.expenseDate, '2026-07-18')
+      assert.equal(copied.categoryId, category.id)
+      assert.deepEqual(request('/transactions'), transactionsBeforeCopy)
+      assert.deepEqual(readBalances(), balancesBeforeCopy)
       assert.equal(request<Array<{ id: number }>>('/family-expenses?month=2026-07').length, 1)
-      request(`/family-expenses/${moved.id}`, 'DELETE')
+      request(`/family-expenses/${copied.id}`, 'DELETE')
+      assert.deepEqual(request('/transactions'), transactionsBeforeCopy)
+      assert.deepEqual(readBalances(), balancesBeforeCopy)
+      request(`/transactions/${movement.id}`, 'DELETE')
     }
     const income = request<{ id: number }>('/transactions', 'POST', {
       instrumentId: debit.id, currencyId: 1, type: 'income', amount: 10,
       transactionDate: '2026-07-18', isMsi: false,
     })
     const balancesBeforeRejection = request('/instruments')
-    assert.match(requestFailure(`/transactions/${income.id}/move-to-family`, 'POST', {}), /gastos manuales/)
-    assert.match(requestFailure(`/transactions/${debitOpening.id}/move-to-family`, 'POST', {}), /gastos manuales/)
+    assert.match(requestFailure(`/transactions/${income.id}/duplicate-to-family`, 'POST', {}), /gastos manuales/)
+    assert.match(requestFailure(`/transactions/${debitOpening.id}/duplicate-to-family`, 'POST', {}), /gastos manuales/)
     assert.deepEqual(request('/instruments'), balancesBeforeRejection)
     assert.equal(request<Array<{ id: number }>>('/family-expenses?month=2026-07').length, 0)
 
@@ -398,20 +405,20 @@ try {
     })
     const balancesBeforeRollback = request('/instruments')
     getDatabase().exec(`
-      CREATE TEMP TRIGGER reject_family_move BEFORE DELETE ON transactions
+      CREATE TEMP TRIGGER reject_family_copy BEFORE INSERT ON family_expenses
       BEGIN SELECT RAISE(ABORT, 'forced rollback'); END;
     `)
     try {
-      requestFailure(`/transactions/${rollbackMovement.id}/move-to-family`, 'POST', {})
+      requestFailure(`/transactions/${rollbackMovement.id}/duplicate-to-family`, 'POST', {})
       assert.deepEqual(request('/instruments'), balancesBeforeRollback)
       assert.equal(request<Array<{ id: number }>>('/family-expenses?month=2026-07').length, 0)
       assert.ok(request<Array<{ id: number }>>('/transactions').some((item) => item.id === rollbackMovement.id))
     } finally {
-      getDatabase().exec('DROP TRIGGER reject_family_move')
+      getDatabase().exec('DROP TRIGGER reject_family_copy')
     }
   } finally {
-    getDatabase().exec('ROLLBACK TO move_to_family')
-    getDatabase().exec('RELEASE move_to_family')
+    getDatabase().exec('ROLLBACK TO duplicate_to_family')
+    getDatabase().exec('RELEASE duplicate_to_family')
   }
 
   const balancesBeforeFamilyExpenses = request<Array<{
@@ -875,6 +882,14 @@ try {
   })
   assert.equal(goal.progressPercent, 25)
 
+  const splitSource = request<{ id: number }>('/instruments', 'POST', {
+    bankId: bank.id,
+    name: 'Cuenta para pagos divididos',
+    type: 'account',
+    currencyId: 1,
+    currentAmount: 1000,
+    isActive: true,
+  })
   const splitCard = request<{ id: number }>('/instruments', 'POST', {
     bankId: bank.id,
     name: 'Tarjeta pagos divididos',
@@ -913,7 +928,7 @@ try {
     outstandingAmount: number
   }>>(`/statements?instrument_id=${splitCard.id}`)
   const splitPayment = request<{ id: number }>('/transfers', 'POST', {
-    sourceInstrumentId: debit.id,
+    sourceInstrumentId: splitSource.id,
     destinationInstrumentId: splitCard.id,
     amount: 200,
     currencyId: 1,
@@ -949,11 +964,11 @@ try {
     type: 'debit_card',
     currencyId: 1,
     currentAmount: 0,
-    linkedAccountId: debit.id,
+    linkedAccountId: splitSource.id,
     isActive: true,
   })
   const debitBeforeDebitCardPayment = request<Array<{ id: number; currentAmount: number }>>('/instruments')
-    .find((item) => item.id === debit.id)?.currentAmount
+    .find((item) => item.id === splitSource.id)?.currentAmount
   const debitCardPayment = request<{ id: number }>('/transfers', 'POST', {
     sourceInstrumentId: debitCardSource.id,
     destinationInstrumentId: splitCard.id,
@@ -963,11 +978,11 @@ try {
     type: 'card_payment',
   })
   const debitAfterDebitCardPayment = request<Array<{ id: number; currentAmount: number }>>('/instruments')
-    .find((item) => item.id === debit.id)?.currentAmount
+    .find((item) => item.id === splitSource.id)?.currentAmount
   assert.equal(debitAfterDebitCardPayment, (debitBeforeDebitCardPayment ?? 0) - 25)
   request(`/transfers/${debitCardPayment.id}`, 'DELETE')
   const debitAfterDebitCardPaymentDelete = request<Array<{ id: number; currentAmount: number }>>('/instruments')
-    .find((item) => item.id === debit.id)?.currentAmount
+    .find((item) => item.id === splitSource.id)?.currentAmount
   assert.equal(debitAfterDebitCardPaymentDelete, debitBeforeDebitCardPayment)
   request(`/instruments/${debitCardSource.id}`, 'DELETE')
 
@@ -1178,6 +1193,7 @@ try {
   const restoredBanks = request<Array<{ name: string }>>('/banks')
   assert.equal(restoredBanks.some((item) => item.name === 'Banco posterior al respaldo'), false)
 } finally {
+  mock.timers.reset()
   closeLocalDb()
   fs.rmSync(tempDirectory, { recursive: true, force: true })
 }

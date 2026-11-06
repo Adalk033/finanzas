@@ -1,4 +1,5 @@
-import { type SyntheticEvent } from 'react'
+import { FormModal } from '../FormModal'
+import { useState, type SyntheticEvent } from 'react'
 import { formatIsoDate, getReminderTypeLabel } from '../../app/appHelpers'
 import type { Reminder, ReminderInput, ReminderType } from '../../types/domain'
 import { NumberInput } from '../NumberInput'
@@ -46,6 +47,7 @@ export function RemindersSection({
   onDeleteDismissed,
   onDelete,
 }: RemindersSectionProps) {
+  const [isFormOpen, setIsFormOpen] = useState(false)
   const hasDismissedReminders = reminders.some((reminder) => reminder.isDismissed)
 
   return (
@@ -59,18 +61,15 @@ export function RemindersSection({
       {reminderError ? <p className="message message--error">{reminderError}</p> : null}
 
       <div className="section-toolbar">
-        <button className="button button--primary" type="button" onClick={onReset}>
+        <button className="button button--primary" type="button" onClick={() => { onReset(); setIsFormOpen(true) }}>
           Nuevo recordatorio
         </button>
       </div>
 
-      <div className="reminders-layout">
-        <article className="mini-card reminders-form-card">
-          <header className="mini-card__header">
-            <h3 className="mini-card__title">{editingReminderId === null ? 'Nuevo recordatorio' : 'Editar recordatorio'}</h3>
-            <p className="mini-card__subtitle">Programa una alerta para no perder una fecha importante.</p>
-          </header>
-
+      <div className="section-stack">
+        {isFormOpen || editingReminderId !== null ? (
+          <FormModal title={editingReminderId === null ? "Nuevo recordatorio" : "Editar recordatorio"} onClose={() => { onReset(); setIsFormOpen(false) }} error={reminderError} message={reminderMessage}>
+              <p className="mini-card__subtitle">Programa una alerta para no perder una fecha importante.</p>
           <form className="reminder-form" onSubmit={onSubmit}>
             <label className="reminder-form__field" htmlFor="reminderTitle">
               <span>Título</span>
@@ -116,7 +115,8 @@ export function RemindersSection({
               <button className="button button--secondary" type="button" onClick={onReset}>Limpiar</button>
             </div>
           </form>
-        </article>
+          </FormModal>
+        ) : null}
 
         <article className="mini-card">
           <header className="mini-card__header">

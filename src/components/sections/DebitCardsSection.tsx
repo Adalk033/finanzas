@@ -1,3 +1,4 @@
+import { FormModal } from '../FormModal'
 import { useState, type SyntheticEvent } from 'react'
 import { formatCurrency, formatIsoDate } from '../../app/appHelpers'
 import type {
@@ -196,8 +197,8 @@ export function DebitCardsSection({
               </div>
 
               {actionPanel === 'movement' ? (
-                <section className="debit-card-movement-form">
-                  <header>
+                <FormModal title="Registrar movimiento" onClose={() => setActionPanel(null)} error={error} message={message}>
+                  <header className="form-modal__intro">
                     <h3>Registrar movimiento</h3>
                     <p>
                       {selectedDebitCard.linkedAccountName
@@ -314,12 +315,12 @@ export function DebitCardsSection({
                       </button>
                     </div>
                   </form>
-                </section>
+                </FormModal>
               ) : null}
 
               {actionPanel === 'reconciliation' ? (
-                <section className="debit-card-reconciliation">
-                  <header>
+                <FormModal title="Conciliar saldo" onClose={() => setActionPanel(null)} error={error} message={message}>
+                  <header className="form-modal__intro">
                     <h3>Conciliar saldo</h3>
                     <p>
                       {selectedDebitCard.linkedAccountName
@@ -367,7 +368,7 @@ export function DebitCardsSection({
                       </button>
                     </div>
                   </form>
-                </section>
+                </FormModal>
               ) : null}
 
               {error ? <p className="message message--error">{error}</p> : null}

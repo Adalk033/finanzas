@@ -1,3 +1,4 @@
+import { FormModal } from '../FormModal'
 import { useState, type SyntheticEvent } from 'react'
 import type { Bank, BankInput } from '../../types/domain'
 
@@ -60,7 +61,7 @@ export function BanksSection({
       </div>
 
       {isFormVisible ? (
-        <div className="section-panel">
+        <FormModal title={editingBankId === null ? "Nuevo banco" : "Editar banco"} onClose={() => { onReset(); setIsFormOpen(false) }} error={bankError} message={bankMessage}>
           <form className="form-grid" onSubmit={onSubmit}>
             <label className="form-grid__field" htmlFor="bankName">Nombre del banco</label>
             <input
@@ -92,7 +93,7 @@ export function BanksSection({
               </button>
             </div>
           </form>
-        </div>
+        </FormModal>
       ) : null}
 
       {bankError ? <p className="message message--error">{bankError}</p> : null}

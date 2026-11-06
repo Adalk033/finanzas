@@ -1,3 +1,4 @@
+import { FormModal } from '../FormModal'
 import { useState, type SyntheticEvent } from 'react'
 import { formatCurrency, formatIsoDate } from '../../app/appHelpers'
 import type {
@@ -94,6 +95,7 @@ export function SubscriptionsSection({
   onRecurringIncomeEdit,
   onRecurringIncomeDelete,
 }: SubscriptionsSectionProps) {
+  const [isRecurringIncomeFormOpen, setIsRecurringIncomeFormOpen] = useState(false)
   const [isFormOpen, setIsFormOpen] = useState(editingSubscriptionId !== null)
   const isFormVisible = isFormOpen || editingSubscriptionId !== null
 
@@ -104,14 +106,8 @@ export function SubscriptionsSection({
         <p className="card__subtitle">Listado y gestion de cargos recurrentes por instrumento y ciclo.</p>
       </header>
 
-      <div className="transaction-layout">
-        <section className="mini-card">
-          <header className="mini-card__header">
-            <h3 className="mini-card__title">Nueva suscripcion</h3>
-            <p className="mini-card__subtitle">Define monto, ciclo y proximo cargo esperado.</p>
-          </header>
-
-          <div className="section-toolbar">
+      <div className="section-stack">
+        <div className="section-toolbar">
             <button className="button button--primary" type="button" onClick={() => {
               if (editingSubscriptionId !== null) {
                 onReset()
@@ -129,7 +125,8 @@ export function SubscriptionsSection({
           </div>
 
           {isFormVisible ? (
-            <div className="section-panel">
+            <FormModal title={editingSubscriptionId === null ? "Nueva suscripción" : "Editar suscripción"} onClose={() => { onReset(); setIsFormOpen(false) }} error={subscriptionError} message={subscriptionMessage}>
+              <p className="mini-card__subtitle">Define monto, ciclo y proximo cargo esperado.</p>
               <form className="form-grid" onSubmit={onSubmit}>
                 <label className="form-grid__field" htmlFor="subscriptionName">Nombre</label>
                 <input
@@ -252,9 +249,8 @@ export function SubscriptionsSection({
                   </button>
                 </div>
               </form>
-            </div>
+            </FormModal>
           ) : null}
-        </section>
 
         <section className="mini-card">
           <header className="mini-card__header">
@@ -335,7 +331,12 @@ export function SubscriptionsSection({
             Genera automaticamente nomina, renta u otros ingresos programados.
           </p>
         </header>
-        <form className="form-grid" onSubmit={onRecurringIncomeSubmit}>
+        <div className="section-toolbar">
+          <button className="button button--primary" type="button" onClick={() => { onRecurringIncomeReset(); setIsRecurringIncomeFormOpen(true) }}>Nuevo ingreso recurrente</button>
+        </div>
+        {isRecurringIncomeFormOpen || editingRecurringIncomeId !== null ? (
+          <FormModal title={editingRecurringIncomeId === null ? "Nuevo ingreso recurrente" : "Editar ingreso recurrente"} onClose={() => { onRecurringIncomeReset(); setIsRecurringIncomeFormOpen(false) }} error={recurringIncomeError} message={recurringIncomeMessage}>
+          <form className="form-grid" onSubmit={onRecurringIncomeSubmit}>
           <label className="form-grid__field" htmlFor="recurringIncomeName">Nombre</label>
           <input
             id="recurringIncomeName"
@@ -467,6 +468,8 @@ export function SubscriptionsSection({
             </button>
           </div>
         </form>
+          </FormModal>
+        ) : null}
         {recurringIncomeError ? <p className="message message--error">{recurringIncomeError}</p> : null}
         {recurringIncomeMessage ? <p className="message message--success">{recurringIncomeMessage}</p> : null}
         <div className="table-wrap">

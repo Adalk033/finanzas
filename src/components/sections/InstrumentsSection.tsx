@@ -1,3 +1,4 @@
+import { FormModal } from '../FormModal'
 import { useState, type SyntheticEvent } from 'react'
 import { formatCurrency } from '../../app/appHelpers'
 import type { Bank, FinancialInstrument, FinancialInstrumentInput, InstrumentType } from '../../types/domain'
@@ -121,7 +122,7 @@ export function InstrumentsSection({
       </div>
 
       {isFormVisible ? (
-        <div className="section-panel">
+        <FormModal title={editingInstrumentId === null ? "Nuevo instrumento" : "Editar instrumento"} onClose={() => { onReset(); setIsFormOpen(false) }} error={instrumentError} message={instrumentMessage}>
           <form className="form-grid" onSubmit={onSubmit}>
             <label className="form-grid__field" htmlFor="instrumentBank">Banco</label>
             <select
@@ -272,13 +273,15 @@ export function InstrumentsSection({
               </button>
             </div>
           </form>
-        </div>
+        </FormModal>
       ) : null}
 
       {reconciliationInstrument !== null ? (
-        <div className="section-panel">
-          <h3 className="card__title">Conciliar {reconciliationInstrument.name}</h3>
-          <p className="card__subtitle">Registra el saldo real para crear un ajuste que conserve el historial.</p>
+        <FormModal title="Conciliar saldo" onClose={() => setReconciliationInstrument(null)} error={instrumentError} message={instrumentMessage}>
+          <header className="form-modal__intro">
+            <h3 className="card__title">Conciliar {reconciliationInstrument.name}</h3>
+            <p className="card__subtitle">Registra el saldo real para crear un ajuste que conserve el historial.</p>
+          </header>
           <form className="form-grid" onSubmit={(event) => { void submitReconciliation(event) }}>
             <label className="form-grid__field" htmlFor="reconciliationBalance">Saldo real</label>
             <input
@@ -319,7 +322,7 @@ export function InstrumentsSection({
               </button>
             </div>
           </form>
-        </div>
+        </FormModal>
       ) : null}
 
       {instrumentError ? <p className="message message--error">{instrumentError}</p> : null}

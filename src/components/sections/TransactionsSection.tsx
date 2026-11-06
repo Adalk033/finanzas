@@ -1,3 +1,4 @@
+import { FormModal } from '../FormModal'
 import { useState, type SyntheticEvent } from 'react'
 import { formatCurrency, formatIsoDate } from '../../app/appHelpers'
 import type {
@@ -55,7 +56,7 @@ type TransactionsSectionProps = {
   onTransactionSubmit: (event: SyntheticEvent<HTMLFormElement>) => Promise<boolean>
   onTransactionEdit: (transaction: Transaction) => void
   onTransactionDelete: (transactionId: number) => void
-  onMoveTransactionToFamily: (transaction: Transaction) => Promise<void>
+  onDuplicateTransactionToFamily: (transaction: Transaction) => Promise<void>
   onResetTransactionForm: () => void
   onFiltersChange: (nextFilters: TransactionFilters) => void
   onSearchChange: (search: string) => void
@@ -102,7 +103,7 @@ export function TransactionsSection({
   onTransactionSubmit,
   onTransactionEdit,
   onTransactionDelete,
-  onMoveTransactionToFamily,
+  onDuplicateTransactionToFamily,
   onResetTransactionForm,
   onFiltersChange,
   onSearchChange,
@@ -113,7 +114,7 @@ export function TransactionsSection({
   onPageChange,
   onReload,
 }: TransactionsSectionProps) {
-  const [movingTransactionId, setMovingTransactionId] = useState<number | null>(null)
+  const [duplicatingTransactionId, setDuplicatingTransactionId] = useState<number | null>(null)
   const [isTransactionFormOpen, setIsTransactionFormOpen] = useState(editingTransactionId !== null)
   const [isCardPaymentFormOpen, setIsCardPaymentFormOpen] = useState(false)
   const [isFiltersFormOpen, setIsFiltersFormOpen] = useState(false)
@@ -180,8 +181,8 @@ export function TransactionsSection({
       </div>
 
       {isCardPaymentFormOpen ? (
-        <section className="mini-card transaction-card-payment">
-          <header className="mini-card__header">
+        <FormModal title="Abonar a tarjeta" onClose={() => setIsCardPaymentFormOpen(false)} error={cardPaymentError} message={cardPaymentMessage}>
+          <header className="mini-card__header form-modal__intro">
             <h3 className="mini-card__title">Abonar a tarjeta</h3>
             <p className="mini-card__subtitle">
               Elige la TDC, la cuenta de débito origen y cualquier monto. El movimiento se registrará como transferencia.
@@ -279,343 +280,337 @@ export function TransactionsSection({
 
           {cardPaymentError ? <p className="message message--error">{cardPaymentError}</p> : null}
           {cardPaymentMessage ? <p className="message message--success">{cardPaymentMessage}</p> : null}
-        </section>
+        </FormModal>
       ) : null}
 
-      {isTransactionFormVisible || isFiltersFormOpen ? (
-        <div className="transaction-layout">
-          {isTransactionFormVisible ? (
-            <section className="mini-card">
-              <header className="mini-card__header">
-                <h3 className="mini-card__title">{editingTransactionId === null ? 'Nueva transaccion' : 'Editar transaccion'}</h3>
-                <p className="mini-card__subtitle">Registra primero los datos esenciales; las opciones de tarjeta aparecen solo cuando aplican.</p>
-              </header>
-
-              <div className="section-panel">
-                <form className="transaction-form" onSubmit={handleTransactionFormSubmit}>
-                  <fieldset className="transaction-form__group">
-                    <legend className="transaction-form__legend">Datos del movimiento</legend>
-                    <div className="transaction-form__fields">
-                      <div className="transaction-form__field">
-                        <label className="transaction-form__label" htmlFor="transactionInstrument">
-                          Instrumento <span className="transaction-form__required" aria-hidden="true">*</span>
-                        </label>
-                        <select
-                          id="transactionInstrument"
-                          className="form-grid__input"
-                          value={selectedTransactionInstrumentId}
-                          onChange={(event) => {
-                            onTransactionFormChange({ ...transactionForm, instrumentId: Number(event.target.value) })
-                          }}
-                          required
-                        >
-                          <option value={0}>Selecciona instrumento</option>
-                          {instruments.filter((instrument) => instrument.isActive).map((instrument) => (
-                            <option key={instrument.id} value={instrument.id}>{instrument.name}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="transaction-form__field">
-                        <label className="transaction-form__label" htmlFor="transactionType">Tipo</label>
-                        <select
-                          id="transactionType"
-                          className="form-grid__input"
-                          value={transactionForm.type}
-                          onChange={(event) => onTransactionTypeChange(event.target.value as TransactionType)}
-                        >
-                          <option value="expense">Gasto</option>
-                          <option value="income">Ingreso</option>
-                        </select>
-                      </div>
-
-                      <div className="transaction-form__field transaction-form__field--amount">
-                        <label className="transaction-form__label" htmlFor="transactionAmount">
-                          Monto <span className="transaction-form__required" aria-hidden="true">*</span>
-                        </label>
-                        <NumberInput
-                          id="transactionAmount"
-                          className="form-grid__input"
-                          inputMode="decimal"
-                          min={0.01}
-                          step="0.01"
-                          value={transactionForm.amount}
-                          emptyValue={0}
-                          onValueChange={(amount) => onTransactionFormChange({ ...transactionForm, amount })}
-                          required
-                        />
-                      </div>
-
-                      <div className="transaction-form__field">
-                        <label className="transaction-form__label" htmlFor="transactionDate">
-                          Fecha <span className="transaction-form__required" aria-hidden="true">*</span>
-                        </label>
-                        <input
-                          id="transactionDate"
-                          className="form-grid__input"
-                          type="date"
-                          value={transactionForm.transactionDate}
-                          onChange={(event) => onTransactionFormChange({ ...transactionForm, transactionDate: event.target.value })}
-                          required
-                        />
-                      </div>
-                    </div>
-                  </fieldset>
-
-                  <fieldset className="transaction-form__group">
-                    <legend className="transaction-form__legend">Clasificación y detalle</legend>
-                    <div className="transaction-form__fields">
-                      <div className="transaction-form__field">
-                        <label className="transaction-form__label" htmlFor="transactionCategory">Categoria</label>
-                        <select
-                          id="transactionCategory"
-                          className="form-grid__input"
-                          value={selectedTransactionCategoryId ?? ''}
-                          onChange={(event) => {
-                            const nextCategoryId = event.target.value ? Number(event.target.value) : null
-                            onTransactionFormChange({ ...transactionForm, categoryId: nextCategoryId, subcategoryId: null })
-                          }}
-                        >
-                          <option value="">Sin categoria</option>
-                          {categories.filter((category) => (
-                            category.isActive
-                            && (category.type === transactionForm.type || category.type === 'both')
-                          )).map((category) => (
-                            <option key={category.id} value={category.id}>{category.name}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="transaction-form__field">
-                        <label className="transaction-form__label" htmlFor="transactionSubcategory">Subcategoria</label>
-                        <select
-                          id="transactionSubcategory"
-                          className="form-grid__input"
-                          value={transactionForm.subcategoryId ?? ''}
-                          onChange={(event) => {
-                            const nextSubcategoryId = event.target.value ? Number(event.target.value) : null
-                            onTransactionFormChange({ ...transactionForm, subcategoryId: nextSubcategoryId })
-                          }}
-                          disabled={transactionSubcategoryOptions.length === 0}
-                        >
-                          <option value="">Sin subcategoria</option>
-                          {transactionSubcategoryOptions.filter((subcategory) => subcategory.isActive).map((subcategory) => (
-                            <option key={subcategory.id} value={subcategory.id}>{subcategory.name}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="transaction-form__field transaction-form__field--wide">
-                        <label className="transaction-form__label" htmlFor="transactionDescription">Descripcion</label>
-                        <input
-                          id="transactionDescription"
-                          className="form-grid__input"
-                          type="text"
-                          value={transactionForm.description}
-                          onChange={(event) => onTransactionFormChange({ ...transactionForm, description: event.target.value })}
-                          placeholder="Supermercado, nomina, etc."
-                        />
-                      </div>
-
-                      <div className="transaction-form__field transaction-form__field--wide">
-                        <label className="transaction-form__label" htmlFor="transactionNotes">Notas</label>
-                        <textarea
-                          id="transactionNotes"
-                          className="form-grid__input"
-                          value={transactionForm.notes}
-                          onChange={(event) => onTransactionFormChange({ ...transactionForm, notes: event.target.value })}
-                          placeholder="Opcional"
-                          rows={3}
-                        />
-                      </div>
-                    </div>
-                  </fieldset>
-
-                  {transactionForm.type === 'expense' && selectedTransactionInstrument?.type === 'credit_card' ? (
-                    <fieldset className="transaction-form__group">
-                      <legend className="transaction-form__legend">Opciones de tarjeta</legend>
-                      <div className="transaction-form__fields">
-                        <label className="transaction-form__checkbox" htmlFor="excludeFromBalance">
-                          <input
-                            id="excludeFromBalance"
-                            type="checkbox"
-                            checked={excludeFromBalance}
-                            onChange={(event) => onExcludeFromBalanceChange(event.target.checked)}
-                          />
-                          <span>
-                            <strong>No afectar saldo actual</strong>
-                            <small>Úsalo solo si es un gasto histórico ya incluido en el saldo inicial.</small>
-                          </span>
-                        </label>
-
-                        <div className="transaction-form__field">
-                          <label className="transaction-form__label" htmlFor="transactionIsMsi">¿Es una compra a MSI?</label>
-                          <select
-                            id="transactionIsMsi"
-                            className="form-grid__input"
-                            value={transactionForm.isMsi ? 'yes' : 'no'}
-                            onChange={(event) => {
-                              const enabled = event.target.value === 'yes'
-                              onTransactionFormChange({
-                                ...transactionForm,
-                                isMsi: enabled,
-                                msiMonths: enabled ? (transactionForm.msiMonths ?? 3) : null,
-                              })
-                            }}
-                          >
-                            <option value="no">No</option>
-                            <option value="yes">Si</option>
-                          </select>
-                        </div>
-
-                        {transactionForm.isMsi ? (
-                          <div className="transaction-form__field">
-                            <label className="transaction-form__label" htmlFor="transactionMsiMonths">Plazo MSI</label>
-                            <select
-                              id="transactionMsiMonths"
-                              className="form-grid__input"
-                              value={transactionForm.msiMonths ?? 3}
-                              onChange={(event) => {
-                                const value = Number(event.target.value)
-                                onTransactionFormChange({ ...transactionForm, msiMonths: value })
-                              }}
-                            >
-                              {[3, 6, 9, 12, 18, 24].map((months) => (
-                                <option key={months} value={months}>{months} meses</option>
-                              ))}
-                            </select>
-                          </div>
-                        ) : null}
-                      </div>
-                    </fieldset>
-                  ) : null}
-
-                  <div className="transaction-form__actions">
-                    <button className="button button--primary" type="submit" disabled={!hasConfig || instruments.length === 0}>
-                      {editingTransactionId === null ? 'Crear transaccion' : 'Guardar cambios'}
-                    </button>
-                    {editingTransactionId === null ? (
-                      <button className="button button--secondary" type="button" onClick={onResetTransactionForm}>
-                        Limpiar
-                      </button>
-                    ) : null}
-                    <button className="button button--secondary" type="button" onClick={handleCancelTransactionForm}>
-                      {editingTransactionId === null ? 'Cancelar' : 'Cancelar edicion'}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </section>
-          ) : null}
-
-          {isFiltersFormOpen ? (
-            <section className="mini-card">
-          <header className="mini-card__header">
-            <h3 className="mini-card__title">Filtros</h3>
-            <p className="mini-card__subtitle">Refina por fecha, tipo, categoria, instrumento y texto.</p>
+      {isTransactionFormVisible ? (
+        <FormModal title={editingTransactionId === null ? "Nueva transacción" : "Editar transacción"} onClose={handleCancelTransactionForm} error={transactionError} message={transactionMessage}>
+          <header className="mini-card__header form-modal__intro">
+            <p className="mini-card__subtitle">Registra primero los datos esenciales; las opciones de tarjeta aparecen solo cuando aplican.</p>
           </header>
 
           <div className="section-panel">
-            <form className="form-grid" onSubmit={onFiltersSubmit}>
-            <label className="form-grid__field" htmlFor="filterFromDate">Desde</label>
-            <input
-              id="filterFromDate"
-              className="form-grid__input"
-              type="date"
-              value={transactionFilters.fromDate ?? ''}
-              onChange={(event) => onFiltersChange({ ...transactionFilters, fromDate: event.target.value })}
-            />
+            <form className="transaction-form" onSubmit={handleTransactionFormSubmit}>
+              <fieldset className="transaction-form__group">
+                <legend className="transaction-form__legend">Datos del movimiento</legend>
+                <div className="transaction-form__fields">
+                  <div className="transaction-form__field">
+                    <label className="transaction-form__label" htmlFor="transactionInstrument">
+                      Instrumento <span className="transaction-form__required" aria-hidden="true">*</span>
+                    </label>
+                    <select
+                      id="transactionInstrument"
+                      className="form-grid__input"
+                      value={selectedTransactionInstrumentId}
+                      onChange={(event) => {
+                        onTransactionFormChange({ ...transactionForm, instrumentId: Number(event.target.value) })
+                      }}
+                      required
+                    >
+                      <option value={0}>Selecciona instrumento</option>
+                      {instruments.filter((instrument) => instrument.isActive).map((instrument) => (
+                        <option key={instrument.id} value={instrument.id}>{instrument.name}</option>
+                      ))}
+                    </select>
+                  </div>
 
-            <label className="form-grid__field" htmlFor="filterToDate">Hasta</label>
-            <input
-              id="filterToDate"
-              className="form-grid__input"
-              type="date"
-              value={transactionFilters.toDate ?? ''}
-              onChange={(event) => onFiltersChange({ ...transactionFilters, toDate: event.target.value })}
-            />
+                  <div className="transaction-form__field">
+                    <label className="transaction-form__label" htmlFor="transactionType">Tipo</label>
+                    <select
+                      id="transactionType"
+                      className="form-grid__input"
+                      value={transactionForm.type}
+                      onChange={(event) => onTransactionTypeChange(event.target.value as TransactionType)}
+                    >
+                      <option value="expense">Gasto</option>
+                      <option value="income">Ingreso</option>
+                    </select>
+                  </div>
 
-            <label className="form-grid__field" htmlFor="filterType">Tipo</label>
-            <select
-              id="filterType"
-              className="form-grid__input"
-              value={transactionFilters.type ?? ''}
-              onChange={(event) => {
-                const nextType = event.target.value ? (event.target.value as TransactionType) : undefined
-                onFiltersChange({ ...transactionFilters, type: nextType })
-              }}
-            >
-              <option value="">Todos</option>
-              <option value="expense">Gasto</option>
-              <option value="income">Ingreso</option>
-            </select>
+                  <div className="transaction-form__field transaction-form__field--amount">
+                    <label className="transaction-form__label" htmlFor="transactionAmount">
+                      Monto <span className="transaction-form__required" aria-hidden="true">*</span>
+                    </label>
+                    <NumberInput
+                      id="transactionAmount"
+                      className="form-grid__input"
+                      inputMode="decimal"
+                      min={0.01}
+                      step="0.01"
+                      value={transactionForm.amount}
+                      emptyValue={0}
+                      onValueChange={(amount) => onTransactionFormChange({ ...transactionForm, amount })}
+                      required
+                    />
+                  </div>
 
-            <label className="form-grid__field" htmlFor="filterCategory">Categoria</label>
-            <select
-              id="filterCategory"
-              className="form-grid__input"
-              value={transactionFilters.categoryId ?? ''}
-              onChange={(event) => {
-                const nextCategoryId = event.target.value ? Number(event.target.value) : undefined
-                onFiltersChange({ ...transactionFilters, categoryId: nextCategoryId })
-              }}
-            >
-              <option value="">Todas</option>
-              {categories.map((category) => (
-                <option key={category.id} value={category.id}>{category.name}</option>
-              ))}
-            </select>
-
-            <label className="form-grid__field" htmlFor="filterInstrument">Instrumento</label>
-            <select
-              id="filterInstrument"
-              className="form-grid__input"
-              value={transactionFilters.instrumentId ?? ''}
-              onChange={(event) => {
-                const nextInstrumentId = event.target.value ? Number(event.target.value) : undefined
-                onFiltersChange({ ...transactionFilters, instrumentId: nextInstrumentId })
-              }}
-            >
-              <option value="">Todos</option>
-              {instruments.map((instrument) => (
-                <option key={instrument.id} value={instrument.id}>{instrument.name}</option>
-              ))}
-            </select>
-
-            <label className="form-grid__field" htmlFor="filterSearch">Busqueda</label>
-            <input
-              id="filterSearch"
-              className="form-grid__input"
-              type="text"
-              value={transactionFilters.search ?? ''}
-              onChange={(event) => onFiltersChange({ ...transactionFilters, search: event.target.value })}
-              placeholder="Descripcion, categoria o instrumento"
-            />
-
-            <label className="form-grid__field" htmlFor="filterAutoAdjustmentsOnly">Ajustes automáticos</label>
-            <label className="form-grid__input" htmlFor="filterAutoAdjustmentsOnly">
-              <input
-                id="filterAutoAdjustmentsOnly"
-                type="checkbox"
-                checked={showAutoAdjustmentsOnly}
-                onChange={(event) => onToggleAutoAdjustmentsOnly(event.target.checked)}
-              />
-              {' '}Solo mostrar Otros (por ajuste)
-            </label>
-
-                <div className="form-grid__actions">
-                  <button className="button button--primary" type="submit" disabled={!hasConfig}>
-                    Aplicar filtros
-                  </button>
-                  <button className="button button--secondary" type="button" onClick={onClearFilters}>
-                    Limpiar filtros
-                  </button>
+                  <div className="transaction-form__field">
+                    <label className="transaction-form__label" htmlFor="transactionDate">
+                      Fecha <span className="transaction-form__required" aria-hidden="true">*</span>
+                    </label>
+                    <input
+                      id="transactionDate"
+                      className="form-grid__input"
+                      type="date"
+                      value={transactionForm.transactionDate}
+                      onChange={(event) => onTransactionFormChange({ ...transactionForm, transactionDate: event.target.value })}
+                      required
+                    />
+                  </div>
                 </div>
+              </fieldset>
+
+              <fieldset className="transaction-form__group">
+                <legend className="transaction-form__legend">Clasificación y detalle</legend>
+                <div className="transaction-form__fields">
+                  <div className="transaction-form__field">
+                    <label className="transaction-form__label" htmlFor="transactionCategory">Categoria</label>
+                    <select
+                      id="transactionCategory"
+                      className="form-grid__input"
+                      value={selectedTransactionCategoryId ?? ''}
+                      onChange={(event) => {
+                        const nextCategoryId = event.target.value ? Number(event.target.value) : null
+                        onTransactionFormChange({ ...transactionForm, categoryId: nextCategoryId, subcategoryId: null })
+                      }}
+                    >
+                      <option value="">Sin categoria</option>
+                      {categories.filter((category) => (
+                        category.isActive
+                        && (category.type === transactionForm.type || category.type === 'both')
+                      )).map((category) => (
+                        <option key={category.id} value={category.id}>{category.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="transaction-form__field">
+                    <label className="transaction-form__label" htmlFor="transactionSubcategory">Subcategoria</label>
+                    <select
+                      id="transactionSubcategory"
+                      className="form-grid__input"
+                      value={transactionForm.subcategoryId ?? ''}
+                      onChange={(event) => {
+                        const nextSubcategoryId = event.target.value ? Number(event.target.value) : null
+                        onTransactionFormChange({ ...transactionForm, subcategoryId: nextSubcategoryId })
+                      }}
+                      disabled={transactionSubcategoryOptions.length === 0}
+                    >
+                      <option value="">Sin subcategoria</option>
+                      {transactionSubcategoryOptions.filter((subcategory) => subcategory.isActive).map((subcategory) => (
+                        <option key={subcategory.id} value={subcategory.id}>{subcategory.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="transaction-form__field transaction-form__field--wide">
+                    <label className="transaction-form__label" htmlFor="transactionDescription">Descripcion</label>
+                    <input
+                      id="transactionDescription"
+                      className="form-grid__input"
+                      type="text"
+                      value={transactionForm.description}
+                      onChange={(event) => onTransactionFormChange({ ...transactionForm, description: event.target.value })}
+                      placeholder="Supermercado, nomina, etc."
+                    />
+                  </div>
+
+                  <div className="transaction-form__field transaction-form__field--wide">
+                    <label className="transaction-form__label" htmlFor="transactionNotes">Notas</label>
+                    <textarea
+                      id="transactionNotes"
+                      className="form-grid__input"
+                      value={transactionForm.notes}
+                      onChange={(event) => onTransactionFormChange({ ...transactionForm, notes: event.target.value })}
+                      placeholder="Opcional"
+                      rows={3}
+                    />
+                  </div>
+                </div>
+              </fieldset>
+
+              {transactionForm.type === 'expense' && selectedTransactionInstrument?.type === 'credit_card' ? (
+                <fieldset className="transaction-form__group">
+                  <legend className="transaction-form__legend">Opciones de tarjeta</legend>
+                  <div className="transaction-form__fields">
+                    <label className="transaction-form__checkbox" htmlFor="excludeFromBalance">
+                      <input
+                        id="excludeFromBalance"
+                        type="checkbox"
+                        checked={excludeFromBalance}
+                        onChange={(event) => onExcludeFromBalanceChange(event.target.checked)}
+                      />
+                      <span>
+                        <strong>No afectar saldo actual</strong>
+                        <small>Úsalo solo si es un gasto histórico ya incluido en el saldo inicial.</small>
+                      </span>
+                    </label>
+
+                    <div className="transaction-form__field">
+                      <label className="transaction-form__label" htmlFor="transactionIsMsi">¿Es una compra a MSI?</label>
+                      <select
+                        id="transactionIsMsi"
+                        className="form-grid__input"
+                        value={transactionForm.isMsi ? 'yes' : 'no'}
+                        onChange={(event) => {
+                          const enabled = event.target.value === 'yes'
+                          onTransactionFormChange({
+                            ...transactionForm,
+                            isMsi: enabled,
+                            msiMonths: enabled ? (transactionForm.msiMonths ?? 3) : null,
+                          })
+                        }}
+                      >
+                        <option value="no">No</option>
+                        <option value="yes">Si</option>
+                      </select>
+                    </div>
+
+                    {transactionForm.isMsi ? (
+                      <div className="transaction-form__field">
+                        <label className="transaction-form__label" htmlFor="transactionMsiMonths">Plazo MSI</label>
+                        <select
+                          id="transactionMsiMonths"
+                          className="form-grid__input"
+                          value={transactionForm.msiMonths ?? 3}
+                          onChange={(event) => {
+                            const value = Number(event.target.value)
+                            onTransactionFormChange({ ...transactionForm, msiMonths: value })
+                          }}
+                        >
+                          {[3, 6, 9, 12, 18, 24].map((months) => (
+                            <option key={months} value={months}>{months} meses</option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : null}
+                  </div>
+                </fieldset>
+              ) : null}
+
+              <div className="transaction-form__actions">
+                <button className="button button--primary" type="submit" disabled={!hasConfig || instruments.length === 0}>
+                  {editingTransactionId === null ? 'Crear transaccion' : 'Guardar cambios'}
+                </button>
+                {editingTransactionId === null ? (
+                  <button className="button button--secondary" type="button" onClick={onResetTransactionForm}>
+                    Limpiar
+                  </button>
+                ) : null}
+                <button className="button button--secondary" type="button" onClick={handleCancelTransactionForm}>
+                  {editingTransactionId === null ? 'Cancelar' : 'Cancelar edicion'}
+                </button>
+              </div>
             </form>
           </div>
-            </section>
-          ) : null}
-        </div>
+        </FormModal>
+      ) : null}
+
+      {isFiltersFormOpen ? (
+        <FormModal title="Filtros de transacciones" onClose={() => setIsFiltersFormOpen(false)} error={transactionError}>
+      <header className="mini-card__header form-modal__intro">
+        <p className="mini-card__subtitle">Refina por fecha, tipo, categoria, instrumento y texto.</p>
+      </header>
+
+      <div className="section-panel">
+        <form className="form-grid" onSubmit={onFiltersSubmit}>
+        <label className="form-grid__field" htmlFor="filterFromDate">Desde</label>
+        <input
+          id="filterFromDate"
+          className="form-grid__input"
+          type="date"
+          value={transactionFilters.fromDate ?? ''}
+          onChange={(event) => onFiltersChange({ ...transactionFilters, fromDate: event.target.value })}
+        />
+
+        <label className="form-grid__field" htmlFor="filterToDate">Hasta</label>
+        <input
+          id="filterToDate"
+          className="form-grid__input"
+          type="date"
+          value={transactionFilters.toDate ?? ''}
+          onChange={(event) => onFiltersChange({ ...transactionFilters, toDate: event.target.value })}
+        />
+
+        <label className="form-grid__field" htmlFor="filterType">Tipo</label>
+        <select
+          id="filterType"
+          className="form-grid__input"
+          value={transactionFilters.type ?? ''}
+          onChange={(event) => {
+            const nextType = event.target.value ? (event.target.value as TransactionType) : undefined
+            onFiltersChange({ ...transactionFilters, type: nextType })
+          }}
+        >
+          <option value="">Todos</option>
+          <option value="expense">Gasto</option>
+          <option value="income">Ingreso</option>
+        </select>
+
+        <label className="form-grid__field" htmlFor="filterCategory">Categoria</label>
+        <select
+          id="filterCategory"
+          className="form-grid__input"
+          value={transactionFilters.categoryId ?? ''}
+          onChange={(event) => {
+            const nextCategoryId = event.target.value ? Number(event.target.value) : undefined
+            onFiltersChange({ ...transactionFilters, categoryId: nextCategoryId })
+          }}
+        >
+          <option value="">Todas</option>
+          {categories.map((category) => (
+            <option key={category.id} value={category.id}>{category.name}</option>
+          ))}
+        </select>
+
+        <label className="form-grid__field" htmlFor="filterInstrument">Instrumento</label>
+        <select
+          id="filterInstrument"
+          className="form-grid__input"
+          value={transactionFilters.instrumentId ?? ''}
+          onChange={(event) => {
+            const nextInstrumentId = event.target.value ? Number(event.target.value) : undefined
+            onFiltersChange({ ...transactionFilters, instrumentId: nextInstrumentId })
+          }}
+        >
+          <option value="">Todos</option>
+          {instruments.map((instrument) => (
+            <option key={instrument.id} value={instrument.id}>{instrument.name}</option>
+          ))}
+        </select>
+
+        <label className="form-grid__field" htmlFor="filterSearch">Busqueda</label>
+        <input
+          id="filterSearch"
+          className="form-grid__input"
+          type="text"
+          value={transactionFilters.search ?? ''}
+          onChange={(event) => onFiltersChange({ ...transactionFilters, search: event.target.value })}
+          placeholder="Descripcion, categoria o instrumento"
+        />
+
+        <label className="form-grid__field" htmlFor="filterAutoAdjustmentsOnly">Ajustes automáticos</label>
+        <label className="form-grid__input" htmlFor="filterAutoAdjustmentsOnly">
+          <input
+            id="filterAutoAdjustmentsOnly"
+            type="checkbox"
+            checked={showAutoAdjustmentsOnly}
+            onChange={(event) => onToggleAutoAdjustmentsOnly(event.target.checked)}
+          />
+          {' '}Solo mostrar Otros (por ajuste)
+        </label>
+
+            <div className="form-grid__actions">
+              <button className="button button--primary" type="submit" disabled={!hasConfig}>
+                Aplicar filtros
+              </button>
+              <button className="button button--secondary" type="button" onClick={onClearFilters}>
+                Limpiar filtros
+              </button>
+            </div>
+        </form>
+      </div>
+        </FormModal>
       ) : null}
 
       {transactionError ? <p className="message message--error">{transactionError}</p> : null}
@@ -695,17 +690,17 @@ export function TransactionsSection({
                           <button
                             className="button button--secondary"
                             type="button"
-                            disabled={movingTransactionId !== null}
+                            disabled={duplicatingTransactionId !== null}
                             onClick={async () => {
-                              setMovingTransactionId(transaction.id)
+                              setDuplicatingTransactionId(transaction.id)
                               try {
-                                await onMoveTransactionToFamily(transaction)
+                                await onDuplicateTransactionToFamily(transaction)
                               } finally {
-                                setMovingTransactionId(null)
+                                setDuplicatingTransactionId(null)
                               }
                             }}
                           >
-                            {movingTransactionId === transaction.id ? 'Trasladando…' : 'Pasar a Familia'}
+                            {duplicatingTransactionId === transaction.id ? 'Duplicando…' : 'Duplicar en Familia'}
                           </button>
                         ) : null}
                         <button className="button button--secondary" type="button" onClick={() => onTransactionEdit(transaction)}>

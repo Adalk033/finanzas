@@ -1,3 +1,4 @@
+import { FormModal } from '../FormModal'
 import { useState, type SyntheticEvent } from 'react'
 import { MSI_OPTIONS, formatCurrency, formatIsoDate, getSimulationScenarioLabel } from '../../app/appHelpers'
 import type {
@@ -61,14 +62,9 @@ export function SimulatorSection({
         </button>
       </div>
 
-      <div className="phase8-layout">
-        <article className="mini-card">
-          <header className="mini-card__header">
-            <h3 className="mini-card__title">Nueva simulacion</h3>
-          </header>
-
-          {isFormOpen ? (
-            <div className="section-panel">
+      <div className="section-stack">
+        {isFormOpen ? (
+            <FormModal title="Nueva simulación" onClose={() => setIsFormOpen(false)} error={simulationError} message={simulationMessage}>
               <form className="form-grid" onSubmit={onSubmit}>
             <label className="form-grid__field" htmlFor="simulationName">Nombre</label>
             <input
@@ -211,9 +207,8 @@ export function SimulatorSection({
                   </button>
                 </div>
               </form>
-            </div>
+            </FormModal>
           ) : null}
-        </article>
 
         <article className="mini-card">
           <header className="mini-card__header">
