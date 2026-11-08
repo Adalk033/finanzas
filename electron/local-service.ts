@@ -3884,12 +3884,15 @@ function getDashboardCashFlow(db: Database.Database): Record<string, unknown>[] 
     const expenseCents = toNumber(row.expense)
     const debtPaymentsCents = toNumber(debt.total)
     const cashExpensesCents = toNumber(row.cash_expenses)
+    const netSavingsCents = incomeCents - expenseCents
     return {
       month: label,
       income: incomeCents / 100,
       expense: expenseCents / 100,
       debtPayments: debtPaymentsCents / 100,
       netCashFlow: (incomeCents - cashExpensesCents - debtPaymentsCents) / 100,
+      netSavings: netSavingsCents / 100,
+      savingsRate: incomeCents > 0 ? Math.round(netSavingsCents / incomeCents * 10_000) / 100 : null,
     }
   })
 }

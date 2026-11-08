@@ -1,10 +1,11 @@
 import { ActionButton } from '../ActionButton'
 import {
-  Area,
-  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
+  ComposedChart,
+  ReferenceLine,
   Legend,
   Line,
   LineChart,
@@ -20,7 +21,6 @@ import type {
   DashboardCashFlowPoint,
   DashboardExpenseByCategory,
   DashboardExpensePeriod,
-  DashboardFutureExpensePoint,
   DashboardSummary,
   DashboardUpcomingCommitment,
   DashboardUpcomingCommitments,
@@ -36,7 +36,6 @@ type DashboardSectionProps = {
   dashboardBalanceEvolutionPeriod: DashboardBalanceEvolutionPeriod
   dashboardCashFlow: DashboardCashFlowPoint[]
   dashboardBalanceEvolution: DashboardBalanceEvolution
-  dashboardFutureExpenses: DashboardFutureExpensePoint[]
   dashboardUpcomingCommitments: DashboardUpcomingCommitments
   onReload: () => void
   onDashboardExpensePeriodChange: (period: DashboardExpensePeriod) => Promise<void>
@@ -56,6 +55,12 @@ const DASHBOARD_BALANCE_EVOLUTION_PERIOD_OPTIONS: Array<{ value: DashboardBalanc
   { value: 'six_months', label: '6 meses' },
 ]
 
+const savingsPercentageFormatter = new Intl.NumberFormat('es-MX', { maximumFractionDigits: 2 })
+
+function formatSavingsPercentage(value: number): string {
+  return `${savingsPercentageFormatter.format(value)}%`
+}
+
 const COMMITMENT_TYPE_LABELS: Record<DashboardUpcomingCommitment['type'], string> = {
   subscription: 'Suscripcion',
   fixed_expense: 'Gasto fijo',
@@ -73,13 +78,11 @@ export function DashboardSection({
   dashboardBalanceEvolutionPeriod,
   dashboardCashFlow,
   dashboardBalanceEvolution,
-  dashboardFutureExpenses,
   dashboardUpcomingCommitments,
   onReload,
   onDashboardExpensePeriodChange,
   onDashboardBalanceEvolutionPeriodChange,
 }: DashboardSectionProps) {
-  const nextMonthProjection = dashboardFutureExpenses[0]
   const balanceEvolutionPoints = dashboardBalanceEvolution.points.map((point) => ({
     ...point,
     label: formatIsoDate(point.date),
@@ -315,32 +318,45 @@ export function DashboardSection({
 
         <article className="mini-card">
           <header className="mini-card__header">
-            <h3 className="mini-card__title">Compromisos y disponible proyectado</h3>
-            {nextMonthProjection ? (
-              <p className="mini-card__subtitle">
-                Proximo mes: {nextMonthProjection.month} · {formatCurrency(nextMonthProjection.total)} de compromisos · {formatCurrency(nextMonthProjection.projectedAvailable)} disponibles despues
-              </p>
-            ) : null}
-            <p className="mini-card__subtitle">Las barras muestran salidas de efectivo programadas; la línea incluye ingresos recurrentes registrados.</p>
+            <h3 className="mini-card__title">Ahorro por mes</h3>
+            <p className="mini-card__subtitle">Últimos 6 meses · Ahorro neto = ingresos − gastos. El porcentaje indica cuánto de tus ingresos conservaste.</p>
+            <p className="mini-card__subtitle">Incluye el mes actual en curso y las compras con tarjeta al registrarse, sin duplicar sus pagos. Sin ingresos, el porcentaje no aplica.</p>
           </header>
-          {dashboardFutureExpenses.length === 0 ? (
-            <p className="card__subtitle">No hay compromisos programados para proyectar.</p>
+          {dashboardCashFlow.length === 0 ? (
+            <p className="card__subtitle">No hay datos suficientes para mostrar el ahorro mensual.</p>
           ) : (
             <div className="chart-box">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={dashboardFutureExpenses}>
+                <ComposedChart data={dashboardCashFlow}>
                   <CartesianGrid strokeDasharray="2 4" stroke="var(--color-chart-grid)" strokeOpacity={0.72} />
                   <XAxis dataKey="month" stroke="var(--color-chart-axis)" tick={{ fill: 'var(--color-chart-label)', fontSize: 11 }} tickLine={false} />
-                  <YAxis yAxisId="commitments" width={100} tickFormatter={formatCurrency} stroke="var(--color-chart-axis)" tick={{ fill: 'var(--color-chart-label)', fontSize: 11 }} tickLine={false} />
-                  <YAxis yAxisId="available" orientation="right" width={100} tickFormatter={formatCurrency} stroke="var(--color-chart-net)" tick={{ fill: 'var(--color-chart-label)', fontSize: 11 }} tickLine={false} />
-                  <Tooltip formatter={(value) => typeof value === 'number' ? formatCurrency(value) : '-'} />
+                  <YAxis yAxisId="savings" width={100} tickFormatter={formatCurrency} stroke="var(--color-chart-axis)" tick={{ fill: 'var(--color-chart-label)', fontSize: 11 }} tickLine={false} />
+                  <YAxis yAxisId="rate" orientation="right" width={72} tickFormatter={formatSavingsPercentage} stroke="var(--color-chart-net)" tick={{ fill: 'var(--color-chart-label)', fontSize: 11 }} tickLine={false} />
+                  <ReferenceLine yAxisId="savings" y={0} stroke="var(--color-chart-axis)" />
+                  <Tooltip
+                    labelFormatter={(label, payload) => {
+                      const point = payload[0]?.payload as DashboardCashFlowPoint | undefined
+                      return point ? (
+                        <>
+                          {label}<br />
+                          Ingresos: {formatCurrency(point.income)}<br />
+                          Gastos: {formatCurrency(point.expense)}
+                          {point.savingsRate === null ? <><br />Porcentaje: no aplica (sin ingresos)</> : null}
+                        </>
+                      ) : label
+                    }}
+                    formatter={(value, name) => typeof value === 'number'
+                      ? name === 'Porcentaje de ahorro' ? formatSavingsPercentage(value) : formatCurrency(value)
+                      : '-'}
+                  />
                   <Legend />
-                  <Area yAxisId="commitments" type="monotone" dataKey="subscriptions" stackId="1" stroke="var(--color-chart-net)" fill="var(--color-chart-net)" fillOpacity={0.18} strokeWidth={2.2} name="Suscripciones" />
-                  <Area yAxisId="commitments" type="monotone" dataKey="fixedExpenses" stackId="1" stroke="var(--color-chart-series-2)" fill="var(--color-chart-series-2)" fillOpacity={0.18} strokeWidth={2.2} name="Gastos fijos" />
-                  <Area yAxisId="commitments" type="monotone" dataKey="loanPayments" stackId="1" stroke="var(--color-chart-debt)" fill="var(--color-chart-debt)" fillOpacity={0.18} strokeWidth={2.2} name="Pagos de prestamos" />
-                  <Area yAxisId="commitments" type="monotone" dataKey="creditCardPayments" stackId="1" stroke="var(--color-chart-expense)" fill="var(--color-chart-expense)" fillOpacity={0.18} strokeWidth={2.2} name="Pagos de tarjeta" />
-                  <Line yAxisId="available" type="monotone" dataKey="projectedAvailable" stroke="var(--color-chart-net)" strokeWidth={2.8} dot name="Disponible proyectado" />
-                </AreaChart>
+                  <Bar yAxisId="savings" dataKey="netSavings" name="Ahorro neto" fill="var(--color-chart-income)" fillOpacity={0.88}>
+                    {dashboardCashFlow.map((point) => (
+                      <Cell key={point.month} fill={point.netSavings >= 0 ? 'var(--color-chart-income)' : 'var(--color-chart-expense)'} />
+                    ))}
+                  </Bar>
+                  <Line yAxisId="rate" type="linear" dataKey="savingsRate" stroke="var(--color-chart-net)" strokeWidth={2.8} dot name="Porcentaje de ahorro" />
+                </ComposedChart>
               </ResponsiveContainer>
             </div>
           )}

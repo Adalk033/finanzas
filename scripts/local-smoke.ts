@@ -315,12 +315,37 @@ try {
       expense: number
       debtPayments: number
       netCashFlow: number
+      netSavings: number
+      savingsRate: number | null
     }>>('/dashboard/charts/cash-flow').at(-1)
     assert.ok(cashFlow)
     assert.equal(cashFlow.income, 0.3)
     assert.equal(cashFlow.expense, 0.2)
     assert.equal(cashFlow.debtPayments, 0.1)
     assert.equal(cashFlow.netCashFlow, 0.1)
+    assert.equal(cashFlow.netSavings, 0.1)
+    assert.equal(cashFlow.savingsRate, 33.33)
+    request('/transactions', 'POST', {
+      instrumentId: debit.id,
+      type: 'expense',
+      amount: 0.2,
+      categoryId: category.id,
+      currencyId: 1,
+      description: 'Ahorro negativo',
+      transactionDate,
+      isMsi: false,
+    })
+    const negativeSavings = request<Array<{ netSavings: number; savingsRate: number | null }>>(
+      '/dashboard/charts/cash-flow',
+    ).at(-1)
+    assert.equal(negativeSavings?.netSavings, -0.1)
+    assert.equal(negativeSavings?.savingsRate, -33.33)
+    getDatabase().prepare("DELETE FROM transactions WHERE type = ? AND transaction_date = ?").run('income', transactionDate)
+    const savingsWithoutIncome = request<Array<{ netSavings: number; savingsRate: number | null }>>(
+      '/dashboard/charts/cash-flow',
+    ).at(-1)
+    assert.equal(savingsWithoutIncome?.netSavings, -0.4)
+    assert.equal(savingsWithoutIncome?.savingsRate, null)
   } finally {
     getDatabase().exec('ROLLBACK TO cash_flow_precision')
     getDatabase().exec('RELEASE cash_flow_precision')
