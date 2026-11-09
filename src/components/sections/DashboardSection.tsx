@@ -103,7 +103,7 @@ export function DashboardSection({
       </header>
 
       {!hasConfig ? <p className="message message--info">Abre la aplicacion de escritorio para acceder a tus datos locales.</p> : null}
-      {isDashboardLoading ? <p className="message message--info">Cargando resumen y graficas del dashboard...</p> : null}
+      {isDashboardLoading ? <p className="message message--info">Cargando resumen y gráficas...</p> : null}
       {dashboardError ? <p className="message message--error">{dashboardError}</p> : null}
       {hasConfig
         && dashboardSummary.totalAvailable === 0

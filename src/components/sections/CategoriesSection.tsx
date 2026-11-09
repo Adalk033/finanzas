@@ -77,7 +77,7 @@ export function CategoriesSection({
     <section className="card">
       <header className="card__header">
         <h2 className="card__title">Categorias y Subcategorias</h2>
-        <p className="card__subtitle">CRUD de categorias con subcategorias anidadas y control de eliminacion.</p>
+        <p className="card__subtitle">Crea, edita y elimina categorías con sus subcategorías.</p>
       </header>
 
       <div className="category-layout">

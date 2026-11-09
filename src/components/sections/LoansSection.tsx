@@ -1,7 +1,7 @@
 import { ActionButton } from '../ActionButton'
 import { FormModal } from '../FormModal'
 import { useState, type SyntheticEvent } from 'react'
-import { formatCurrency, formatIsoDate } from '../../app/appHelpers'
+import { FREQUENCY_LABELS, formatCurrency, formatIsoDate } from '../../app/appHelpers'
 import type {
   FinancialInstrument,
   Loan,
@@ -13,12 +13,6 @@ import type {
   LoanPaymentType,
 } from '../../types/domain'
 import { NumberInput } from '../NumberInput'
-
-const LOAN_PAYMENT_FREQUENCY_LABELS: Record<LoanPaymentFrequency, string> = {
-  weekly: 'Semanal',
-  biweekly: 'Quincenal',
-  monthly: 'Mensual',
-}
 
 type LoansSectionProps = {
   hasConfig: boolean
@@ -227,8 +221,8 @@ export function LoansSection({
                     })
                   }}
                 >
-                  {Object.entries(LOAN_PAYMENT_FREQUENCY_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>{label}</option>
+                  {(['weekly', 'biweekly', 'monthly'] as const).map((value) => (
+                    <option key={value} value={value}>{FREQUENCY_LABELS[value]}</option>
                   ))}
                 </select>
 
@@ -462,7 +456,7 @@ export function LoansSection({
         <FormModal title="Conciliar saldo pendiente" onClose={() => setReconciliationLoan(null)} error={loanError} message={loanMessage}>
           <header className="loan-reconciliation__header form-modal__intro">
             <h3 className="loan-reconciliation__title">Conciliar saldo pendiente · {reconciliationLoan.name}</h3>
-            <p className="loan-reconciliation__description">Captura el saldo real indicado por el acreedor. La app no modifica tu cuenta vinculada y recalcula las cuotas futuras.</p>
+            <p className="loan-reconciliation__description">Captura el saldo real indicado por el acreedor. La aplicación no modifica tu cuenta vinculada y recalcula las cuotas futuras.</p>
           </header>
           <form className="form-grid loan-reconciliation__form" onSubmit={(event) => { void submitReconciliation(event) }}>
             <label className="form-grid__field" htmlFor="loanReconciliationBalance">Saldo pendiente real</label>
@@ -550,7 +544,7 @@ export function LoansSection({
                     <tr key={loan.id}>
                       <td>{loan.name}</td>
                       <td>
-                        {loan.paymentType === 'fixed' ? 'Fijo' : 'Variable'} · {LOAN_PAYMENT_FREQUENCY_LABELS[loan.paymentFrequency]}
+                        {loan.paymentType === 'fixed' ? 'Fijo' : 'Variable'} · {FREQUENCY_LABELS[loan.paymentFrequency]}
                         {loan.affectsInstrumentBalance ? '' : ' · Descontado del ingreso'}
                       </td>
                       <td>{formatCurrency(loan.originalAmount)}</td>
@@ -592,7 +586,7 @@ export function LoansSection({
               <div>
                 <h3 className="category-card__title">Tabla de amortizacion · {selectedLoan.name}</h3>
                 <p className="category-card__meta">
-                  {selectedLoan.paymentType === 'fixed' ? 'Pago fijo' : 'Pago variable'} · {LOAN_PAYMENT_FREQUENCY_LABELS[selectedLoan.paymentFrequency]} · Saldo pendiente {formatCurrency(selectedLoan.remainingAmount)}
+                  {selectedLoan.paymentType === 'fixed' ? 'Pago fijo' : 'Pago variable'} · {FREQUENCY_LABELS[selectedLoan.paymentFrequency]} · Saldo pendiente {formatCurrency(selectedLoan.remainingAmount)}
                 </p>
               </div>
             </header>

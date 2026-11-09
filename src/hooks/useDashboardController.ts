@@ -36,7 +36,7 @@ export function useDashboardController() {
     if (!selectedPreferences) {
       const preferencesResult = await apiClient.getDashboardPreferences()
       if (!preferencesResult.success) {
-        setDashboardError(preferencesResult.error ?? 'No se pudieron cargar las preferencias del dashboard.')
+        setDashboardError(preferencesResult.error ?? 'No se pudieron cargar las preferencias del resumen.')
         setIsDashboardLoading(false)
         return
       }

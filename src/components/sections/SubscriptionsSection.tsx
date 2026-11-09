@@ -1,7 +1,7 @@
 import { ActionButton } from '../ActionButton'
 import { FormModal } from '../FormModal'
 import { useState, type SyntheticEvent } from 'react'
-import { formatCurrency, formatIsoDate } from '../../app/appHelpers'
+import { FREQUENCY_LABELS, formatCurrency, formatIsoDate } from '../../app/appHelpers'
 import type {
   Category,
   FinancialInstrument,
@@ -45,15 +45,8 @@ type SubscriptionsSectionProps = {
   onRecurringIncomeDelete: (id: number) => void
 }
 
-const RECURRING_INCOME_FREQUENCY_LABELS: Record<RecurringIncomeInput['frequency'], string> = {
-  weekly: 'Semanal',
-  biweekly: 'Quincenal',
-  monthly: 'Mensual',
-  yearly: 'Anual',
-}
-
 function formatRecurringIncomeSchedule(income: RecurringIncome): string {
-  const label = RECURRING_INCOME_FREQUENCY_LABELS[income.frequency]
+  const label = FREQUENCY_LABELS[income.frequency]
   if (income.frequency === 'biweekly') {
     return income.paymentDay !== null && income.secondPaymentDay !== null
       ? `${label} · dias ${income.paymentDay} y ${income.secondPaymentDay}`
@@ -172,9 +165,9 @@ export function SubscriptionsSection({
                   value={subscriptionForm.billingCycle}
                   onChange={(event) => onBillingCycleChange(event.target.value as SubscriptionBillingCycle)}
                 >
-                  <option value="monthly">Mensual</option>
-                  <option value="yearly">Anual</option>
-                  <option value="weekly">Semanal</option>
+                  <option value="monthly">{FREQUENCY_LABELS.monthly}</option>
+                  <option value="yearly">{FREQUENCY_LABELS.yearly}</option>
+                  <option value="weekly">{FREQUENCY_LABELS.weekly}</option>
                 </select>
 
                 <label className="form-grid__field" htmlFor="subscriptionBillingDay">Dia de cargo</label>
@@ -304,7 +297,7 @@ export function SubscriptionsSection({
                   <td>{subscription.name}</td>
                   <td>{subscription.instrumentName ?? '-'}</td>
                   <td>{formatCurrency(subscription.amount)}</td>
-                  <td>{subscription.billingCycle}</td>
+                  <td>{FREQUENCY_LABELS[subscription.billingCycle]}</td>
                   <td>{formatIsoDate(subscription.nextBilling)}</td>
                   <td>
                     <div className="table__actions">
@@ -413,10 +406,10 @@ export function SubscriptionsSection({
               })
             }}
           >
-            <option value="weekly">Semanal</option>
-            <option value="biweekly">Quincenal</option>
-            <option value="monthly">Mensual</option>
-            <option value="yearly">Anual</option>
+            <option value="weekly">{FREQUENCY_LABELS.weekly}</option>
+            <option value="biweekly">{FREQUENCY_LABELS.biweekly}</option>
+            <option value="monthly">{FREQUENCY_LABELS.monthly}</option>
+            <option value="yearly">{FREQUENCY_LABELS.yearly}</option>
           </select>
           {recurringIncomeForm.frequency === 'biweekly' ? (
             <>

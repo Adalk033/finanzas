@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3'
 import { getDatabase, getDatabasePath } from './local-db.js'
+import { getValidationFieldLabel } from './validation-labels.js'
 import type { ApiResponse, DatabaseInfo } from '../src/types/config.js'
 
 export type LocalRequestPayload = {
@@ -74,7 +75,7 @@ function fromCents(value: unknown): number | null {
 function requiredString(input: Input, key: string, maxLength: number): string {
   const value = typeof input[key] === 'string' ? input[key].trim() : ''
   if (!value || value.length > maxLength) {
-    throw new ValidationError(`${key} debe tener entre 1 y ${maxLength} caracteres.`)
+    throw new ValidationError(`${getValidationFieldLabel(key)} debe tener entre 1 y ${maxLength} caracteres.`)
   }
   return value
 }
@@ -85,7 +86,7 @@ function optionalString(input: Input, key: string, maxLength: number): string | 
     return null
   }
   if (typeof raw !== 'string' || raw.trim().length > maxLength) {
-    throw new ValidationError(`${key} no es valido.`)
+    throw new ValidationError(`${getValidationFieldLabel(key)} no es válido.`)
   }
   return raw.trim() || null
 }
@@ -93,7 +94,7 @@ function optionalString(input: Input, key: string, maxLength: number): string | 
 function requiredInteger(input: Input, key: string, min = 1, max = Number.MAX_SAFE_INTEGER): number {
   const value = input[key]
   if (!Number.isInteger(value) || toNumber(value) < min || toNumber(value) > max) {
-    throw new ValidationError(`${key} debe ser un entero entre ${min} y ${max}.`)
+    throw new ValidationError(`${getValidationFieldLabel(key)} debe ser un entero entre ${min} y ${max}.`)
   }
   return toNumber(value)
 }
@@ -112,7 +113,7 @@ function requiredBoolean(input: Input, key: string, defaultValue?: boolean): boo
     return defaultValue
   }
   if (typeof value !== 'boolean') {
-    throw new ValidationError(`${key} debe ser booleano.`)
+    throw new ValidationError(`${getValidationFieldLabel(key)} solo admite sí o no.`)
   }
   return value
 }
@@ -120,7 +121,7 @@ function requiredBoolean(input: Input, key: string, defaultValue?: boolean): boo
 function requiredEnum(input: Input, key: string, allowed: Set<string>): string {
   const value = input[key]
   if (typeof value !== 'string' || !allowed.has(value)) {
-    throw new ValidationError(`${key} no contiene un valor permitido.`)
+    throw new ValidationError(`${getValidationFieldLabel(key)} no contiene un valor permitido.`)
   }
   return value
 }
@@ -128,11 +129,11 @@ function requiredEnum(input: Input, key: string, allowed: Set<string>): string {
 function requiredDate(input: Input, key: string): string {
   const value = requiredString(input, key, 10)
   if (!ISO_DATE.test(value)) {
-    throw new ValidationError(`${key} debe usar el formato AAAA-MM-DD.`)
+    throw new ValidationError(`${getValidationFieldLabel(key)} debe usar el formato AAAA-MM-DD.`)
   }
   const parsed = new Date(`${value}T00:00:00Z`)
   if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
-    throw new ValidationError(`${key} no es una fecha valida.`)
+    throw new ValidationError(`${getValidationFieldLabel(key)} no es una fecha válida.`)
   }
   return value
 }
@@ -150,33 +151,33 @@ function optionalPositiveSearchParam(url: URL, key: string, max: number): number
     return null
   }
   if (!/^[1-9]\d*$/.test(raw)) {
-    throw new ValidationError(`${key} debe ser un entero positivo.`)
+    throw new ValidationError(`${getValidationFieldLabel(key)} debe ser un entero positivo.`)
   }
   const value = Number(raw)
   if (!Number.isSafeInteger(value) || value > max) {
-    throw new ValidationError(`${key} esta fuera del rango permitido.`)
+    throw new ValidationError(`${getValidationFieldLabel(key)} está fuera del rango permitido.`)
   }
   return value
 }
 
 function requiredMonth(value: string): string {
   if (!ISO_MONTH.test(value)) {
-    throw new ValidationError('month debe usar el formato AAAA-MM.')
+    throw new ValidationError('El mes debe usar el formato AAAA-MM.')
   }
   const parsed = new Date(`${value}-01T00:00:00Z`)
   if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 7) !== value) {
-    throw new ValidationError('month no es un mes valido.')
+    throw new ValidationError('El mes no es válido.')
   }
   return value
 }
 
 function moneyToCents(value: unknown, key: string, allowZero = false): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
-    throw new ValidationError(`${key} debe ser un monto valido.`)
+    throw new ValidationError(`${getValidationFieldLabel(key)} debe ser un monto válido.`)
   }
   const cents = Math.round((value + Number.EPSILON) * 100)
   if (cents < 0 || (!allowZero && cents === 0) || cents > 99_999_999_999) {
-    throw new ValidationError(`${key} esta fuera del rango permitido.`)
+    throw new ValidationError(`${getValidationFieldLabel(key)} está fuera del rango permitido.`)
   }
   return cents
 }
@@ -195,7 +196,7 @@ function optionalRate(input: Input, key: string): number | null {
     return null
   }
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1000) {
-    throw new ValidationError(`${key} debe estar entre 0 y 1000.`)
+    throw new ValidationError(`${getValidationFieldLabel(key)} debe estar entre 0 y 1000.`)
   }
   return Math.round(value * 10_000) / 10_000
 }
@@ -794,14 +795,14 @@ function validateInstrument(body: Input): {
   const type = requiredEnum(body, 'type', INSTRUMENT_TYPES)
   const lastFour = optionalString(body, 'lastFour', 4)
   if (lastFour && !LAST_FOUR.test(lastFour)) {
-    throw new ValidationError('lastFour debe contener exactamente cuatro digitos.')
+    throw new ValidationError('Ingresa exactamente cuatro números en los últimos dígitos.')
   }
   const creditLimit = type === 'credit_card' ? optionalMoneyToCents(body, 'creditLimit') : null
   const currentBalance = type === 'credit_card'
     ? (optionalMoneyToCents(body, 'currentBalance') ?? 0)
     : null
   if (type === 'credit_card' && creditLimit === null) {
-    throw new ValidationError('creditLimit es obligatorio para tarjetas de credito.')
+    throw new ValidationError('El límite de crédito es obligatorio para tarjetas de crédito.')
   }
   return {
     bankId: requiredInteger(body, 'bankId'),
@@ -1086,7 +1087,7 @@ function saveSubcategory(db: Database.Database, body: Input, id?: number): Recor
   const iconName = optionalString(body, 'iconName', 50)
   const isActive = requiredBoolean(body, 'isActive', true)
   if (iconName && !ICON_NAME.test(iconName)) {
-    throw new ValidationError('iconName solo admite letras y numeros.')
+    throw new ValidationError('El nombre del icono solo admite letras y números.')
   }
   if (id) {
     requireEntity(db, 'subcategories', id)
@@ -1204,7 +1205,7 @@ function listTransactions(db: Database.Database, url: URL): Record<string, unkno
   if (Number.isInteger(categoryId) && categoryId > 0) add('t.category_id = ?', categoryId)
   if (Number.isInteger(instrumentId) && instrumentId > 0) add('t.instrument_id = ?', instrumentId)
   if (type && TRANSACTION_TYPES.has(type)) add('t.type = ?', type)
-  if (search && search.length > 255) throw new ValidationError('search no puede superar 255 caracteres.')
+  if (search && search.length > 255) throw new ValidationError('La búsqueda no puede superar 255 caracteres.')
   if (search) {
     const searchValue = `%${search}%`
     add(
@@ -1217,7 +1218,7 @@ function listTransactions(db: Database.Database, url: URL): Record<string, unkno
     )
   }
   if (autoAdjustmentsOnly !== null && autoAdjustmentsOnly !== 'true') {
-    throw new ValidationError('auto_adjustments_only debe ser true.')
+    throw new ValidationError('El filtro de ajustes automáticos debe estar activado.')
   }
   if (autoAdjustmentsOnly === 'true') {
     add(automaticAdjustmentClause, `${AUTO_ADJUSTMENT_NOTE_PREFIX}%`, AUTO_ADJUSTMENT_DESCRIPTION)
@@ -1439,7 +1440,7 @@ function listFamilyExpenses(db: Database.Database, url: URL): Record<string, unk
   if (categoryIdValue) {
     const categoryId = Number(categoryIdValue)
     if (!Number.isInteger(categoryId) || categoryId < 1) {
-      throw new ValidationError('categoryId no es valido.')
+      throw new ValidationError('La categoría no es válida.')
     }
     add('fe.category_id = ?', categoryId)
   }
@@ -2133,10 +2134,10 @@ function validateLoan(db: Database.Database, body: Input): {
   const fixedPaymentCents = optionalMoneyToCents(body, 'fixedPayment')
   const annualRate = optionalRate(body, 'annualRate')
   if (paymentType === 'fixed' && fixedPaymentCents === null) {
-    throw new ValidationError('fixedPayment es obligatorio para prestamos de pago fijo.')
+    throw new ValidationError('El pago fijo es obligatorio para préstamos de pago fijo.')
   }
   if (paymentType === 'variable' && annualRate === null) {
-    throw new ValidationError('annualRate es obligatoria para prestamos de tasa variable.')
+    throw new ValidationError('La tasa anual es obligatoria para préstamos de tasa variable.')
   }
   const paymentDay = paymentFrequency === 'weekly' ? null : optionalInteger(body, 'paymentDay', 1, 31)
   const secondPaymentDay = paymentFrequency === 'biweekly'
@@ -3778,7 +3779,7 @@ function saveDashboardPreferences(db: Database.Database, body: Input): Record<st
   const hasExpensePeriod = body.expensePeriod !== undefined
   const hasBalanceEvolutionPeriod = body.balanceEvolutionPeriod !== undefined
   if (!hasExpensePeriod && !hasBalanceEvolutionPeriod) {
-    throw new ValidationError('Se requiere al menos una preferencia del dashboard.')
+    throw new ValidationError('Se requiere al menos una preferencia del resumen.')
   }
 
   const expensePeriod = hasExpensePeriod

@@ -101,7 +101,7 @@ export function RemindersSection({
               <summary>Vincular a un registro <span>(opcional)</span></summary>
               <div className="reminder-form__row">
                 <label className="reminder-form__field" htmlFor="reminderReferenceId">
-                  <span>ID de referencia</span>
+                  <span>Identificador de referencia</span>
                   <NumberInput id="reminderReferenceId" className="form-grid__input" min={1} value={reminderForm.referenceId} emptyValue={null} onValueChange={(referenceId) => {
                     onReminderFormChange({ ...reminderForm, referenceId })
                   }} />

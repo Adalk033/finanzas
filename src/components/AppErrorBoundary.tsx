@@ -56,7 +56,7 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
               Puedes recargar la aplicacion para recuperar la sesion.
             </p>
           </header>
-          <p className="message message--error">Error ID: {this.state.errorId}</p>
+          <p className="message message--error">Identificador del error: {this.state.errorId}</p>
           <div className="form-grid__actions error-boundary__actions">
             <ActionButton type="button" className="button button--primary" onClick={this.handleReload} icon="refresh" label="Recargar aplicacion" />
           </div>
