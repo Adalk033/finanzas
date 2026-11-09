@@ -1,3 +1,5 @@
+import { ActionButton } from '../ActionButton'
+import { FormModal } from '../FormModal'
 import { useState, type SyntheticEvent } from 'react'
 import type { Bank, BankInput } from '../../types/domain'
 
@@ -43,24 +45,23 @@ export function BanksSection({
       </header>
 
       <div className="section-toolbar">
-        <button className="button button--primary" type="button" onClick={() => {
+        <ActionButton className="button button--primary" type="button" onClick={() => {
           if (editingBankId !== null) {
             onReset()
             setIsFormOpen(false)
             return
           }
           setIsFormOpen((value) => !value)
-        }}>
-          {isFormVisible ? 'Ocultar formulario' : 'Nuevo banco'}
-        </button>
+        }}
+          icon={isFormVisible ? 'close' : 'plus'}
+          label={isFormVisible ? 'Ocultar formulario' : 'Nuevo banco'}
+        />
         <div className="section-toolbar__spacer" />
-        <button className="button button--secondary" type="button" disabled={!hasConfig} onClick={onReload}>
-          Recargar
-        </button>
+        <ActionButton className="button button--secondary" type="button" disabled={!hasConfig} onClick={onReload} icon="refresh" label="Recargar" />
       </div>
 
       {isFormVisible ? (
-        <div className="section-panel">
+        <FormModal title={editingBankId === null ? "Nuevo banco" : "Editar banco"} onClose={() => { onReset(); setIsFormOpen(false) }} error={bankError} message={bankMessage}>
           <form className="form-grid" onSubmit={onSubmit}>
             <label className="form-grid__field" htmlFor="bankName">Nombre del banco</label>
             <input
@@ -84,15 +85,14 @@ export function BanksSection({
             />
 
             <div className="form-grid__actions">
-              <button className="button button--primary" type="submit" disabled={!hasConfig}>
-                {editingBankId === null ? 'Crear banco' : 'Guardar cambios'}
-              </button>
-              <button className="button button--secondary" type="button" onClick={onReset}>
-                Limpiar
-              </button>
+              <ActionButton className="button button--primary" type="submit" disabled={!hasConfig}
+                icon="save"
+                label={editingBankId === null ? 'Crear banco' : 'Guardar cambios'}
+              />
+              <ActionButton className="button button--secondary" type="button" onClick={onReset} icon="reset" label="Limpiar" />
             </div>
           </form>
-        </div>
+        </FormModal>
       ) : null}
 
       {bankError ? <p className="message message--error">{bankError}</p> : null}
@@ -125,12 +125,8 @@ export function BanksSection({
                   <td>{bank.shortName ?? '-'}</td>
                   <td>
                     <div className="table__actions">
-                      <button className="button button--secondary" type="button" onClick={() => onEdit(bank)}>
-                        Editar
-                      </button>
-                      <button className="button button--danger" type="button" onClick={() => onDelete(bank.id)}>
-                        Eliminar
-                      </button>
+                      <ActionButton className="button button--secondary" type="button" onClick={() => onEdit(bank)} icon="edit" label="Editar" />
+                      <ActionButton className="button button--danger" type="button" onClick={() => onDelete(bank.id)} icon="trash" label="Eliminar" />
                     </div>
                   </td>
                 </tr>

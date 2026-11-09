@@ -518,6 +518,8 @@ export interface DashboardCashFlowPoint {
   expense: number
   debtPayments: number
   netCashFlow: number
+  netSavings: number
+  savingsRate: number | null
 }
 
 export interface DashboardBalanceSeries {

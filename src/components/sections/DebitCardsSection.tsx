@@ -1,3 +1,5 @@
+import { ActionButton } from '../ActionButton'
+import { FormModal } from '../FormModal'
 import { useState, type SyntheticEvent } from 'react'
 import { formatCurrency, formatIsoDate } from '../../app/appHelpers'
 import type {
@@ -105,9 +107,7 @@ export function DebitCardsSection({
           <h2 className="card__title">Tarjetas de débito</h2>
           <p className="card__subtitle">Consulta el saldo disponible y concilia cada tarjeta sin pasar por Instrumentos.</p>
         </div>
-        <button className="button button--secondary" type="button" disabled={!hasConfig} onClick={onReload}>
-          Actualizar
-        </button>
+        <ActionButton className="button button--secondary" type="button" disabled={!hasConfig} onClick={onReload} icon="refresh" label="Actualizar" />
       </header>
 
       {debitCardInstruments.length === 0 ? (
@@ -171,15 +171,15 @@ export function DebitCardsSection({
               </article>
 
               <div className="debit-card-actions">
-                <button
+                <ActionButton
                   className="button button--primary"
                   type="button"
                   disabled={!hasConfig}
                   onClick={() => setActionPanel((current) => current === 'movement' ? null : 'movement')}
-                >
-                  {actionPanel === 'movement' ? 'Cerrar movimiento' : 'Registrar movimiento'}
-                </button>
-                <button
+                  icon={actionPanel === 'movement' ? 'close' : 'plus'}
+                  label={actionPanel === 'movement' ? 'Cerrar movimiento' : 'Registrar movimiento'}
+                />
+                <ActionButton
                   className="button button--secondary"
                   type="button"
                   disabled={!hasConfig}
@@ -190,14 +190,14 @@ export function DebitCardsSection({
                       startReconciliation()
                     }
                   }}
-                >
-                  {actionPanel === 'reconciliation' ? 'Cerrar conciliación' : 'Conciliar saldo'}
-                </button>
+                  icon="balance"
+                  label={actionPanel === 'reconciliation' ? 'Cerrar conciliación' : 'Conciliar saldo'}
+                />
               </div>
 
               {actionPanel === 'movement' ? (
-                <section className="debit-card-movement-form">
-                  <header>
+                <FormModal title="Registrar movimiento" onClose={() => setActionPanel(null)} error={error} message={message}>
+                  <header className="form-modal__intro">
                     <h3>Registrar movimiento</h3>
                     <p>
                       {selectedDebitCard.linkedAccountName
@@ -301,25 +301,25 @@ export function DebitCardsSection({
                     />
 
                     <div className="form-grid__actions">
-                      <button className="button button--primary" type="submit">Guardar movimiento</button>
-                      <button
+                      <ActionButton className="button button--primary" type="submit" icon="save" label="Guardar movimiento" />
+                      <ActionButton
                         className="button button--secondary"
                         type="button"
                         onClick={() => {
                           onResetMovement()
                           setActionPanel(null)
                         }}
-                      >
-                        Cancelar
-                      </button>
+                        icon="close"
+                        label="Cancelar"
+                      />
                     </div>
                   </form>
-                </section>
+                </FormModal>
               ) : null}
 
               {actionPanel === 'reconciliation' ? (
-                <section className="debit-card-reconciliation">
-                  <header>
+                <FormModal title="Conciliar saldo" onClose={() => setActionPanel(null)} error={error} message={message}>
+                  <header className="form-modal__intro">
                     <h3>Conciliar saldo</h3>
                     <p>
                       {selectedDebitCard.linkedAccountName
@@ -361,13 +361,14 @@ export function DebitCardsSection({
                     />
 
                     <div className="form-grid__actions">
-                      <button className="button button--primary" type="submit">Aplicar conciliación</button>
-                      <button className="button button--secondary" type="button" onClick={() => setActionPanel(null)}>
-                        Cancelar
-                      </button>
+                      <ActionButton className="button button--primary" type="submit" icon="balance" label="Aplicar conciliación" />
+                      <ActionButton className="button button--secondary" type="button" onClick={() => setActionPanel(null)}
+                        icon="close"
+                        label="Cancelar"
+                      />
                     </div>
                   </form>
-                </section>
+                </FormModal>
               ) : null}
 
               {error ? <p className="message message--error">{error}</p> : null}

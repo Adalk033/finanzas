@@ -1,4 +1,6 @@
-import { type SyntheticEvent } from 'react'
+import { ActionButton } from '../ActionButton'
+import { FormModal } from '../FormModal'
+import { useState, type SyntheticEvent } from 'react'
 import { formatIsoDate, getReminderTypeLabel } from '../../app/appHelpers'
 import type { Reminder, ReminderInput, ReminderType } from '../../types/domain'
 import { NumberInput } from '../NumberInput'
@@ -46,6 +48,7 @@ export function RemindersSection({
   onDeleteDismissed,
   onDelete,
 }: RemindersSectionProps) {
+  const [isFormOpen, setIsFormOpen] = useState(false)
   const hasDismissedReminders = reminders.some((reminder) => reminder.isDismissed)
 
   return (
@@ -59,18 +62,16 @@ export function RemindersSection({
       {reminderError ? <p className="message message--error">{reminderError}</p> : null}
 
       <div className="section-toolbar">
-        <button className="button button--primary" type="button" onClick={onReset}>
-          Nuevo recordatorio
-        </button>
+        <ActionButton className="button button--primary" type="button" onClick={() => { onReset(); setIsFormOpen(true) }}
+          icon="plus"
+          label="Nuevo recordatorio"
+        />
       </div>
 
-      <div className="reminders-layout">
-        <article className="mini-card reminders-form-card">
-          <header className="mini-card__header">
-            <h3 className="mini-card__title">{editingReminderId === null ? 'Nuevo recordatorio' : 'Editar recordatorio'}</h3>
-            <p className="mini-card__subtitle">Programa una alerta para no perder una fecha importante.</p>
-          </header>
-
+      <div className="section-stack">
+        {isFormOpen || editingReminderId !== null ? (
+          <FormModal title={editingReminderId === null ? "Nuevo recordatorio" : "Editar recordatorio"} onClose={() => { onReset(); setIsFormOpen(false) }} error={reminderError} message={reminderMessage}>
+              <p className="mini-card__subtitle">Programa una alerta para no perder una fecha importante.</p>
           <form className="reminder-form" onSubmit={onSubmit}>
             <label className="reminder-form__field" htmlFor="reminderTitle">
               <span>Título</span>
@@ -100,7 +101,7 @@ export function RemindersSection({
               <summary>Vincular a un registro <span>(opcional)</span></summary>
               <div className="reminder-form__row">
                 <label className="reminder-form__field" htmlFor="reminderReferenceId">
-                  <span>ID de referencia</span>
+                  <span>Identificador de referencia</span>
                   <NumberInput id="reminderReferenceId" className="form-grid__input" min={1} value={reminderForm.referenceId} emptyValue={null} onValueChange={(referenceId) => {
                     onReminderFormChange({ ...reminderForm, referenceId })
                   }} />
@@ -112,11 +113,15 @@ export function RemindersSection({
               </div>
             </details>
             <div className="form-grid__actions">
-              <button className="button button--primary" type="submit" disabled={!hasConfig || isRemindersLoading}>{editingReminderId === null ? 'Guardar recordatorio' : 'Actualizar recordatorio'}</button>
-              <button className="button button--secondary" type="button" onClick={onReset}>Limpiar</button>
+              <ActionButton className="button button--primary" type="submit" disabled={!hasConfig || isRemindersLoading}
+                icon={editingReminderId === null ? 'save' : 'refresh'}
+                label={editingReminderId === null ? 'Guardar recordatorio' : 'Actualizar recordatorio'}
+              />
+              <ActionButton className="button button--secondary" type="button" onClick={onReset} icon="reset" label="Limpiar" />
             </div>
           </form>
-        </article>
+          </FormModal>
+        ) : null}
 
         <article className="mini-card">
           <header className="mini-card__header">
@@ -125,38 +130,38 @@ export function RemindersSection({
           </header>
 
           <div className="form-grid__actions">
-            <button
+            <ActionButton
               className="button button--secondary"
               type="button"
               disabled={!hasConfig || isRemindersLoading}
               onClick={onReload}
-            >
-              {isRemindersLoading ? 'Cargando...' : 'Recargar'}
-            </button>
-            <button
+              icon="refresh"
+              label={isRemindersLoading ? 'Cargando...' : 'Recargar'}
+            />
+            <ActionButton
               className="button button--secondary"
               type="button"
               disabled={!hasConfig || isRemindersLoading || !reminders.some((reminder) => !reminder.isDismissed)}
               onClick={onDismissAll}
-            >
-              Descartar todos
-            </button>
-            <button
+              icon="dismiss"
+              label="Descartar todos"
+            />
+            <ActionButton
               className="button button--danger"
               type="button"
               disabled={!hasConfig || isRemindersLoading || pendingRemindersCount === 0}
               onClick={onDeletePending}
-            >
-              Eliminar pendientes
-            </button>
-            <button
+              icon="trash"
+              label="Eliminar pendientes"
+            />
+            <ActionButton
               className="button button--danger"
               type="button"
               disabled={!hasConfig || isRemindersLoading || !hasDismissedReminders}
               onClick={onDeleteDismissed}
-            >
-              Limpiar descartados
-            </button>
+              icon="trash"
+              label="Limpiar descartados"
+            />
           </div>
 
           <div className="reminders-list" aria-live="polite">
@@ -173,44 +178,44 @@ export function RemindersSection({
                   {reminder.isDismissed ? <span className="badge badge--warning">Descartado</span> : reminder.isRead ? <span className="badge badge--success">Leído</span> : <span className="badge badge--info">Pendiente</span>}
                 </div>
                 <div className="reminder-item__actions">
-                          <button
+                          <ActionButton
                             className="button button--secondary"
                             type="button"
                             onClick={() => {
                               onEdit(reminder)
                             }}
-                          >
-                            Editar
-                          </button>
-                          <button
+                            icon="edit"
+                            label="Editar"
+                          />
+                          <ActionButton
                             className="button button--secondary"
                             type="button"
                             disabled={reminder.isRead}
                             onClick={() => {
                               onMarkAsRead(reminder)
                             }}
-                          >
-                            Marcar leido
-                          </button>
-                          <button
+                            icon="check"
+                            label="Marcar leido"
+                          />
+                          <ActionButton
                             className="button button--secondary"
                             type="button"
                             disabled={reminder.isDismissed}
                             onClick={() => {
                               onDismiss(reminder)
                             }}
-                          >
-                            Descartar
-                          </button>
-                          <button
+                            icon="dismiss"
+                            label="Descartar"
+                          />
+                          <ActionButton
                             className="button button--danger"
                             type="button"
                             onClick={() => {
                               onDelete(reminder.id)
                             }}
-                          >
-                            Eliminar
-                          </button>
+                            icon="trash"
+                            label="Eliminar"
+                          />
                 </div>
               </article>
             )) : null}

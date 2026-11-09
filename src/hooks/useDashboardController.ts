@@ -7,7 +7,6 @@ import type {
   DashboardCashFlowPoint,
   DashboardExpenseByCategory,
   DashboardExpensePeriod,
-  DashboardFutureExpensePoint,
   DashboardPreferences,
   DashboardUpcomingCommitments,
   DashboardSummary,
@@ -23,7 +22,6 @@ export function useDashboardController() {
     series: [],
     points: [],
   })
-  const [dashboardFutureExpenses, setDashboardFutureExpenses] = useState<DashboardFutureExpensePoint[]>([])
   const [dashboardUpcomingCommitments, setDashboardUpcomingCommitments] = useState<DashboardUpcomingCommitments>(
     EMPTY_DASHBOARD_UPCOMING_COMMITMENTS,
   )
@@ -38,7 +36,7 @@ export function useDashboardController() {
     if (!selectedPreferences) {
       const preferencesResult = await apiClient.getDashboardPreferences()
       if (!preferencesResult.success) {
-        setDashboardError(preferencesResult.error ?? 'No se pudieron cargar las preferencias del dashboard.')
+        setDashboardError(preferencesResult.error ?? 'No se pudieron cargar las preferencias del resumen.')
         setIsDashboardLoading(false)
         return
       }
@@ -55,14 +53,12 @@ export function useDashboardController() {
       expensesResult,
       cashFlowResult,
       balanceEvolutionResult,
-      futureExpensesResult,
       upcomingCommitmentsResult,
     ] = await Promise.all([
       apiClient.getDashboardSummary(),
       apiClient.getDashboardExpensesByCategory(selectedPreferences.expensePeriod),
       apiClient.getDashboardCashFlow(),
       apiClient.getDashboardBalanceEvolution(),
-      apiClient.getDashboardFutureExpenses(),
       apiClient.getDashboardUpcomingCommitments(),
     ])
 
@@ -90,12 +86,6 @@ export function useDashboardController() {
       return
     }
 
-    if (!futureExpensesResult.success) {
-      setDashboardError(futureExpensesResult.error ?? 'No se pudo cargar la proyeccion de gastos futuros.')
-      setIsDashboardLoading(false)
-      return
-    }
-
     if (!upcomingCommitmentsResult.success) {
       setDashboardError(upcomingCommitmentsResult.error ?? 'No se pudieron cargar los compromisos proximos.')
       setIsDashboardLoading(false)
@@ -106,7 +96,6 @@ export function useDashboardController() {
     setDashboardExpensesByCategory(expensesResult.data ?? [])
     setDashboardCashFlow(cashFlowResult.data ?? [])
     setDashboardBalanceEvolution(balanceEvolutionResult.data ?? { series: [], points: [] })
-    setDashboardFutureExpenses(futureExpensesResult.data ?? [])
     setDashboardUpcomingCommitments(upcomingCommitmentsResult.data ?? EMPTY_DASHBOARD_UPCOMING_COMMITMENTS)
     setIsDashboardLoading(false)
   }
@@ -118,7 +107,6 @@ export function useDashboardController() {
     dashboardBalanceEvolutionPeriod,
     dashboardCashFlow,
     dashboardBalanceEvolution,
-    dashboardFutureExpenses,
     dashboardUpcomingCommitments,
     isDashboardLoading,
     dashboardError,

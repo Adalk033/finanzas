@@ -1,3 +1,5 @@
+import { ActionButton } from '../ActionButton'
+import { FormModal } from '../FormModal'
 import { useState, type SyntheticEvent } from 'react'
 import { formatCurrency } from '../../app/appHelpers'
 import type { Bank, FinancialInstrument, FinancialInstrumentInput, InstrumentType } from '../../types/domain'
@@ -104,24 +106,23 @@ export function InstrumentsSection({
       </header>
 
       <div className="section-toolbar">
-        <button className="button button--primary" type="button" onClick={() => {
+        <ActionButton className="button button--primary" type="button" onClick={() => {
           if (editingInstrumentId !== null) {
             onReset()
             setIsFormOpen(false)
             return
           }
           setIsFormOpen((value) => !value)
-        }}>
-          {isFormVisible ? 'Ocultar formulario' : 'Nuevo instrumento'}
-        </button>
+        }}
+          icon={isFormVisible ? 'close' : 'plus'}
+          label={isFormVisible ? 'Ocultar formulario' : 'Nuevo instrumento'}
+        />
         <div className="section-toolbar__spacer" />
-        <button className="button button--secondary" type="button" disabled={!hasConfig} onClick={onReload}>
-          Recargar
-        </button>
+        <ActionButton className="button button--secondary" type="button" disabled={!hasConfig} onClick={onReload} icon="refresh" label="Recargar" />
       </div>
 
       {isFormVisible ? (
-        <div className="section-panel">
+        <FormModal title={editingInstrumentId === null ? "Nuevo instrumento" : "Editar instrumento"} onClose={() => { onReset(); setIsFormOpen(false) }} error={instrumentError} message={instrumentMessage}>
           <form className="form-grid" onSubmit={onSubmit}>
             <label className="form-grid__field" htmlFor="instrumentBank">Banco</label>
             <select
@@ -264,21 +265,22 @@ export function InstrumentsSection({
             />
 
             <div className="form-grid__actions">
-              <button className="button button--primary" type="submit" disabled={!hasConfig || banks.length === 0}>
-                {editingInstrumentId === null ? 'Crear instrumento' : 'Guardar cambios'}
-              </button>
-              <button className="button button--secondary" type="button" onClick={onReset}>
-                Limpiar
-              </button>
+              <ActionButton className="button button--primary" type="submit" disabled={!hasConfig || banks.length === 0}
+                icon="save"
+                label={editingInstrumentId === null ? 'Crear instrumento' : 'Guardar cambios'}
+              />
+              <ActionButton className="button button--secondary" type="button" onClick={onReset} icon="reset" label="Limpiar" />
             </div>
           </form>
-        </div>
+        </FormModal>
       ) : null}
 
       {reconciliationInstrument !== null ? (
-        <div className="section-panel">
-          <h3 className="card__title">Conciliar {reconciliationInstrument.name}</h3>
-          <p className="card__subtitle">Registra el saldo real para crear un ajuste que conserve el historial.</p>
+        <FormModal title="Conciliar saldo" onClose={() => setReconciliationInstrument(null)} error={instrumentError} message={instrumentMessage}>
+          <header className="form-modal__intro">
+            <h3 className="card__title">Conciliar {reconciliationInstrument.name}</h3>
+            <p className="card__subtitle">Registra el saldo real para crear un ajuste que conserve el historial.</p>
+          </header>
           <form className="form-grid" onSubmit={(event) => { void submitReconciliation(event) }}>
             <label className="form-grid__field" htmlFor="reconciliationBalance">Saldo real</label>
             <input
@@ -313,13 +315,14 @@ export function InstrumentsSection({
             />
 
             <div className="form-grid__actions">
-              <button className="button button--primary" type="submit">Aplicar conciliacion</button>
-              <button className="button button--secondary" type="button" onClick={() => setReconciliationInstrument(null)}>
-                Cancelar
-              </button>
+              <ActionButton className="button button--primary" type="submit" icon="balance" label="Aplicar conciliacion" />
+              <ActionButton className="button button--secondary" type="button" onClick={() => setReconciliationInstrument(null)}
+                icon="close"
+                label="Cancelar"
+              />
             </div>
           </form>
-        </div>
+        </FormModal>
       ) : null}
 
       {instrumentError ? <p className="message message--error">{instrumentError}</p> : null}
@@ -357,17 +360,20 @@ export function InstrumentsSection({
                         </td>
                         <td>
                           <div className="table__actions">
-                            <button className="button button--secondary" type="button" onClick={() => onEdit(instrument)}>
-                              Editar
-                            </button>
+                            <ActionButton className="button button--secondary" type="button" onClick={() => onEdit(instrument)}
+                              icon="edit"
+                              label="Editar"
+                            />
                             {instrument.isActive ? (
-                              <button className="button button--secondary" type="button" onClick={() => startReconciliation(instrument)}>
-                                Conciliar
-                              </button>
+                              <ActionButton className="button button--secondary" type="button" onClick={() => startReconciliation(instrument)}
+                                icon="balance"
+                                label="Conciliar"
+                              />
                             ) : null}
-                            <button className="button button--danger" type="button" onClick={() => onDelete(instrument.id)}>
-                              Archivar
-                            </button>
+                            <ActionButton className="button button--danger" type="button" onClick={() => onDelete(instrument.id)}
+                              icon="archive"
+                              label="Archivar"
+                            />
                           </div>
                         </td>
                       </tr>

@@ -1,5 +1,7 @@
+import { ActionButton } from '../ActionButton'
+import { FormModal } from '../FormModal'
 import { useState, type SyntheticEvent } from 'react'
-import { formatCurrency, formatIsoDate } from '../../app/appHelpers'
+import { FREQUENCY_LABELS, formatCurrency, formatIsoDate } from '../../app/appHelpers'
 import type {
   FinancialInstrument,
   Loan,
@@ -11,12 +13,6 @@ import type {
   LoanPaymentType,
 } from '../../types/domain'
 import { NumberInput } from '../NumberInput'
-
-const LOAN_PAYMENT_FREQUENCY_LABELS: Record<LoanPaymentFrequency, string> = {
-  weekly: 'Semanal',
-  biweekly: 'Quincenal',
-  monthly: 'Mensual',
-}
 
 type LoansSectionProps = {
   hasConfig: boolean
@@ -73,6 +69,7 @@ export function LoansSection({
 }: LoansSectionProps) {
   const [isLoanFormOpen, setIsLoanFormOpen] = useState(editingLoanId !== null)
   const [isRegisterFormOpen, setIsRegisterFormOpen] = useState(false)
+  const [selectedInstallment, setSelectedInstallment] = useState<number | null>(null)
   const [reconciliationLoan, setReconciliationLoan] = useState<Loan | null>(null)
   const [reconciliationBalance, setReconciliationBalance] = useState('')
   const [reconciliationDate, setReconciliationDate] = useState('')
@@ -115,32 +112,26 @@ export function LoansSection({
         <p className="card__subtitle">Gestion de prestamos, tabla de amortizacion y registro de cuotas pagadas.</p>
       </header>
 
-      <div className="transaction-layout">
-        <section className="mini-card">
-          <header className="mini-card__header">
-            <h3 className="mini-card__title">Nuevo prestamo</h3>
-            <p className="mini-card__subtitle">Configura tipo de pago fijo o variable y genera su calendario.</p>
-          </header>
-
-          <div className="section-toolbar">
-            <button className="button button--primary" type="button" onClick={() => {
+      <div className="section-stack">
+        <div className="section-toolbar">
+            <ActionButton className="button button--primary" type="button" onClick={() => {
               if (editingLoanId !== null) {
                 onReset()
                 setIsLoanFormOpen(false)
                 return
               }
               setIsLoanFormOpen((value) => !value)
-            }}>
-              {isLoanFormVisible ? 'Ocultar formulario' : 'Nuevo prestamo'}
-            </button>
+            }}
+              icon={isLoanFormVisible ? 'close' : 'plus'}
+              label={isLoanFormVisible ? 'Ocultar formulario' : 'Nuevo prestamo'}
+            />
             <div className="section-toolbar__spacer" />
-            <button className="button button--secondary" type="button" onClick={onReload}>
-              Recargar
-            </button>
+            <ActionButton className="button button--secondary" type="button" onClick={onReload} icon="refresh" label="Recargar" />
           </div>
 
           {isLoanFormVisible ? (
-            <div className="section-panel">
+            <FormModal title={editingLoanId === null ? "Nuevo préstamo" : "Editar préstamo"} onClose={() => { onReset(); setIsLoanFormOpen(false) }} error={loanError} message={loanMessage}>
+              <p className="mini-card__subtitle">Configura tipo de pago fijo o variable y genera su calendario.</p>
               <form className="form-grid" onSubmit={onSubmit}>
                 <label className="form-grid__field" htmlFor="loanName">Nombre</label>
                 <input
@@ -230,8 +221,8 @@ export function LoansSection({
                     })
                   }}
                 >
-                  {Object.entries(LOAN_PAYMENT_FREQUENCY_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>{label}</option>
+                  {(['weekly', 'biweekly', 'monthly'] as const).map((value) => (
+                    <option key={value} value={value}>{FREQUENCY_LABELS[value]}</option>
                   ))}
                 </select>
 
@@ -362,33 +353,61 @@ export function LoansSection({
                 />
 
                 <div className="form-grid__actions">
-                  <button className="button button--primary" type="submit" disabled={!hasConfig}>
-                    {editingLoanId === null ? 'Crear prestamo' : 'Guardar cambios'}
-                  </button>
-                  <button className="button button--secondary" type="button" onClick={onReset}>
-                    Limpiar
-                  </button>
+                  <ActionButton className="button button--primary" type="submit" disabled={!hasConfig}
+                    icon="save"
+                    label={editingLoanId === null ? 'Crear prestamo' : 'Guardar cambios'}
+                  />
+                  <ActionButton className="button button--secondary" type="button" onClick={onReset} icon="reset" label="Limpiar" />
                 </div>
               </form>
-            </div>
+            </FormModal>
           ) : null}
-        </section>
 
-        <section className="mini-card">
-          <header className="mini-card__header">
-            <h3 className="mini-card__title">Registro de cuota</h3>
-            <p className="mini-card__subtitle">Selecciona un prestamo y registra cuotas pendientes.</p>
-          </header>
-
-          <div className="section-toolbar">
-            <button className="button button--primary" type="button" onClick={() => setIsRegisterFormOpen((value) => !value)}>
-              {isRegisterFormOpen ? 'Ocultar formulario' : 'Registrar cuota'}
-            </button>
+        <div className="section-toolbar">
+            <ActionButton className="button button--primary" type="button" onClick={() => setIsRegisterFormOpen((value) => !value)}
+              icon={isRegisterFormOpen ? 'close' : 'payment'}
+              label={isRegisterFormOpen ? 'Ocultar formulario' : 'Registrar cuota'}
+            />
           </div>
 
           {isRegisterFormOpen ? (
-            <div className="section-panel">
-              <form className="form-grid" onSubmit={(event) => event.preventDefault()}>
+            <FormModal title="Registrar cuota" onClose={() => setIsRegisterFormOpen(false)} error={loanError} message={loanMessage}>
+              <p className="mini-card__subtitle">Selecciona un préstamo y la cuota pendiente que deseas registrar.</p>
+              <form className="form-grid" onSubmit={(event) => {
+                event.preventDefault()
+                if (selectedInstallment !== null) onPayInstallment(selectedInstallment)
+              }}>
+                <label className="form-grid__field" htmlFor="loanRegisterLoan">Préstamo</label>
+                <select
+                  id="loanRegisterLoan"
+                  className="form-grid__input"
+                  value={selectedLoan?.id ?? ''}
+                  disabled={isLoanPaymentsLoading}
+                  onChange={(event) => {
+                    setSelectedInstallment(null)
+                    onLoadLoanPayments(Number(event.target.value))
+                  }}
+                  required
+                >
+                  <option value="" disabled>Selecciona un préstamo</option>
+                  {loans.map((loan) => <option key={loan.id} value={loan.id}>{loan.name}</option>)}
+                </select>
+                <label className="form-grid__field" htmlFor="loanRegisterInstallment">Cuota pendiente</label>
+                <select
+                  id="loanRegisterInstallment"
+                  className="form-grid__input"
+                  value={selectedInstallment ?? ''}
+                  disabled={selectedLoan === null || isLoanPaymentsLoading}
+                  onChange={(event) => setSelectedInstallment(Number(event.target.value))}
+                  required
+                >
+                  <option value="" disabled>Selecciona una cuota</option>
+                  {loanPayments.filter((payment) => !payment.isPaid).map((payment) => (
+                    <option key={payment.id} value={payment.installmentNum}>
+                      Cuota {payment.installmentNum} · {formatIsoDate(payment.paymentDate)} · {formatCurrency(payment.amount)}
+                    </option>
+                  ))}
+                </select>
                 <label className="form-grid__field" htmlFor="loanRegisterPaidDate">Fecha de pago</label>
                 <input
                   id="loanRegisterPaidDate"
@@ -419,20 +438,25 @@ export function LoansSection({
                   placeholder="Comprobante o comentario"
                 />
 
-                <p className="card__subtitle form-grid__help">
-                  Usa el boton Pagar de la tabla para registrar cada cuota pendiente con esta configuracion.
-                </p>
+                <div className="form-grid__actions">
+                  <ActionButton
+                    className="button button--primary"
+                    type="submit"
+                    disabled={!hasConfig || isLoanPaymentsLoading || !loanPayments.some((payment) => payment.installmentNum === selectedInstallment && !payment.isPaid)}
+                    icon="payment"
+                    label={selectedLoan?.affectsInstrumentBalance === false ? 'Registrar descuento' : 'Registrar pago'}
+                  />
+                </div>
               </form>
-            </div>
+            </FormModal>
           ) : null}
-        </section>
       </div>
 
       {reconciliationLoan !== null ? (
-        <section className="loan-reconciliation">
-          <header className="loan-reconciliation__header">
+        <FormModal title="Conciliar saldo pendiente" onClose={() => setReconciliationLoan(null)} error={loanError} message={loanMessage}>
+          <header className="loan-reconciliation__header form-modal__intro">
             <h3 className="loan-reconciliation__title">Conciliar saldo pendiente · {reconciliationLoan.name}</h3>
-            <p className="loan-reconciliation__description">Captura el saldo real indicado por el acreedor. La app no modifica tu cuenta vinculada y recalcula las cuotas futuras.</p>
+            <p className="loan-reconciliation__description">Captura el saldo real indicado por el acreedor. La aplicación no modifica tu cuenta vinculada y recalcula las cuotas futuras.</p>
           </header>
           <form className="form-grid loan-reconciliation__form" onSubmit={(event) => { void submitReconciliation(event) }}>
             <label className="form-grid__field" htmlFor="loanReconciliationBalance">Saldo pendiente real</label>
@@ -468,13 +492,14 @@ export function LoansSection({
             />
 
             <div className="form-grid__actions">
-              <button className="button button--primary" type="submit">Aplicar conciliacion</button>
-              <button className="button button--secondary" type="button" onClick={() => setReconciliationLoan(null)}>
-                Cancelar
-              </button>
+              <ActionButton className="button button--primary" type="submit" icon="balance" label="Aplicar conciliacion" />
+              <ActionButton className="button button--secondary" type="button" onClick={() => setReconciliationLoan(null)}
+                icon="close"
+                label="Cancelar"
+              />
             </div>
           </form>
-        </section>
+        </FormModal>
       ) : null}
 
       {loanError ? <p className="message message--error">{loanError}</p> : null}
@@ -519,7 +544,7 @@ export function LoansSection({
                     <tr key={loan.id}>
                       <td>{loan.name}</td>
                       <td>
-                        {loan.paymentType === 'fixed' ? 'Fijo' : 'Variable'} · {LOAN_PAYMENT_FREQUENCY_LABELS[loan.paymentFrequency]}
+                        {loan.paymentType === 'fixed' ? 'Fijo' : 'Variable'} · {FREQUENCY_LABELS[loan.paymentFrequency]}
                         {loan.affectsInstrumentBalance ? '' : ' · Descontado del ingreso'}
                       </td>
                       <td>{formatCurrency(loan.originalAmount)}</td>
@@ -527,20 +552,24 @@ export function LoansSection({
                       <td>{loan.remainingAmount === 0 ? 'Liquidado' : `${loan.paidInstallments}/${loan.totalInstallments}`}</td>
                       <td>
                         <div className="table__actions">
-                          <button className="button button--secondary" type="button" onClick={() => onLoadLoanPayments(loan.id)}>
-                            Ver detalle
-                          </button>
-                          <button className="button button--secondary" type="button" onClick={() => onEditLoan(loan)}>
-                            Editar
-                          </button>
+                          <ActionButton className="button button--secondary" type="button" onClick={() => onLoadLoanPayments(loan.id)}
+                            icon="eye"
+                            label="Ver detalle"
+                          />
+                          <ActionButton className="button button--secondary" type="button" onClick={() => onEditLoan(loan)}
+                            icon="edit"
+                            label="Editar"
+                          />
                           {loan.isActive ? (
-                            <button className="button button--secondary" type="button" onClick={() => startReconciliation(loan)}>
-                              Conciliar saldo
-                            </button>
+                            <ActionButton className="button button--secondary" type="button" onClick={() => startReconciliation(loan)}
+                              icon="balance"
+                              label="Conciliar saldo"
+                            />
                           ) : null}
-                          <button className="button button--danger" type="button" onClick={() => onDeleteLoan(loan.id)}>
-                            Eliminar
-                          </button>
+                          <ActionButton className="button button--danger" type="button" onClick={() => onDeleteLoan(loan.id)}
+                            icon="trash"
+                            label="Eliminar"
+                          />
                         </div>
                       </td>
                     </tr>
@@ -557,7 +586,7 @@ export function LoansSection({
               <div>
                 <h3 className="category-card__title">Tabla de amortizacion · {selectedLoan.name}</h3>
                 <p className="category-card__meta">
-                  {selectedLoan.paymentType === 'fixed' ? 'Pago fijo' : 'Pago variable'} · {LOAN_PAYMENT_FREQUENCY_LABELS[selectedLoan.paymentFrequency]} · Saldo pendiente {formatCurrency(selectedLoan.remainingAmount)}
+                  {selectedLoan.paymentType === 'fixed' ? 'Pago fijo' : 'Pago variable'} · {FREQUENCY_LABELS[selectedLoan.paymentFrequency]} · Saldo pendiente {formatCurrency(selectedLoan.remainingAmount)}
                 </p>
               </div>
             </header>
@@ -599,22 +628,22 @@ export function LoansSection({
                         <td>{payment.isPaid ? `Pagada${payment.paidDate ? ` ${formatIsoDate(payment.paidDate)}` : ''}${payment.affectsInstrumentBalance ? '' : ' · Descontada del ingreso'}` : 'Pendiente'}</td>
                         <td>
                           <div className="table__actions">
-                            <button
+                            <ActionButton
                               className="button button--primary"
                               type="button"
                               disabled={payment.isPaid}
-                              onClick={() => onPayInstallment(payment.installmentNum)}
-                            >
-                              {selectedLoan.affectsInstrumentBalance ? 'Pagar' : 'Registrar descuento'}
-                            </button>
+                              onClick={() => { setSelectedInstallment(payment.installmentNum); setIsRegisterFormOpen(true) }}
+                              icon="payment"
+                              label={selectedLoan.affectsInstrumentBalance ? 'Pagar' : 'Registrar descuento'}
+                            />
                             {payment.isPaid ? (
-                              <button
+                              <ActionButton
                                 className="button button--danger"
                                 type="button"
                                 onClick={() => onUndoInstallment(payment.installmentNum)}
-                              >
-                                Revertir
-                              </button>
+                                icon="undo"
+                                label="Revertir"
+                              />
                             ) : null}
                           </div>
                         </td>

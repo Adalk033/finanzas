@@ -1,5 +1,7 @@
+import { ActionButton } from '../ActionButton'
+import { FormModal } from '../FormModal'
 import { useState, type SyntheticEvent } from 'react'
-import { formatCurrency, formatIsoDate } from '../../app/appHelpers'
+import { FREQUENCY_LABELS, formatCurrency, formatIsoDate } from '../../app/appHelpers'
 import type {
   Category,
   FinancialInstrument,
@@ -43,15 +45,8 @@ type SubscriptionsSectionProps = {
   onRecurringIncomeDelete: (id: number) => void
 }
 
-const RECURRING_INCOME_FREQUENCY_LABELS: Record<RecurringIncomeInput['frequency'], string> = {
-  weekly: 'Semanal',
-  biweekly: 'Quincenal',
-  monthly: 'Mensual',
-  yearly: 'Anual',
-}
-
 function formatRecurringIncomeSchedule(income: RecurringIncome): string {
-  const label = RECURRING_INCOME_FREQUENCY_LABELS[income.frequency]
+  const label = FREQUENCY_LABELS[income.frequency]
   if (income.frequency === 'biweekly') {
     return income.paymentDay !== null && income.secondPaymentDay !== null
       ? `${label} · dias ${income.paymentDay} y ${income.secondPaymentDay}`
@@ -94,6 +89,7 @@ export function SubscriptionsSection({
   onRecurringIncomeEdit,
   onRecurringIncomeDelete,
 }: SubscriptionsSectionProps) {
+  const [isRecurringIncomeFormOpen, setIsRecurringIncomeFormOpen] = useState(false)
   const [isFormOpen, setIsFormOpen] = useState(editingSubscriptionId !== null)
   const isFormVisible = isFormOpen || editingSubscriptionId !== null
 
@@ -104,32 +100,26 @@ export function SubscriptionsSection({
         <p className="card__subtitle">Listado y gestion de cargos recurrentes por instrumento y ciclo.</p>
       </header>
 
-      <div className="transaction-layout">
-        <section className="mini-card">
-          <header className="mini-card__header">
-            <h3 className="mini-card__title">Nueva suscripcion</h3>
-            <p className="mini-card__subtitle">Define monto, ciclo y proximo cargo esperado.</p>
-          </header>
-
-          <div className="section-toolbar">
-            <button className="button button--primary" type="button" onClick={() => {
+      <div className="section-stack">
+        <div className="section-toolbar">
+            <ActionButton className="button button--primary" type="button" onClick={() => {
               if (editingSubscriptionId !== null) {
                 onReset()
                 setIsFormOpen(false)
                 return
               }
               setIsFormOpen((value) => !value)
-            }}>
-              {isFormVisible ? 'Ocultar formulario' : 'Nueva suscripcion'}
-            </button>
+            }}
+              icon={isFormVisible ? 'close' : 'plus'}
+              label={isFormVisible ? 'Ocultar formulario' : 'Nueva suscripcion'}
+            />
             <div className="section-toolbar__spacer" />
-            <button className="button button--secondary" type="button" onClick={onReload}>
-              Recargar
-            </button>
+            <ActionButton className="button button--secondary" type="button" onClick={onReload} icon="refresh" label="Recargar" />
           </div>
 
           {isFormVisible ? (
-            <div className="section-panel">
+            <FormModal title={editingSubscriptionId === null ? "Nueva suscripción" : "Editar suscripción"} onClose={() => { onReset(); setIsFormOpen(false) }} error={subscriptionError} message={subscriptionMessage}>
+              <p className="mini-card__subtitle">Define monto, ciclo y proximo cargo esperado.</p>
               <form className="form-grid" onSubmit={onSubmit}>
                 <label className="form-grid__field" htmlFor="subscriptionName">Nombre</label>
                 <input
@@ -175,9 +165,9 @@ export function SubscriptionsSection({
                   value={subscriptionForm.billingCycle}
                   onChange={(event) => onBillingCycleChange(event.target.value as SubscriptionBillingCycle)}
                 >
-                  <option value="monthly">Mensual</option>
-                  <option value="yearly">Anual</option>
-                  <option value="weekly">Semanal</option>
+                  <option value="monthly">{FREQUENCY_LABELS.monthly}</option>
+                  <option value="yearly">{FREQUENCY_LABELS.yearly}</option>
+                  <option value="weekly">{FREQUENCY_LABELS.weekly}</option>
                 </select>
 
                 <label className="form-grid__field" htmlFor="subscriptionBillingDay">Dia de cargo</label>
@@ -244,17 +234,15 @@ export function SubscriptionsSection({
                 />
 
                 <div className="form-grid__actions">
-                  <button className="button button--primary" type="submit" disabled={!hasConfig || instruments.length === 0}>
-                    {editingSubscriptionId === null ? 'Crear suscripcion' : 'Guardar cambios'}
-                  </button>
-                  <button className="button button--secondary" type="button" onClick={onReset}>
-                    Limpiar
-                  </button>
+                  <ActionButton className="button button--primary" type="submit" disabled={!hasConfig || instruments.length === 0}
+                    icon="save"
+                    label={editingSubscriptionId === null ? 'Crear suscripcion' : 'Guardar cambios'}
+                  />
+                  <ActionButton className="button button--secondary" type="button" onClick={onReset} icon="reset" label="Limpiar" />
                 </div>
               </form>
-            </div>
+            </FormModal>
           ) : null}
-        </section>
 
         <section className="mini-card">
           <header className="mini-card__header">
@@ -309,16 +297,18 @@ export function SubscriptionsSection({
                   <td>{subscription.name}</td>
                   <td>{subscription.instrumentName ?? '-'}</td>
                   <td>{formatCurrency(subscription.amount)}</td>
-                  <td>{subscription.billingCycle}</td>
+                  <td>{FREQUENCY_LABELS[subscription.billingCycle]}</td>
                   <td>{formatIsoDate(subscription.nextBilling)}</td>
                   <td>
                     <div className="table__actions">
-                      <button className="button button--secondary" type="button" onClick={() => onEdit(subscription)}>
-                        Editar
-                      </button>
-                      <button className="button button--danger" type="button" onClick={() => onDelete(subscription.id)}>
-                        Eliminar
-                      </button>
+                      <ActionButton className="button button--secondary" type="button" onClick={() => onEdit(subscription)}
+                        icon="edit"
+                        label="Editar"
+                      />
+                      <ActionButton className="button button--danger" type="button" onClick={() => onDelete(subscription.id)}
+                        icon="trash"
+                        label="Eliminar"
+                      />
                     </div>
                   </td>
                 </tr>
@@ -335,7 +325,15 @@ export function SubscriptionsSection({
             Genera automaticamente nomina, renta u otros ingresos programados.
           </p>
         </header>
-        <form className="form-grid" onSubmit={onRecurringIncomeSubmit}>
+        <div className="section-toolbar">
+          <ActionButton className="button button--primary" type="button" onClick={() => { onRecurringIncomeReset(); setIsRecurringIncomeFormOpen(true) }}
+            icon="plus"
+            label="Nuevo ingreso recurrente"
+          />
+        </div>
+        {isRecurringIncomeFormOpen || editingRecurringIncomeId !== null ? (
+          <FormModal title={editingRecurringIncomeId === null ? "Nuevo ingreso recurrente" : "Editar ingreso recurrente"} onClose={() => { onRecurringIncomeReset(); setIsRecurringIncomeFormOpen(false) }} error={recurringIncomeError} message={recurringIncomeMessage}>
+          <form className="form-grid" onSubmit={onRecurringIncomeSubmit}>
           <label className="form-grid__field" htmlFor="recurringIncomeName">Nombre</label>
           <input
             id="recurringIncomeName"
@@ -408,10 +406,10 @@ export function SubscriptionsSection({
               })
             }}
           >
-            <option value="weekly">Semanal</option>
-            <option value="biweekly">Quincenal</option>
-            <option value="monthly">Mensual</option>
-            <option value="yearly">Anual</option>
+            <option value="weekly">{FREQUENCY_LABELS.weekly}</option>
+            <option value="biweekly">{FREQUENCY_LABELS.biweekly}</option>
+            <option value="monthly">{FREQUENCY_LABELS.monthly}</option>
+            <option value="yearly">{FREQUENCY_LABELS.yearly}</option>
           </select>
           {recurringIncomeForm.frequency === 'biweekly' ? (
             <>
@@ -459,14 +457,15 @@ export function SubscriptionsSection({
             required
           />
           <div className="form-grid__actions">
-            <button className="button button--primary" type="submit" disabled={!hasConfig}>
-              {editingRecurringIncomeId === null ? 'Crear ingreso recurrente' : 'Guardar cambios'}
-            </button>
-            <button className="button button--secondary" type="button" onClick={onRecurringIncomeReset}>
-              Limpiar
-            </button>
+            <ActionButton className="button button--primary" type="submit" disabled={!hasConfig}
+              icon="save"
+              label={editingRecurringIncomeId === null ? 'Crear ingreso recurrente' : 'Guardar cambios'}
+            />
+            <ActionButton className="button button--secondary" type="button" onClick={onRecurringIncomeReset} icon="reset" label="Limpiar" />
           </div>
         </form>
+          </FormModal>
+        ) : null}
         {recurringIncomeError ? <p className="message message--error">{recurringIncomeError}</p> : null}
         {recurringIncomeMessage ? <p className="message message--success">{recurringIncomeMessage}</p> : null}
         <div className="table-wrap">
@@ -486,8 +485,14 @@ export function SubscriptionsSection({
                   <td>{formatIsoDate(income.nextPayment)}</td>
                   <td>
                     <div className="table__actions">
-                      <button className="button button--secondary" type="button" onClick={() => onRecurringIncomeEdit(income)}>Editar</button>
-                      <button className="button button--danger" type="button" onClick={() => onRecurringIncomeDelete(income.id)}>Archivar</button>
+                      <ActionButton className="button button--secondary" type="button" onClick={() => onRecurringIncomeEdit(income)}
+                        icon="edit"
+                        label="Editar"
+                      />
+                      <ActionButton className="button button--danger" type="button" onClick={() => onRecurringIncomeDelete(income.id)}
+                        icon="archive"
+                        label="Archivar"
+                      />
                     </div>
                   </td>
                 </tr>

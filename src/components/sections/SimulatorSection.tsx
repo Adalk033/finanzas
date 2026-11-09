@@ -1,3 +1,5 @@
+import { ActionButton } from '../ActionButton'
+import { FormModal } from '../FormModal'
 import { useState, type SyntheticEvent } from 'react'
 import { MSI_OPTIONS, formatCurrency, formatIsoDate, getSimulationScenarioLabel } from '../../app/appHelpers'
 import type {
@@ -52,23 +54,20 @@ export function SimulatorSection({
       {simulationError ? <p className="message message--error">{simulationError}</p> : null}
 
       <div className="section-toolbar">
-        <button className="button button--primary" type="button" onClick={() => setIsFormOpen((value) => !value)}>
-          {isFormOpen ? 'Ocultar formulario' : 'Nueva simulacion'}
-        </button>
+        <ActionButton className="button button--primary" type="button" onClick={() => setIsFormOpen((value) => !value)}
+          icon={isFormOpen ? 'close' : 'plus'}
+          label={isFormOpen ? 'Ocultar formulario' : 'Nueva simulacion'}
+        />
         <div className="section-toolbar__spacer" />
-        <button className="button button--secondary" type="button" disabled={!hasConfig || isSimulationsLoading} onClick={onReload}>
-          {isSimulationsLoading ? 'Cargando...' : 'Recargar historial'}
-        </button>
+        <ActionButton className="button button--secondary" type="button" disabled={!hasConfig || isSimulationsLoading} onClick={onReload}
+          icon="refresh"
+          label={isSimulationsLoading ? 'Cargando...' : 'Recargar historial'}
+        />
       </div>
 
-      <div className="phase8-layout">
-        <article className="mini-card">
-          <header className="mini-card__header">
-            <h3 className="mini-card__title">Nueva simulacion</h3>
-          </header>
-
-          {isFormOpen ? (
-            <div className="section-panel">
+      <div className="section-stack">
+        {isFormOpen ? (
+            <FormModal title="Nueva simulación" onClose={() => setIsFormOpen(false)} error={simulationError} message={simulationMessage}>
               <form className="form-grid" onSubmit={onSubmit}>
             <label className="form-grid__field" htmlFor="simulationName">Nombre</label>
             <input
@@ -203,17 +202,15 @@ export function SimulatorSection({
             />
 
                 <div className="form-grid__actions">
-                  <button className="button button--primary" type="submit" disabled={!hasConfig || isSimulationsLoading}>
-                    Guardar simulacion
-                  </button>
-                  <button className="button button--secondary" type="button" onClick={onReset}>
-                    Limpiar
-                  </button>
+                  <ActionButton className="button button--primary" type="submit" disabled={!hasConfig || isSimulationsLoading}
+                    icon="save"
+                    label="Guardar simulacion"
+                  />
+                  <ActionButton className="button button--secondary" type="button" onClick={onReset} icon="reset" label="Limpiar" />
                 </div>
               </form>
-            </div>
+            </FormModal>
           ) : null}
-        </article>
 
         <article className="mini-card">
           <header className="mini-card__header">
@@ -279,15 +276,15 @@ export function SimulatorSection({
                         </td>
                         <td>
                           <div className="table__actions">
-                            <button
+                            <ActionButton
                               className="button button--danger"
                               type="button"
                               onClick={() => {
                                 onDelete(simulation.id)
                               }}
-                            >
-                              Eliminar
-                            </button>
+                              icon="trash"
+                              label="Eliminar"
+                            />
                           </div>
                         </td>
                       </tr>

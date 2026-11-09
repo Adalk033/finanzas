@@ -1,4 +1,6 @@
-import type { SyntheticEvent } from 'react'
+import { ActionButton } from '../ActionButton'
+import { FormModal } from '../FormModal'
+import { useState, type SyntheticEvent } from 'react'
 import { formatCurrency, formatIsoDate } from '../../app/appHelpers'
 import type {
   FinancialInstrument,
@@ -54,6 +56,7 @@ export function TransfersSection({
   onEdit,
   onDelete,
 }: TransfersSectionProps) {
+  const [isFormOpen, setIsFormOpen] = useState(false)
   const visibleTransfers = transfers.filter(
     (transfer) => transfer.type === 'inter_account' || transfer.type === 'other',
   )
@@ -67,22 +70,21 @@ export function TransfersSection({
             Mueve dinero entre tus cuentas. Los pagos de tarjeta se registran directamente desde Tarjetas.
           </p>
         </div>
-        <button className="button button--secondary" type="button" onClick={onReload}>
-          Actualizar
-        </button>
+        <ActionButton className="button button--secondary" type="button" onClick={onReload} icon="refresh" label="Actualizar" />
       </header>
 
-      <div className="transfers__layout">
-        <article className="mini-card">
-          <header className="mini-card__header">
-            <h3 className="mini-card__title">
-              {editingTransferId === null ? 'Nueva transferencia' : 'Editar transferencia'}
-            </h3>
-            <p className="mini-card__subtitle">
+      <div className="section-stack">
+        <div className="section-toolbar">
+          <ActionButton className="button button--primary" type="button" onClick={() => { onReset(); setIsFormOpen(true) }}
+            icon="plus"
+            label="Nueva transferencia"
+          />
+        </div>
+        {isFormOpen || editingTransferId !== null ? (
+          <FormModal title={editingTransferId === null ? "Nueva transferencia" : "Editar transferencia"} onClose={() => { onReset(); setIsFormOpen(false) }} error={error} message={message}>
+              <p className="mini-card__subtitle">
               El saldo se descuenta del origen y se aplica al destino en una sola operación.
             </p>
-          </header>
-
           <form className="form-grid" onSubmit={onSubmit}>
             <label className="form-grid__field" htmlFor="transferType">Tipo</label>
             <select
@@ -189,18 +191,21 @@ export function TransfersSection({
             />
 
             <div className="form-grid__actions">
-              <button className="button button--primary" type="submit" disabled={!hasConfig}>
-                {editingTransferId === null ? 'Registrar transferencia' : 'Guardar cambios'}
-              </button>
-              <button className="button button--secondary" type="button" onClick={onReset}>
-                {editingTransferId === null ? 'Limpiar' : 'Cancelar'}
-              </button>
+              <ActionButton className="button button--primary" type="submit" disabled={!hasConfig}
+                icon={editingTransferId === null ? 'plus' : 'save'}
+                label={editingTransferId === null ? 'Registrar transferencia' : 'Guardar cambios'}
+              />
+              <ActionButton className="button button--secondary" type="button" onClick={onReset}
+                icon={editingTransferId === null ? 'reset' : 'close'}
+                label={editingTransferId === null ? 'Limpiar' : 'Cancelar'}
+              />
             </div>
           </form>
+          </FormModal>
+        ) : null}
 
           {error ? <p className="message message--error">{error}</p> : null}
           {message ? <p className="message message--success">{message}</p> : null}
-        </article>
 
         <article className="mini-card">
           <header className="mini-card__header">
@@ -242,12 +247,14 @@ export function TransfersSection({
                     <td className="table__amount">{formatCurrency(transfer.amount)}</td>
                     <td>
                       <div className="table__actions">
-                        <button className="button button--secondary" type="button" onClick={() => onEdit(transfer)}>
-                          Editar
-                        </button>
-                        <button className="button button--danger" type="button" onClick={() => onDelete(transfer.id)}>
-                          Eliminar
-                        </button>
+                        <ActionButton className="button button--secondary" type="button" onClick={() => onEdit(transfer)}
+                          icon="edit"
+                          label="Editar"
+                        />
+                        <ActionButton className="button button--danger" type="button" onClick={() => onDelete(transfer.id)}
+                          icon="trash"
+                          label="Eliminar"
+                        />
                       </div>
                     </td>
                   </tr>

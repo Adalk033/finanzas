@@ -135,7 +135,7 @@
 .settings-database {
   display: grid;
   gap: var(--space-2);
-  margin: var(--space-3) 0 0;
+  margin: var(--space-3) 0;
 }
 
 .settings-database__row {
@@ -241,6 +241,7 @@
 .card__subtitle {
   color: var(--color-text-secondary);
   font-size: 14px;
+  line-height: 1.5;
 }
 
 .section-toolbar {
@@ -652,18 +653,19 @@ input[type='month']::-webkit-calendar-picker-indicator {
 }
 
 .mini-card__header {
-  margin-bottom: var(--space-2);
+  margin-bottom: var(--space-3);
 }
 
 .mini-card__title {
   font-size: 18px;
   font-weight: 600;
-  margin-bottom: 4px;
+  margin-bottom: var(--space-1);
 }
 
 .mini-card__subtitle {
   color: var(--color-text-secondary);
   font-size: 14px;
+  line-height: 1.5;
 }
 
 .transaction-card-payment {
@@ -695,18 +697,19 @@ input[type='month']::-webkit-calendar-picker-indicator {
   display: flex;
   justify-content: space-between;
   gap: var(--space-2);
-  margin-bottom: var(--space-2);
+  margin-bottom: var(--space-3);
 }
 
 .category-card__title {
   font-size: 18px;
   font-weight: 600;
-  margin-bottom: 4px;
+  margin-bottom: var(--space-1);
 }
 
 .category-card__meta {
   color: var(--color-text-secondary);
   font-size: 12px;
+  line-height: 1.5;
 }
 
 .category-card__badges {
@@ -864,7 +867,7 @@ input[type='month']::-webkit-calendar-picker-indicator {
 }
 
 .credit-card-overview__identity h3 {
-  margin: 6px 0;
+  margin: var(--space-1) 0;
   font-size: 22px;
 }
 
@@ -958,13 +961,14 @@ input[type='month']::-webkit-calendar-picker-indicator {
 }
 
 .credit-card-form-panel > header h3 {
-  margin-bottom: 4px;
+  margin-bottom: var(--space-1);
   font-size: 18px;
 }
 
 .credit-card-form-panel > header p {
   color: var(--color-text-secondary);
   font-size: 14px;
+  line-height: 1.5;
 }
 
 .credit-card-statement-edit .form-grid {
@@ -993,8 +997,8 @@ input[type='month']::-webkit-calendar-picker-indicator {
 }
 
 .payment-presets {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--space-1);
   margin-bottom: var(--space-3);
 }
@@ -1388,13 +1392,14 @@ input[type='month']::-webkit-calendar-picker-indicator {
 .reminder-item h4 {
   overflow-wrap: anywhere;
   font-size: 16px;
+  margin: 0;
 }
 
 .reminder-item__content p {
-  margin-top: 4px;
+  margin-top: var(--space-1);
   color: var(--color-text-secondary);
   font-size: 13px;
-  line-height: 1.4;
+  line-height: 1.5;
   overflow-wrap: anywhere;
 }
 
@@ -1724,7 +1729,7 @@ input[type='month']::-webkit-calendar-picker-indicator {
   .table__actions,
   .category-card__actions,
   .credit-card-actions {
-    flex-direction: column;
+    flex-direction: row;
   }
 
   .category-card__header {
@@ -2207,7 +2212,7 @@ input[type='month']::-webkit-calendar-picker-indicator {
 }
 
 .debit-card-overview__identity h3 {
-  margin: 6px 0;
+  margin: var(--space-1) 0;
   font-size: 22px;
 }
 
@@ -2277,7 +2282,7 @@ input[type='month']::-webkit-calendar-picker-indicator {
 .debit-card-movement-form h3,
 .debit-card-reconciliation h3,
 .debit-card-movements h3 {
-  margin-bottom: 4px;
+  margin-bottom: var(--space-1);
   font-size: 18px;
 }
 
@@ -2288,7 +2293,7 @@ input[type='month']::-webkit-calendar-picker-indicator {
 }
 
 .debit-card-movements__header {
-  margin-bottom: var(--space-2);
+  margin-bottom: var(--space-3);
 }
 
 .loan-reconciliation {
@@ -2304,7 +2309,7 @@ input[type='month']::-webkit-calendar-picker-indicator {
 }
 
 .loan-reconciliation__title {
-  margin-bottom: 4px;
+  margin-bottom: var(--space-1);
   font-size: 18px;
 }
 
@@ -2347,7 +2352,7 @@ input[type='month']::-webkit-calendar-picker-indicator {
   }
 
   .debit-card-actions {
-    flex-direction: column;
+    flex-direction: row;
   }
 
   .loan-reconciliation .loan-reconciliation__form {
@@ -2363,4 +2368,11 @@ input[type='month']::-webkit-calendar-picker-indicator {
   .loan-reconciliation {
     padding: var(--space-2);
   }
+}
+
+.section-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
 }

@@ -389,17 +389,15 @@ export function useTransactionsController({
     void loadTransactions(nextFilters, 1)
   }
 
-  const handleMoveTransactionToFamily = async (id: number): Promise<void> => {
+  const handleDuplicateTransactionToFamily = async (id: number): Promise<void> => {
     setTransactionError('')
     setTransactionMessage('')
-    const result = await apiClient.moveTransactionToFamily(id)
+    const result = await apiClient.duplicateTransactionToFamily(id)
     if (!result.success) {
-      setTransactionError(result.error ?? 'No se pudo pasar el gasto a Familia.')
+      setTransactionError(result.error ?? 'No se pudo duplicar el gasto en Familia.')
       return
     }
-    if (editingTransactionId === id) resetTransactionForm()
-    setTransactionMessage('Gasto trasladado a Familia sin duplicarlo. Se revirtió su impacto en el saldo personal.')
-    await Promise.all([loadInstruments(), loadTransactions()])
+    setTransactionMessage('Gasto duplicado en Familia. El movimiento original y su impacto en el saldo se conservaron.')
   }
 
   const changeTransactionPage = (page: number): void => {
@@ -445,7 +443,7 @@ export function useTransactionsController({
     handleTransactionTypeChange,
     handleTransactionSubmit,
     handleTransactionDelete,
-    handleMoveTransactionToFamily,
+    handleDuplicateTransactionToFamily,
     handleTransactionFiltersSubmit,
     clearTransactionFilters,
     changeTransactionPage,

@@ -30,6 +30,7 @@ import type {
   TransactionInput,
   TransferInput,
   RecurringIncomeInput,
+  RecurringIncomeFrequency,
   SavingsGoalInput,
 } from '../types/domain'
 
@@ -286,6 +287,12 @@ export const EMPTY_SAVINGS_GOAL_FORM: SavingsGoalInput = {
 }
 
 export const MSI_OPTIONS = [3, 6, 9, 12, 18, 24]
+export const FREQUENCY_LABELS: Record<RecurringIncomeFrequency, string> = {
+  weekly: 'Semanal',
+  biweekly: 'Quincenal',
+  monthly: 'Mensual',
+  yearly: 'Anual',
+}
 export const DASHBOARD_CHART_COLORS = [
   'var(--color-chart-neutral)',
   'var(--color-chart-series-2)',
@@ -463,5 +470,5 @@ export function getReminderTypeLabel(type: ReminderType): string {
     return 'Prestamo'
   }
 
-  return 'Custom'
+  return 'Personalizado'
 }
