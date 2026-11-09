@@ -114,7 +114,7 @@ export function SubscriptionsSection({
               label={isFormVisible ? 'Ocultar formulario' : 'Nueva suscripcion'}
             />
             <div className="section-toolbar__spacer" />
-            <ActionButton className="button button--secondary" type="button" onClick={onReload} icon="refresh" label="Recargar" />
+            <ActionButton iconOnly className="button button--secondary" type="button" onClick={onReload} icon="refresh" label="Recargar" />
           </div>
 
           {isFormVisible ? (
@@ -238,7 +238,7 @@ export function SubscriptionsSection({
                     icon="save"
                     label={editingSubscriptionId === null ? 'Crear suscripcion' : 'Guardar cambios'}
                   />
-                  <ActionButton className="button button--secondary" type="button" onClick={onReset} icon="reset" label="Limpiar" />
+                  <ActionButton iconOnly className="button button--secondary" type="button" onClick={onReset} icon="reset" label="Limpiar" />
                 </div>
               </form>
             </FormModal>
@@ -301,11 +301,11 @@ export function SubscriptionsSection({
                   <td>{formatIsoDate(subscription.nextBilling)}</td>
                   <td>
                     <div className="table__actions">
-                      <ActionButton className="button button--secondary" type="button" onClick={() => onEdit(subscription)}
+                      <ActionButton iconOnly className="button button--secondary" type="button" onClick={() => onEdit(subscription)}
                         icon="edit"
                         label="Editar"
                       />
-                      <ActionButton className="button button--danger" type="button" onClick={() => onDelete(subscription.id)}
+                      <ActionButton iconOnly className="button button--danger" type="button" onClick={() => onDelete(subscription.id)}
                         icon="trash"
                         label="Eliminar"
                       />
@@ -461,7 +461,7 @@ export function SubscriptionsSection({
               icon="save"
               label={editingRecurringIncomeId === null ? 'Crear ingreso recurrente' : 'Guardar cambios'}
             />
-            <ActionButton className="button button--secondary" type="button" onClick={onRecurringIncomeReset} icon="reset" label="Limpiar" />
+            <ActionButton iconOnly className="button button--secondary" type="button" onClick={onRecurringIncomeReset} icon="reset" label="Limpiar" />
           </div>
         </form>
           </FormModal>
@@ -485,11 +485,11 @@ export function SubscriptionsSection({
                   <td>{formatIsoDate(income.nextPayment)}</td>
                   <td>
                     <div className="table__actions">
-                      <ActionButton className="button button--secondary" type="button" onClick={() => onRecurringIncomeEdit(income)}
+                      <ActionButton iconOnly className="button button--secondary" type="button" onClick={() => onRecurringIncomeEdit(income)}
                         icon="edit"
                         label="Editar"
                       />
-                      <ActionButton className="button button--danger" type="button" onClick={() => onRecurringIncomeDelete(income.id)}
+                      <ActionButton iconOnly className="button button--danger" type="button" onClick={() => onRecurringIncomeDelete(income.id)}
                         icon="archive"
                         label="Archivar"
                       />

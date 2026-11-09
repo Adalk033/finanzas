@@ -830,10 +830,15 @@ input[type='month']::-webkit-calendar-picker-indicator {
   font-size: 16px;
 }
 
-.credit-card-picker__item > span:last-child,
+.credit-card-picker__item > span,
 .credit-card-picker__bank {
   color: var(--color-text-secondary);
   font-size: 12px;
+}
+
+.credit-card-picker__item > .credit-card-picker__utilization {
+  color: var(--color-text);
+  font-weight: 600;
 }
 
 .credit-card-overview {

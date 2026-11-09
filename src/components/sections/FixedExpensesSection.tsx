@@ -93,7 +93,7 @@ export function FixedExpensesSection({
               label={isExpenseFormVisible ? 'Ocultar formulario' : 'Nuevo gasto fijo'}
             />
             <div className="section-toolbar__spacer" />
-            <ActionButton className="button button--secondary" type="button" onClick={onReloadFixedExpenses} icon="refresh" label="Recargar" />
+            <ActionButton iconOnly className="button button--secondary" type="button" onClick={onReloadFixedExpenses} icon="refresh" label="Recargar" />
           </div>
 
           {isExpenseFormVisible ? (
@@ -209,7 +209,7 @@ export function FixedExpensesSection({
                     icon="save"
                     label={editingFixedExpenseId === null ? 'Crear gasto fijo' : 'Guardar cambios'}
                   />
-                  <ActionButton className="button button--secondary" type="button" onClick={onResetFixedExpenseEditor} icon="reset" label="Limpiar" />
+                  <ActionButton iconOnly className="button button--secondary" type="button" onClick={onResetFixedExpenseEditor} icon="reset" label="Limpiar" />
                 </div>
               </form>
             </FormModal>
@@ -310,7 +310,7 @@ export function FixedExpensesSection({
                     icon="payment"
                     label="Registrar pago"
                   />
-                  <ActionButton className="button button--secondary" type="button" onClick={onResetFixedExpensePaymentForm}
+                  <ActionButton iconOnly className="button button--secondary" type="button" onClick={onResetFixedExpensePaymentForm}
                     icon="reset"
                     label="Limpiar"
                   />
@@ -367,11 +367,11 @@ export function FixedExpensesSection({
                       <td>{expense.paymentDay ?? '-'}</td>
                       <td>
                         <div className="table__actions">
-                          <ActionButton className="button button--secondary" type="button" onClick={() => onEditFixedExpense(expense)}
+                          <ActionButton iconOnly className="button button--secondary" type="button" onClick={() => onEditFixedExpense(expense)}
                             icon="edit"
                             label="Editar"
                           />
-                          <ActionButton className="button button--danger" type="button" onClick={() => onDeleteFixedExpense(expense.id)}
+                          <ActionButton iconOnly className="button button--danger" type="button" onClick={() => onDeleteFixedExpense(expense.id)}
                             icon="trash"
                             label="Eliminar"
                           />
@@ -428,7 +428,7 @@ export function FixedExpensesSection({
                         <td>{payment.isPaid ? 'Pagado' : 'Pendiente'}</td>
                         <td>
                           <div className="table__actions">
-                            <ActionButton className="button button--danger" type="button" onClick={() => onDeleteFixedExpensePayment(payment.fixedExpenseId, payment.id)}
+                            <ActionButton iconOnly className="button button--danger" type="button" onClick={() => onDeleteFixedExpensePayment(payment.fixedExpenseId, payment.id)}
                               icon="trash"
                               label="Eliminar"
                             />

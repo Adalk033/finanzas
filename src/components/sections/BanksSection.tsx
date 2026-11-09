@@ -57,7 +57,7 @@ export function BanksSection({
           label={isFormVisible ? 'Ocultar formulario' : 'Nuevo banco'}
         />
         <div className="section-toolbar__spacer" />
-        <ActionButton className="button button--secondary" type="button" disabled={!hasConfig} onClick={onReload} icon="refresh" label="Recargar" />
+        <ActionButton iconOnly className="button button--secondary" type="button" disabled={!hasConfig} onClick={onReload} icon="refresh" label="Recargar" />
       </div>
 
       {isFormVisible ? (
@@ -89,7 +89,7 @@ export function BanksSection({
                 icon="save"
                 label={editingBankId === null ? 'Crear banco' : 'Guardar cambios'}
               />
-              <ActionButton className="button button--secondary" type="button" onClick={onReset} icon="reset" label="Limpiar" />
+              <ActionButton iconOnly className="button button--secondary" type="button" onClick={onReset} icon="reset" label="Limpiar" />
             </div>
           </form>
         </FormModal>
@@ -125,8 +125,8 @@ export function BanksSection({
                   <td>{bank.shortName ?? '-'}</td>
                   <td>
                     <div className="table__actions">
-                      <ActionButton className="button button--secondary" type="button" onClick={() => onEdit(bank)} icon="edit" label="Editar" />
-                      <ActionButton className="button button--danger" type="button" onClick={() => onDelete(bank.id)} icon="trash" label="Eliminar" />
+                      <ActionButton iconOnly className="button button--secondary" type="button" onClick={() => onEdit(bank)} icon="edit" label="Editar" />
+                      <ActionButton iconOnly className="button button--danger" type="button" onClick={() => onDelete(bank.id)} icon="trash" label="Eliminar" />
                     </div>
                   </td>
                 </tr>

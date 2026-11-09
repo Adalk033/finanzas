@@ -100,7 +100,7 @@ export function CategoriesSection({
               label={isCategoryFormVisible ? 'Ocultar formulario' : 'Nueva categoria'}
             />
             <div className="section-toolbar__spacer" />
-            <ActionButton className="button button--secondary" type="button" disabled={!hasConfig} onClick={onReload}
+            <ActionButton iconOnly className="button button--secondary" type="button" disabled={!hasConfig} onClick={onReload}
               icon="refresh"
               label="Recargar"
             />
@@ -137,7 +137,7 @@ export function CategoriesSection({
                     icon="save"
                     label={editingCategoryId === null ? 'Crear categoria' : 'Guardar cambios'}
                   />
-                  <ActionButton className="button button--secondary" type="button" onClick={onCategoryReset} icon="reset" label="Limpiar" />
+                  <ActionButton iconOnly className="button button--secondary" type="button" onClick={onCategoryReset} icon="reset" label="Limpiar" />
                 </div>
               </form>
             </FormModal>
@@ -166,7 +166,7 @@ export function CategoriesSection({
               label={isSubcategoryFormVisible ? 'Ocultar formulario' : 'Nueva subcategoria'}
             />
             <div className="section-toolbar__spacer" />
-            <ActionButton className="button button--secondary" type="button" disabled={!hasConfig} onClick={onReload}
+            <ActionButton iconOnly className="button button--secondary" type="button" disabled={!hasConfig} onClick={onReload}
               icon="refresh"
               label="Recargar"
             />
@@ -215,7 +215,7 @@ export function CategoriesSection({
                     icon="save"
                     label={editingSubcategoryId === null ? 'Crear subcategoria' : 'Guardar cambios'}
                   />
-                  <ActionButton className="button button--secondary" type="button" onClick={onSubcategoryReset} icon="reset" label="Limpiar" />
+                  <ActionButton iconOnly className="button button--secondary" type="button" onClick={onSubcategoryReset} icon="reset" label="Limpiar" />
                 </div>
               </form>
             </FormModal>
@@ -267,11 +267,11 @@ export function CategoriesSection({
                         <td>{subcategory.iconName ?? '-'}</td>
                         <td>
                           <div className="table__actions">
-                            <ActionButton className="button button--secondary" type="button" onClick={() => onEditSubcategory(subcategory)}
+                            <ActionButton iconOnly className="button button--secondary" type="button" onClick={() => onEditSubcategory(subcategory)}
                               icon="edit"
                               label="Editar"
                             />
-                            <ActionButton className="button button--danger" type="button" onClick={() => onDeleteSubcategory(subcategory.id)}
+                            <ActionButton iconOnly className="button button--danger" type="button" onClick={() => onDeleteSubcategory(subcategory.id)}
                               icon="trash"
                               label="Eliminar"
                             />
@@ -284,11 +284,11 @@ export function CategoriesSection({
               </div>
 
               <div className="category-card__actions">
-                <ActionButton className="button button--secondary" type="button" onClick={() => onEditCategory(category)}
+                <ActionButton iconOnly className="button button--secondary" type="button" onClick={() => onEditCategory(category)}
                   icon="edit"
                   label="Editar categoria"
                 />
-                <ActionButton className="button button--danger" type="button" disabled={!category.canDelete} onClick={() => onDeleteCategory(category.id)}
+                <ActionButton iconOnly className="button button--danger" type="button" disabled={!category.canDelete} onClick={() => onDeleteCategory(category.id)}
                   icon="trash"
                   label="Eliminar categoria"
                 />

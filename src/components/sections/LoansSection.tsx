@@ -126,7 +126,7 @@ export function LoansSection({
               label={isLoanFormVisible ? 'Ocultar formulario' : 'Nuevo prestamo'}
             />
             <div className="section-toolbar__spacer" />
-            <ActionButton className="button button--secondary" type="button" onClick={onReload} icon="refresh" label="Recargar" />
+            <ActionButton iconOnly className="button button--secondary" type="button" onClick={onReload} icon="refresh" label="Recargar" />
           </div>
 
           {isLoanFormVisible ? (
@@ -357,7 +357,7 @@ export function LoansSection({
                     icon="save"
                     label={editingLoanId === null ? 'Crear prestamo' : 'Guardar cambios'}
                   />
-                  <ActionButton className="button button--secondary" type="button" onClick={onReset} icon="reset" label="Limpiar" />
+                  <ActionButton iconOnly className="button button--secondary" type="button" onClick={onReset} icon="reset" label="Limpiar" />
                 </div>
               </form>
             </FormModal>
@@ -493,7 +493,7 @@ export function LoansSection({
 
             <div className="form-grid__actions">
               <ActionButton className="button button--primary" type="submit" icon="balance" label="Aplicar conciliacion" />
-              <ActionButton className="button button--secondary" type="button" onClick={() => setReconciliationLoan(null)}
+              <ActionButton iconOnly className="button button--secondary" type="button" onClick={() => setReconciliationLoan(null)}
                 icon="close"
                 label="Cancelar"
               />
@@ -556,7 +556,7 @@ export function LoansSection({
                             icon="eye"
                             label="Ver detalle"
                           />
-                          <ActionButton className="button button--secondary" type="button" onClick={() => onEditLoan(loan)}
+                          <ActionButton iconOnly className="button button--secondary" type="button" onClick={() => onEditLoan(loan)}
                             icon="edit"
                             label="Editar"
                           />
@@ -566,7 +566,7 @@ export function LoansSection({
                               label="Conciliar saldo"
                             />
                           ) : null}
-                          <ActionButton className="button button--danger" type="button" onClick={() => onDeleteLoan(loan.id)}
+                          <ActionButton iconOnly className="button button--danger" type="button" onClick={() => onDeleteLoan(loan.id)}
                             icon="trash"
                             label="Eliminar"
                           />

@@ -100,7 +100,7 @@ export function FamilyExpensesSection({
           label={areFiltersOpen ? 'Ocultar filtros' : 'Filtros'}
         />
         <div className="section-toolbar__spacer" />
-        <ActionButton className="button button--secondary" type="button" onClick={onReload} icon="refresh" label="Recargar" />
+        <ActionButton iconOnly className="button button--secondary" type="button" onClick={onReload} icon="refresh" label="Recargar" />
       </div>
 
       <div className="section-stack">
@@ -188,7 +188,7 @@ export function FamilyExpensesSection({
                     icon={editingId === null ? 'plus' : 'save'}
                     label={editingId === null ? 'Registrar gasto' : 'Guardar cambios'}
                   />
-                  <ActionButton className="button button--secondary" type="button" onClick={onReset}
+                  <ActionButton iconOnly className="button button--secondary" type="button" onClick={onReset}
                     icon={editingId === null ? 'reset' : 'close'}
                     label={editingId === null ? 'Limpiar' : 'Cancelar edicion'}
                   />
@@ -227,7 +227,7 @@ export function FamilyExpensesSection({
 
                 <div className="form-grid__actions">
                   <ActionButton className="button button--primary" type="submit" disabled={!hasConfig} icon="filter" label="Aplicar filtros" />
-                  <ActionButton className="button button--secondary" type="button" onClick={onClearFilters} icon="reset" label="Limpiar" />
+                  <ActionButton iconOnly className="button button--secondary" type="button" onClick={onClearFilters} icon="reset" label="Limpiar" />
                 </div>
               </form>
             </FormModal>
@@ -261,11 +261,11 @@ export function FamilyExpensesSection({
                 <td>{expense.notes ?? '-'}</td>
                 <td>
                   <div className="table__actions">
-                    <ActionButton className="button button--secondary button--small" type="button" onClick={() => onEdit(expense)}
+                    <ActionButton iconOnly className="button button--secondary button--small" type="button" onClick={() => onEdit(expense)}
                       icon="edit"
                       label="Editar"
                     />
-                    <ActionButton className="button button--danger button--small" type="button" onClick={() => onDelete(expense.id)}
+                    <ActionButton iconOnly className="button button--danger button--small" type="button" onClick={() => onDelete(expense.id)}
                       icon="trash"
                       label="Eliminar"
                     />

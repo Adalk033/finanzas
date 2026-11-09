@@ -96,7 +96,7 @@ export function DashboardSection({
           <h2 className="card__title"></h2>
           <p className="card__subtitle"></p>
         </div>
-        <ActionButton className="button button--secondary dashboard-header__reload" type="button" disabled={!hasConfig || isDashboardLoading} onClick={onReload}
+        <ActionButton iconOnly className="button button--secondary dashboard-header__reload" type="button" disabled={!hasConfig || isDashboardLoading} onClick={onReload}
           icon="refresh"
           label={isDashboardLoading ? 'Cargando...' : 'Recargar'}
         />

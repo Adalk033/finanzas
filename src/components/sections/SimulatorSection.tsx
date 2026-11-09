@@ -59,7 +59,7 @@ export function SimulatorSection({
           label={isFormOpen ? 'Ocultar formulario' : 'Nueva simulacion'}
         />
         <div className="section-toolbar__spacer" />
-        <ActionButton className="button button--secondary" type="button" disabled={!hasConfig || isSimulationsLoading} onClick={onReload}
+        <ActionButton iconOnly className="button button--secondary" type="button" disabled={!hasConfig || isSimulationsLoading} onClick={onReload}
           icon="refresh"
           label={isSimulationsLoading ? 'Cargando...' : 'Recargar historial'}
         />
@@ -202,11 +202,11 @@ export function SimulatorSection({
             />
 
                 <div className="form-grid__actions">
-                  <ActionButton className="button button--primary" type="submit" disabled={!hasConfig || isSimulationsLoading}
+                  <ActionButton iconOnly className="button button--primary" type="submit" disabled={!hasConfig || isSimulationsLoading}
                     icon="save"
                     label="Guardar simulacion"
                   />
-                  <ActionButton className="button button--secondary" type="button" onClick={onReset} icon="reset" label="Limpiar" />
+                  <ActionButton iconOnly className="button button--secondary" type="button" onClick={onReset} icon="reset" label="Limpiar" />
                 </div>
               </form>
             </FormModal>
@@ -276,7 +276,7 @@ export function SimulatorSection({
                         </td>
                         <td>
                           <div className="table__actions">
-                            <ActionButton
+                            <ActionButton iconOnly
                               className="button button--danger"
                               type="button"
                               onClick={() => {

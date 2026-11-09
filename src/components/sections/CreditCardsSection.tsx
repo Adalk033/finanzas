@@ -18,6 +18,12 @@ import { NumberInput } from '../NumberInput'
 type CardTab = 'summary' | 'movements' | 'msi' | 'statements'
 type ActionPanel = 'purchase' | 'payment' | 'reconciliation' | null
 
+const utilizationFormatter = new Intl.NumberFormat('es-MX', { maximumFractionDigits: 2 })
+
+function formatCreditUtilization(value: number | null): string {
+  return value === null ? 'Sin límite definido' : `${utilizationFormatter.format(value)} % ocupado`
+}
+
 type CreditCardsSectionProps = {
   hasConfig: boolean
   creditCardInstruments: FinancialInstrument[]
@@ -207,7 +213,7 @@ export function CreditCardsSection({
           <h2 className="card__title">Tarjetas de crédito</h2>
           <p className="card__subtitle">Consulta lo que debes, registra compras y abona desde tus cuentas de débito.</p>
         </div>
-        <ActionButton className="button button--secondary" type="button" onClick={onReload} icon="refresh" label="Actualizar" />
+        <ActionButton iconOnly className="button button--secondary" type="button" onClick={onReload} icon="refresh" label="Actualizar" />
       </header>
 
       {creditCardInstruments.length === 0 ? (
@@ -232,6 +238,9 @@ export function CreditCardsSection({
                 <span className="credit-card-picker__bank">{card.bankName ?? 'Tarjeta'}</span>
                 <strong>{card.name}</strong>
                 <span>•••• {card.lastFour ?? '----'}</span>
+                <span className="credit-card-picker__utilization">
+                  {formatCreditUtilization(card.creditUtilization)}
+                </span>
               </button>
             ))}
           </div>
@@ -257,6 +266,7 @@ export function CreditCardsSection({
                   <div>
                     <span>Limite</span>
                     <strong>{formatCurrency(selectedCard.creditLimit)}</strong>
+                    <small>{formatCreditUtilization(selectedCard.creditUtilization)}</small>
                   </div>
                   <div>
                     <span>Ciclo</span>
@@ -425,8 +435,8 @@ export function CreditCardsSection({
                     ) : null}
 
                     <div className="form-grid__actions">
-                      <ActionButton className="button button--primary" type="submit" disabled={!hasConfig} icon="save" label="Guardar compra" />
-                      <ActionButton className="button button--secondary" type="button" onClick={onResetPurchase} icon="reset" label="Limpiar" />
+                      <ActionButton iconOnly className="button button--primary" type="submit" disabled={!hasConfig} icon="save" label="Guardar compra" />
+                      <ActionButton iconOnly className="button button--secondary" type="button" onClick={onResetPurchase} icon="reset" label="Limpiar" />
                     </div>
                   </form>
                 </FormModal>
@@ -512,7 +522,7 @@ export function CreditCardsSection({
                         icon="payment"
                         label="Aplicar abono"
                       />
-                      <ActionButton className="button button--secondary" type="button" onClick={onResetPayment} icon="reset" label="Limpiar" />
+                      <ActionButton iconOnly className="button button--secondary" type="button" onClick={onResetPayment} icon="reset" label="Limpiar" />
                     </div>
                   </form>
                 </FormModal>
@@ -559,7 +569,7 @@ export function CreditCardsSection({
 
                     <div className="form-grid__actions">
                       <ActionButton className="button button--primary" type="submit" icon="balance" label="Aplicar conciliación" />
-                      <ActionButton className="button button--secondary" type="button" onClick={() => setActionPanel(null)}
+                      <ActionButton iconOnly className="button button--secondary" type="button" onClick={() => setActionPanel(null)}
                         icon="close"
                         label="Cancelar"
                       />
@@ -636,7 +646,7 @@ export function CreditCardsSection({
                                 <td>{payment.description ?? 'Abono a tarjeta'}</td>
                                 <td className="table__amount table__amount--positive">{formatCurrency(payment.amount)}</td>
                                 <td>
-                                  <ActionButton className="button button--danger" type="button" onClick={() => onDeletePayment(payment.id)}
+                                  <ActionButton iconOnly className="button button--danger" type="button" onClick={() => onDeletePayment(payment.id)}
                                     icon="trash"
                                     label="Eliminar"
                                   />
@@ -769,11 +779,11 @@ export function CreditCardsSection({
                             })}
                           />
                           <div className="form-grid__actions">
-                            <ActionButton className="button button--primary" type="button" onClick={onSaveStatementUpdate}
+                            <ActionButton iconOnly className="button button--primary" type="button" onClick={onSaveStatementUpdate}
                               icon="save"
                               label="Guardar ajustes"
                             />
-                            <ActionButton className="button button--secondary" type="button" onClick={onCancelStatementUpdate}
+                            <ActionButton iconOnly className="button button--secondary" type="button" onClick={onCancelStatementUpdate}
                               icon="close"
                               label="Cancelar"
                             />

@@ -49,14 +49,16 @@ const ICON_PATHS = {
 type ActionButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children' | 'title' | 'aria-label'> & {
   icon: keyof typeof ICON_PATHS
   label: string
+  iconOnly?: boolean
 }
 
-export function ActionButton({ icon, label, className = 'button button--secondary', type = 'button', ...props }: ActionButtonProps) {
+export function ActionButton({ icon, label, iconOnly = false, className = 'button button--secondary', type = 'button', ...props }: ActionButtonProps) {
   return (
-    <button {...props} type={type} className={`${className} action-button`} aria-label={label} title={label}>
+    <button {...props} type={type} className={`${className} action-button${iconOnly ? ' action-button--icon-only' : ''}`} aria-label={label} title={label}>
       <svg className="action-button__icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
         {ICON_PATHS[icon].map((path) => <path key={path} d={path} />)}
       </svg>
+      {!iconOnly ? <span className="action-button__label">{label}</span> : null}
     </button>
   )
 }

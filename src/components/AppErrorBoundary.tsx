@@ -58,7 +58,7 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
           </header>
           <p className="message message--error">Identificador del error: {this.state.errorId}</p>
           <div className="form-grid__actions error-boundary__actions">
-            <ActionButton type="button" className="button button--primary" onClick={this.handleReload} icon="refresh" label="Recargar aplicacion" />
+            <ActionButton iconOnly type="button" className="button button--primary" onClick={this.handleReload} icon="refresh" label="Recargar aplicacion" />
           </div>
         </section>
       </div>

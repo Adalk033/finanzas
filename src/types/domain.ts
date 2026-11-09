@@ -36,6 +36,7 @@ export interface FinancialInstrument {
   creditLimit: number | null
   currentBalance: number | null
   availableCredit: number | null
+  creditUtilization: number | null
   cutOffDay: number | null
   paymentDueDay: number | null
   annualRate: number | null
