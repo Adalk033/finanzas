@@ -113,11 +113,11 @@ export function RemindersSection({
               </div>
             </details>
             <div className="form-grid__actions">
-              <ActionButton className="button button--primary" type="submit" disabled={!hasConfig || isRemindersLoading}
+              <ActionButton iconOnly className="button button--primary" type="submit" disabled={!hasConfig || isRemindersLoading}
                 icon={editingReminderId === null ? 'save' : 'refresh'}
                 label={editingReminderId === null ? 'Guardar recordatorio' : 'Actualizar recordatorio'}
               />
-              <ActionButton className="button button--secondary" type="button" onClick={onReset} icon="reset" label="Limpiar" />
+              <ActionButton iconOnly className="button button--secondary" type="button" onClick={onReset} icon="reset" label="Limpiar" />
             </div>
           </form>
           </FormModal>
@@ -130,7 +130,7 @@ export function RemindersSection({
           </header>
 
           <div className="form-grid__actions">
-            <ActionButton
+            <ActionButton iconOnly
               className="button button--secondary"
               type="button"
               disabled={!hasConfig || isRemindersLoading}
@@ -178,7 +178,7 @@ export function RemindersSection({
                   {reminder.isDismissed ? <span className="badge badge--warning">Descartado</span> : reminder.isRead ? <span className="badge badge--success">Leído</span> : <span className="badge badge--info">Pendiente</span>}
                 </div>
                 <div className="reminder-item__actions">
-                          <ActionButton
+                          <ActionButton iconOnly
                             className="button button--secondary"
                             type="button"
                             onClick={() => {
@@ -207,7 +207,7 @@ export function RemindersSection({
                             icon="dismiss"
                             label="Descartar"
                           />
-                          <ActionButton
+                          <ActionButton iconOnly
                             className="button button--danger"
                             type="button"
                             onClick={() => {

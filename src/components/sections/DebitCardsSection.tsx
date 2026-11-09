@@ -107,7 +107,7 @@ export function DebitCardsSection({
           <h2 className="card__title">Tarjetas de débito</h2>
           <p className="card__subtitle">Consulta el saldo disponible y concilia cada tarjeta sin pasar por Instrumentos.</p>
         </div>
-        <ActionButton className="button button--secondary" type="button" disabled={!hasConfig} onClick={onReload} icon="refresh" label="Actualizar" />
+        <ActionButton iconOnly className="button button--secondary" type="button" disabled={!hasConfig} onClick={onReload} icon="refresh" label="Actualizar" />
       </header>
 
       {debitCardInstruments.length === 0 ? (
@@ -301,8 +301,8 @@ export function DebitCardsSection({
                     />
 
                     <div className="form-grid__actions">
-                      <ActionButton className="button button--primary" type="submit" icon="save" label="Guardar movimiento" />
-                      <ActionButton
+                      <ActionButton iconOnly className="button button--primary" type="submit" icon="save" label="Guardar movimiento" />
+                      <ActionButton iconOnly
                         className="button button--secondary"
                         type="button"
                         onClick={() => {
@@ -362,7 +362,7 @@ export function DebitCardsSection({
 
                     <div className="form-grid__actions">
                       <ActionButton className="button button--primary" type="submit" icon="balance" label="Aplicar conciliación" />
-                      <ActionButton className="button button--secondary" type="button" onClick={() => setActionPanel(null)}
+                      <ActionButton iconOnly className="button button--secondary" type="button" onClick={() => setActionPanel(null)}
                         icon="close"
                         label="Cancelar"
                       />

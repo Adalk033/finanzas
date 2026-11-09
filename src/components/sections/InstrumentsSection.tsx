@@ -118,7 +118,7 @@ export function InstrumentsSection({
           label={isFormVisible ? 'Ocultar formulario' : 'Nuevo instrumento'}
         />
         <div className="section-toolbar__spacer" />
-        <ActionButton className="button button--secondary" type="button" disabled={!hasConfig} onClick={onReload} icon="refresh" label="Recargar" />
+        <ActionButton iconOnly className="button button--secondary" type="button" disabled={!hasConfig} onClick={onReload} icon="refresh" label="Recargar" />
       </div>
 
       {isFormVisible ? (
@@ -269,7 +269,7 @@ export function InstrumentsSection({
                 icon="save"
                 label={editingInstrumentId === null ? 'Crear instrumento' : 'Guardar cambios'}
               />
-              <ActionButton className="button button--secondary" type="button" onClick={onReset} icon="reset" label="Limpiar" />
+              <ActionButton iconOnly className="button button--secondary" type="button" onClick={onReset} icon="reset" label="Limpiar" />
             </div>
           </form>
         </FormModal>
@@ -316,7 +316,7 @@ export function InstrumentsSection({
 
             <div className="form-grid__actions">
               <ActionButton className="button button--primary" type="submit" icon="balance" label="Aplicar conciliacion" />
-              <ActionButton className="button button--secondary" type="button" onClick={() => setReconciliationInstrument(null)}
+              <ActionButton iconOnly className="button button--secondary" type="button" onClick={() => setReconciliationInstrument(null)}
                 icon="close"
                 label="Cancelar"
               />
@@ -360,7 +360,7 @@ export function InstrumentsSection({
                         </td>
                         <td>
                           <div className="table__actions">
-                            <ActionButton className="button button--secondary" type="button" onClick={() => onEdit(instrument)}
+                            <ActionButton iconOnly className="button button--secondary" type="button" onClick={() => onEdit(instrument)}
                               icon="edit"
                               label="Editar"
                             />
@@ -370,7 +370,7 @@ export function InstrumentsSection({
                                 label="Conciliar"
                               />
                             ) : null}
-                            <ActionButton className="button button--danger" type="button" onClick={() => onDelete(instrument.id)}
+                            <ActionButton iconOnly className="button button--danger" type="button" onClick={() => onDelete(instrument.id)}
                               icon="archive"
                               label="Archivar"
                             />

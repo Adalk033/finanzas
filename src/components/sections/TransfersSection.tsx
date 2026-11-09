@@ -70,7 +70,7 @@ export function TransfersSection({
             Mueve dinero entre tus cuentas. Los pagos de tarjeta se registran directamente desde Tarjetas.
           </p>
         </div>
-        <ActionButton className="button button--secondary" type="button" onClick={onReload} icon="refresh" label="Actualizar" />
+        <ActionButton iconOnly className="button button--secondary" type="button" onClick={onReload} icon="refresh" label="Actualizar" />
       </header>
 
       <div className="section-stack">
@@ -195,7 +195,7 @@ export function TransfersSection({
                 icon={editingTransferId === null ? 'plus' : 'save'}
                 label={editingTransferId === null ? 'Registrar transferencia' : 'Guardar cambios'}
               />
-              <ActionButton className="button button--secondary" type="button" onClick={onReset}
+              <ActionButton iconOnly className="button button--secondary" type="button" onClick={onReset}
                 icon={editingTransferId === null ? 'reset' : 'close'}
                 label={editingTransferId === null ? 'Limpiar' : 'Cancelar'}
               />
@@ -247,11 +247,11 @@ export function TransfersSection({
                     <td className="table__amount">{formatCurrency(transfer.amount)}</td>
                     <td>
                       <div className="table__actions">
-                        <ActionButton className="button button--secondary" type="button" onClick={() => onEdit(transfer)}
+                        <ActionButton iconOnly className="button button--secondary" type="button" onClick={() => onEdit(transfer)}
                           icon="edit"
                           label="Editar"
                         />
-                        <ActionButton className="button button--danger" type="button" onClick={() => onDelete(transfer.id)}
+                        <ActionButton iconOnly className="button button--danger" type="button" onClick={() => onDelete(transfer.id)}
                           icon="trash"
                           label="Eliminar"
                         />

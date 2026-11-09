@@ -68,7 +68,7 @@ export function FormModal({ title, children, onClose, error, message }: FormModa
     >
       <header className="form-modal__header">
         <h2 className="form-modal__title" id={titleId}>{title}</h2>
-        <ActionButton className="button button--secondary" type="button" onClick={onClose} icon="close" label={`Cerrar: ${title}`} />
+        <ActionButton iconOnly className="button button--secondary" type="button" onClick={onClose} icon="close" label={`Cerrar: ${title}`} />
       </header>
       <div className="form-modal__body">
         {error ? <p className="message message--error" role="alert">{error}</p> : null}

@@ -178,11 +178,11 @@ export function BudgetsSection({
             />
 
                 <div className="form-grid__actions">
-                  <ActionButton className="button button--primary" type="submit" disabled={!hasConfig || isBudgetsLoading}
+                  <ActionButton iconOnly className="button button--primary" type="submit" disabled={!hasConfig || isBudgetsLoading}
                     icon={editingBudgetId === null ? 'save' : 'refresh'}
                     label={editingBudgetId === null ? 'Guardar presupuesto' : 'Actualizar presupuesto'}
                   />
-                  <ActionButton className="button button--secondary" type="button" onClick={onReset} icon="reset" label="Limpiar" />
+                  <ActionButton iconOnly className="button button--secondary" type="button" onClick={onReset} icon="reset" label="Limpiar" />
                 </div>
               </form>
             </FormModal>
@@ -288,7 +288,7 @@ export function BudgetsSection({
                       </td>
                       <td>
                         <div className="table__actions">
-                          <ActionButton
+                          <ActionButton iconOnly
                             className="button button--secondary"
                             type="button"
                             onClick={() => {
@@ -297,7 +297,7 @@ export function BudgetsSection({
                             icon="edit"
                             label="Editar"
                           />
-                          <ActionButton
+                          <ActionButton iconOnly
                             className="button button--danger"
                             type="button"
                             onClick={() => {
@@ -349,7 +349,7 @@ export function BudgetsSection({
               icon="save"
               label={editingSavingsGoalId === null ? 'Crear meta' : 'Guardar meta'}
             />
-            <ActionButton className="button button--secondary" type="button" onClick={onSavingsGoalReset} icon="reset" label="Limpiar" />
+            <ActionButton iconOnly className="button button--secondary" type="button" onClick={onSavingsGoalReset} icon="reset" label="Limpiar" />
           </div>
         </form>
           </FormModal>
@@ -368,11 +368,11 @@ export function BudgetsSection({
                   <td>{goal.progressPercent}%</td>
                   <td>{formatIsoDate(goal.targetDate)}</td>
                   <td><div className="table__actions">
-                    <ActionButton className="button button--secondary" type="button" onClick={() => onSavingsGoalEdit(goal)}
+                    <ActionButton iconOnly className="button button--secondary" type="button" onClick={() => onSavingsGoalEdit(goal)}
                       icon="edit"
                       label="Editar"
                     />
-                    <ActionButton className="button button--danger" type="button" onClick={() => onSavingsGoalDelete(goal.id)}
+                    <ActionButton iconOnly className="button button--danger" type="button" onClick={() => onSavingsGoalDelete(goal.id)}
                       icon="archive"
                       label="Archivar"
                     />

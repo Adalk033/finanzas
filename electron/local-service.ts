@@ -246,6 +246,11 @@ function mapBank(row: DbRow): Record<string, unknown> {
 }
 
 function mapInstrument(row: DbRow): Record<string, unknown> {
+  const creditLimit = toNumber(row.credit_limit_cents)
+  const creditUtilization = row.type === 'credit_card' && creditLimit > 0
+    ? Math.round(Math.max(toNumber(row.current_balance_cents), 0) / creditLimit * 10_000) / 100
+    : null
+
   return {
     id: toNumber(row.id),
     bankId: toNumber(row.bank_id),
@@ -257,6 +262,7 @@ function mapInstrument(row: DbRow): Record<string, unknown> {
     creditLimit: fromCents(row.credit_limit_cents),
     currentBalance: fromCents(row.current_balance_cents),
     availableCredit: fromCents(row.available_credit_cents),
+    creditUtilization,
     cutOffDay: toNullableNumber(row.cut_off_day),
     paymentDueDay: toNullableNumber(row.payment_due_day),
     annualRate: toNullableNumber(row.annual_rate),

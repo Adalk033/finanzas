@@ -37,7 +37,7 @@ export function FamilyDashboardSection({
           <h2 className="card__title">Inicio de Familia</h2>
           <p className="card__subtitle">Resumen mensual de gastos familiares, separado de tus instrumentos personales.</p>
         </div>
-        <ActionButton className="button button--secondary dashboard-header__reload" type="button" disabled={!hasConfig || isLoading} onClick={onReload}
+        <ActionButton iconOnly className="button button--secondary dashboard-header__reload" type="button" disabled={!hasConfig || isLoading} onClick={onReload}
           icon="refresh"
           label={isLoading ? 'Cargando...' : 'Recargar'}
         />

@@ -218,7 +218,7 @@ try {
     shortName: 'Local',
     isActive: true,
   })
-  const debit = request<{ id: number; currentAmount: number }>('/instruments', 'POST', {
+  const debit = request<{ id: number; currentAmount: number; creditUtilization: number | null }>('/instruments', 'POST', {
     bankId: bank.id,
     name: 'Cuenta principal',
     type: 'account',
@@ -227,7 +227,8 @@ try {
     currentAmount: 10000,
     isActive: true,
   })
-  const credit = request<{ id: number }>('/instruments', 'POST', {
+  assert.equal(debit.creditUtilization, null)
+  const credit = request<{ id: number; creditUtilization: number }>('/instruments', 'POST', {
     bankId: bank.id,
     name: 'Tarjeta',
     type: 'credit_card',
@@ -240,7 +241,8 @@ try {
     annualRate: 40,
     isActive: true,
   })
-  const openingCredit = request<{ id: number }>('/instruments', 'POST', {
+  assert.equal(credit.creditUtilization, 0)
+  const openingCredit = request<{ id: number; creditUtilization: number }>('/instruments', 'POST', {
     bankId: bank.id,
     name: 'Tarjeta con saldo inicial',
     type: 'credit_card',
@@ -251,6 +253,7 @@ try {
     paymentDueDay: 5,
     isActive: true,
   })
+  assert.equal(openingCredit.creditUtilization, 10)
   const category = request<{ id: number }>('/categories', 'POST', {
     name: 'Alimentos',
     type: 'expense',
@@ -541,9 +544,10 @@ try {
   )
   assert.equal(statementMovements.length, 1)
 
-  let instruments = request<Array<{ id: number; currentAmount: number | null; currentBalance: number | null }>>('/instruments')
+  let instruments = request<Array<{ id: number; currentAmount: number | null; currentBalance: number | null; creditUtilization: number | null }>>('/instruments')
   assert.equal(instruments.find((item) => item.id === debit.id)?.currentAmount, 9874.55)
   assert.equal(instruments.find((item) => item.id === credit.id)?.currentBalance, 1300)
+  assert.equal(instruments.find((item) => item.id === credit.id)?.creditUtilization, 6.5)
 
   const overpaymentError = requestFailure('/transfers', 'POST', {
     sourceInstrumentId: debit.id,
@@ -567,6 +571,7 @@ try {
   instruments = request('/instruments')
   assert.equal(instruments.find((item) => item.id === debit.id)?.currentAmount, 9774.55)
   assert.equal(instruments.find((item) => item.id === credit.id)?.currentBalance, 1200)
+  assert.equal(instruments.find((item) => item.id === credit.id)?.creditUtilization, 6)
   const paidStatements = request<Array<{
     id: number
     isPaid: boolean
