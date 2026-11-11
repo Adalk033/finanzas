@@ -1,7 +1,7 @@
 import { ActionButton } from '../ActionButton'
 import { FormModal } from '../FormModal'
 import { useState, type SyntheticEvent } from 'react'
-import { formatCurrency, formatIsoDate, MSI_OPTIONS } from '../../app/appHelpers'
+import { formatCurrency, formatIsoDate } from '../../app/appHelpers'
 import type {
   Category,
   CreditCardStatement,
@@ -409,7 +409,7 @@ export function CreditCardsSection({
                         onChange={(event) => onPurchaseFormChange({
                           ...purchaseForm,
                           isMsi: event.target.checked,
-                          msiMonths: event.target.checked ? (purchaseForm.msiMonths ?? 3) : null,
+                          msiMonths: event.target.checked ? (purchaseForm.msiMonths ?? 2) : null,
                         })}
                       />
                       Compra a meses sin intereses
@@ -417,25 +417,25 @@ export function CreditCardsSection({
 
                     {purchaseForm.isMsi ? (
                       <>
-                        <label className="form-grid__field" htmlFor="cardPurchaseMsiMonths">Plazo</label>
-                        <select
+                        <label className="form-grid__field" htmlFor="cardPurchaseMsiMonths">Plazo MSI (meses, mínimo 2)</label>
+                        <NumberInput
                           id="cardPurchaseMsiMonths"
                           className="form-grid__input"
-                          value={purchaseForm.msiMonths ?? 3}
-                          onChange={(event) => onPurchaseFormChange({
+                          min={2}
+                          step={1}
+                          value={purchaseForm.msiMonths}
+                          emptyValue={null}
+                          onValueChange={(msiMonths) => onPurchaseFormChange({
                             ...purchaseForm,
-                            msiMonths: Number(event.target.value),
+                            msiMonths,
                           })}
-                        >
-                          {MSI_OPTIONS.map((months) => (
-                            <option key={months} value={months}>{months} meses</option>
-                          ))}
-                        </select>
+                          required
+                        />
                       </>
                     ) : null}
 
                     <div className="form-grid__actions">
-                      <ActionButton iconOnly className="button button--primary" type="submit" disabled={!hasConfig} icon="save" label="Guardar compra" />
+                      <ActionButton className="button button--primary" type="submit" disabled={!hasConfig} icon="save" label="Guardar compra" />
                       <ActionButton iconOnly className="button button--secondary" type="button" onClick={onResetPurchase} icon="reset" label="Limpiar" />
                     </div>
                   </form>
@@ -718,11 +718,11 @@ export function CreditCardsSection({
                                   <td><span className={`status-pill status-pill--${status.modifier}`}>{status.label}</span></td>
                                   <td>
                                     <div className="table__actions">
-                                      <ActionButton className="button button--secondary" type="button" onClick={() => onLoadStatementMovements(statement)}
+                                      <ActionButton iconOnly className="button button--secondary" type="button" onClick={() => onLoadStatementMovements(statement)}
                                         icon="eye"
                                         label="Detalle"
                                       />
-                                      <ActionButton className="button button--secondary" type="button" onClick={() => onStartStatementEdit(statement)}
+                                      <ActionButton iconOnly className="button button--secondary" type="button" onClick={() => onStartStatementEdit(statement)}
                                         icon="edit"
                                         label="Ajustar"
                                       />
@@ -779,7 +779,7 @@ export function CreditCardsSection({
                             })}
                           />
                           <div className="form-grid__actions">
-                            <ActionButton iconOnly className="button button--primary" type="button" onClick={onSaveStatementUpdate}
+                            <ActionButton className="button button--primary" type="button" onClick={onSaveStatementUpdate}
                               icon="save"
                               label="Guardar ajustes"
                             />

@@ -92,6 +92,18 @@ export function FixedExpensesSection({
               icon={isExpenseFormVisible ? 'close' : 'plus'}
               label={isExpenseFormVisible ? 'Ocultar formulario' : 'Nuevo gasto fijo'}
             />
+            <ActionButton className="button button--primary" type="button" onClick={() => {
+              if (selectedFixedExpenseId !== null) {
+                onResetFixedExpensePaymentForm()
+                onSelectFixedExpense(null)
+                setIsPaymentFormOpen(false)
+                return
+              }
+              setIsPaymentFormOpen((value) => !value)
+            }}
+              icon={isPaymentFormVisible ? 'close' : 'plus'}
+              label={isPaymentFormVisible ? 'Ocultar formulario' : 'Nuevo pago'}
+            />
             <div className="section-toolbar__spacer" />
             <ActionButton iconOnly className="button button--secondary" type="button" onClick={onReloadFixedExpenses} icon="refresh" label="Recargar" />
           </div>
@@ -214,21 +226,6 @@ export function FixedExpensesSection({
               </form>
             </FormModal>
           ) : null}
-
-        <div className="section-toolbar">
-            <ActionButton className="button button--primary" type="button" onClick={() => {
-              if (selectedFixedExpenseId !== null) {
-                onResetFixedExpensePaymentForm()
-                onSelectFixedExpense(null)
-                setIsPaymentFormOpen(false)
-                return
-              }
-              setIsPaymentFormOpen((value) => !value)
-            }}
-              icon={isPaymentFormVisible ? 'close' : 'plus'}
-              label={isPaymentFormVisible ? 'Ocultar formulario' : 'Nuevo pago'}
-            />
-          </div>
 
           {isPaymentFormVisible ? (
             <FormModal title="Registrar pago de gasto fijo" onClose={() => { onResetFixedExpensePaymentForm(); onSelectFixedExpense(null); setIsPaymentFormOpen(false) }} error={fixedExpenseError} message={fixedExpenseMessage}>

@@ -1,6 +1,6 @@
 import { useMemo, useState, type SyntheticEvent } from 'react'
 import { apiClient } from '../api/client'
-import { EMPTY_SIMULATION_FORM, MSI_OPTIONS } from '../app/appHelpers'
+import { EMPTY_SIMULATION_FORM } from '../app/appHelpers'
 import type {
   FinancialInstrument,
   Simulation,
@@ -13,6 +13,7 @@ type UseSimulatorControllerParams = {
 }
 
 export function useSimulatorController({ instruments }: UseSimulatorControllerParams) {
+  const [editingSimulationId, setEditingSimulationId] = useState<number | null>(null)
   const [simulations, setSimulations] = useState<Simulation[]>([])
   const [isSimulationsLoading, setIsSimulationsLoading] = useState(false)
   const [simulationMessage, setSimulationMessage] = useState('')
@@ -48,10 +49,24 @@ export function useSimulatorController({ instruments }: UseSimulatorControllerPa
   }
 
   const resetSimulationForm = (): void => {
+    setEditingSimulationId(null)
+    setSimulationError('')
+    setSimulationMessage('')
     setSimulationForm({
       ...EMPTY_SIMULATION_FORM,
       instrumentId: instruments[0]?.id ?? null,
     })
+  }
+
+  const handleSimulationEdit = (simulation: Simulation): void => {
+    setEditingSimulationId(simulation.id)
+    setSimulationForm({ ...simulation.input, creditUtilizationWarningThreshold: simulation.input.creditUtilizationWarningThreshold ?? 50 })
+    setSimulationError('')
+    setSimulationMessage(
+      simulation.input.scenarioType === 'loan' && simulation.input.loanMonths === null
+        ? 'Esta simulación antigua no guardó el plazo ni la tasa. Captúralos para recalcular.'
+        : '',
+    )
   }
 
   const handleSimulationScenarioTypeChange = (scenarioType: SimulationScenarioType): void => {
@@ -59,43 +74,43 @@ export function useSimulatorController({ instruments }: UseSimulatorControllerPa
       ...previous,
       scenarioType,
       instrumentId: scenarioType === 'loan' ? null : previous.instrumentId,
-      msiMonths: scenarioType === 'msi' ? (previous.msiMonths ?? MSI_OPTIONS[0]) : null,
+      msiMonths: scenarioType === 'msi' ? (previous.msiMonths ?? 2) : null,
       loanMonths: scenarioType === 'loan' ? (previous.loanMonths ?? 12) : null,
       annualRate: scenarioType === 'loan' ? (previous.annualRate ?? 0) : null,
     }))
   }
 
-  const handleSimulationSubmit = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
+  const handleSimulationSubmit = async (event: SyntheticEvent<HTMLFormElement>): Promise<boolean> => {
     event.preventDefault()
     setSimulationError('')
     setSimulationMessage('')
 
     if (simulationForm.amount <= 0) {
       setSimulationError('Ingresa un monto mayor a cero para simular.')
-      return
+      return false
     }
 
     if (simulationForm.scenarioType === 'msi') {
       if (!simulationForm.instrumentId) {
         setSimulationError('Selecciona una tarjeta de credito para escenario MSI.')
-        return
+        return false
       }
 
-      if (!simulationForm.msiMonths) {
-        setSimulationError('Selecciona los meses MSI.')
-        return
+      if (!Number.isSafeInteger(simulationForm.msiMonths) || (simulationForm.msiMonths ?? 0) < 2) {
+        setSimulationError('Ingresa un número entero de meses desde 2 para MSI.')
+        return false
       }
     }
 
     if (simulationForm.scenarioType === 'loan') {
       if (!simulationForm.loanMonths || simulationForm.loanMonths < 1) {
         setSimulationError('Ingresa un plazo de prestamo valido.')
-        return
+        return false
       }
 
       if (simulationForm.annualRate === null || simulationForm.annualRate < 0) {
         setSimulationError('Ingresa una tasa anual valida para la simulacion de prestamo.')
-        return
+        return false
       }
     }
 
@@ -107,15 +122,19 @@ export function useSimulatorController({ instruments }: UseSimulatorControllerPa
       instrumentId: simulationForm.scenarioType === 'loan' ? null : simulationForm.instrumentId,
     }
 
-    const created = await apiClient.createSimulation(payload)
+    const created = editingSimulationId === null
+      ? await apiClient.createSimulation(payload)
+      : await apiClient.updateSimulation(editingSimulationId, payload)
     if (!created.success) {
-      setSimulationError(created.error ?? 'No se pudo crear la simulacion.')
-      return
+      setSimulationError(created.error ?? 'No se pudo guardar la simulacion.')
+      return false
     }
 
-    setSimulationMessage('Simulacion creada correctamente.')
+    const wasEditing = editingSimulationId !== null
     resetSimulationForm()
+    setSimulationMessage(wasEditing ? 'Simulación actualizada correctamente.' : 'Simulación creada correctamente.')
     await loadSimulations()
+    return true
   }
 
   const handleSimulationDelete = async (simulationId: number): Promise<void> => {
@@ -128,11 +147,14 @@ export function useSimulatorController({ instruments }: UseSimulatorControllerPa
       return
     }
 
+    if (editingSimulationId === simulationId) resetSimulationForm()
     setSimulationMessage('Simulacion eliminada correctamente.')
     await loadSimulations()
   }
 
   return {
+    editingSimulationId,
+    handleSimulationEdit,
     simulations,
     isSimulationsLoading,
     simulationMessage,

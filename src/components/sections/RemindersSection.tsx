@@ -113,7 +113,7 @@ export function RemindersSection({
               </div>
             </details>
             <div className="form-grid__actions">
-              <ActionButton iconOnly className="button button--primary" type="submit" disabled={!hasConfig || isRemindersLoading}
+              <ActionButton className="button button--primary" type="submit" disabled={!hasConfig || isRemindersLoading}
                 icon={editingReminderId === null ? 'save' : 'refresh'}
                 label={editingReminderId === null ? 'Guardar recordatorio' : 'Actualizar recordatorio'}
               />
@@ -187,7 +187,7 @@ export function RemindersSection({
                             icon="edit"
                             label="Editar"
                           />
-                          <ActionButton
+                          <ActionButton iconOnly
                             className="button button--secondary"
                             type="button"
                             disabled={reminder.isRead}
@@ -197,7 +197,7 @@ export function RemindersSection({
                             icon="check"
                             label="Marcar leido"
                           />
-                          <ActionButton
+                          <ActionButton iconOnly
                             className="button button--secondary"
                             type="button"
                             disabled={reminder.isDismissed}

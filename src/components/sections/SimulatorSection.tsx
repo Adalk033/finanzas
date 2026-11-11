@@ -1,7 +1,7 @@
 import { ActionButton } from '../ActionButton'
 import { FormModal } from '../FormModal'
 import { useState, type SyntheticEvent } from 'react'
-import { MSI_OPTIONS, formatCurrency, formatIsoDate, getSimulationScenarioLabel } from '../../app/appHelpers'
+import { formatCurrency, getSimulationScenarioLabel } from '../../app/appHelpers'
 import type {
   FinancialInstrument,
   Simulation,
@@ -9,8 +9,12 @@ import type {
   SimulationScenarioType,
 } from '../../types/domain'
 import { NumberInput } from '../NumberInput'
+import { SimulationDetailsModal } from '../SimulationDetailsModal'
+import './SimulatorSection.css'
 
 type SimulatorSectionProps = {
+  editingSimulationId: number | null
+  onEdit: (simulation: Simulation) => void
   hasConfig: boolean
   simulationMessage: string
   simulationError: string
@@ -20,13 +24,15 @@ type SimulatorSectionProps = {
   isSimulationsLoading: boolean
   onSimulationFormChange: (nextForm: SimulationInput) => void
   onScenarioTypeChange: (scenarioType: SimulationScenarioType) => void
-  onSubmit: (event: SyntheticEvent<HTMLFormElement>) => void
+  onSubmit: (event: SyntheticEvent<HTMLFormElement>) => Promise<boolean>
   onReset: () => void
   onReload: () => void
   onDelete: (simulationId: number) => void
 }
 
 export function SimulatorSection({
+  editingSimulationId,
+  onEdit,
   hasConfig,
   simulationMessage,
   simulationError,
@@ -42,6 +48,8 @@ export function SimulatorSection({
   onDelete,
 }: SimulatorSectionProps) {
   const [isFormOpen, setIsFormOpen] = useState(false)
+  const [detailSimulationId, setDetailSimulationId] = useState<number | null>(null)
+  const detailSimulation = simulations.find((simulation) => simulation.id === detailSimulationId)
 
   return (
     <section className="card">
@@ -54,7 +62,10 @@ export function SimulatorSection({
       {simulationError ? <p className="message message--error">{simulationError}</p> : null}
 
       <div className="section-toolbar">
-        <ActionButton className="button button--primary" type="button" onClick={() => setIsFormOpen((value) => !value)}
+        <ActionButton className="button button--primary" type="button" onClick={() => {
+          onReset()
+          setIsFormOpen((value) => !value)
+        }}
           icon={isFormOpen ? 'close' : 'plus'}
           label={isFormOpen ? 'Ocultar formulario' : 'Nueva simulacion'}
         />
@@ -65,10 +76,17 @@ export function SimulatorSection({
         />
       </div>
 
+      {detailSimulation ? (
+        <SimulationDetailsModal simulation={detailSimulation} onClose={() => setDetailSimulationId(null)} />
+      ) : null}
+
       <div className="section-stack">
         {isFormOpen ? (
-            <FormModal title="Nueva simulación" onClose={() => setIsFormOpen(false)} error={simulationError} message={simulationMessage}>
-              <form className="form-grid" onSubmit={onSubmit}>
+            <FormModal title={editingSimulationId === null ? 'Nueva simulación' : 'Editar simulación'} onClose={() => setIsFormOpen(false)} error={simulationError} message={simulationMessage}>
+              <p className="card__subtitle">Al guardar se recalcula el escenario con tus datos financieros actuales.</p>
+              <form className="form-grid" onSubmit={async (event) => {
+                if (await onSubmit(event)) setIsFormOpen(false)
+              }}>
             <label className="form-grid__field" htmlFor="simulationName">Nombre</label>
             <input
               id="simulationName"
@@ -143,19 +161,17 @@ export function SimulatorSection({
 
             {simulationForm.scenarioType === 'msi' ? (
               <>
-                <label className="form-grid__field" htmlFor="simulationMsiMonths">Meses MSI</label>
-                <select
+                <label className="form-grid__field" htmlFor="simulationMsiMonths">Plazo MSI (meses, mínimo 2)</label>
+                <NumberInput
                   id="simulationMsiMonths"
                   className="form-grid__input"
-                  value={simulationForm.msiMonths ?? MSI_OPTIONS[0]}
-                  onChange={(event) => {
-                    onSimulationFormChange({ ...simulationForm, msiMonths: Number.parseInt(event.target.value, 10) })
-                  }}
-                >
-                  {MSI_OPTIONS.map((months) => (
-                    <option key={months} value={months}>{months} meses</option>
-                  ))}
-                </select>
+                  min={2}
+                  step={1}
+                  value={simulationForm.msiMonths}
+                  emptyValue={null}
+                  onValueChange={(msiMonths) => onSimulationFormChange({ ...simulationForm, msiMonths })}
+                  required
+                />
               </>
             ) : null}
 
@@ -167,8 +183,8 @@ export function SimulatorSection({
                   className="form-grid__input"
                   min={1}
                   max={600}
-                  value={simulationForm.loanMonths ?? 12}
-                  emptyValue={0}
+                  value={simulationForm.loanMonths}
+                  emptyValue={null}
                   onValueChange={(loanMonths) => {
                     onSimulationFormChange({ ...simulationForm, loanMonths })
                   }}
@@ -181,10 +197,28 @@ export function SimulatorSection({
                   min={0}
                   max={100}
                   step="0.01"
-                  value={simulationForm.annualRate ?? 0}
-                  emptyValue={0}
+                  value={simulationForm.annualRate}
+                  emptyValue={null}
                   onValueChange={(annualRate) => {
                     onSimulationFormChange({ ...simulationForm, annualRate })
+                  }}
+                />
+              </>
+            ) : null}
+
+            {simulationForm.scenarioType !== 'loan' ? (
+              <>
+                <label className="form-grid__field" htmlFor="simulationCreditThreshold">Advertir utilización mayor a (%)</label>
+                <NumberInput
+                  id="simulationCreditThreshold"
+                  className="form-grid__input"
+                  min={1}
+                  max={100}
+                  step={1}
+                  value={simulationForm.creditUtilizationWarningThreshold}
+                  emptyValue={50}
+                  onValueChange={(creditUtilizationWarningThreshold) => {
+                    onSimulationFormChange({ ...simulationForm, creditUtilizationWarningThreshold })
                   }}
                 />
               </>
@@ -202,7 +236,7 @@ export function SimulatorSection({
             />
 
                 <div className="form-grid__actions">
-                  <ActionButton iconOnly className="button button--primary" type="submit" disabled={!hasConfig || isSimulationsLoading}
+                  <ActionButton className="button button--primary" type="submit" disabled={!hasConfig || isSimulationsLoading}
                     icon="save"
                     label="Guardar simulacion"
                   />
@@ -218,64 +252,78 @@ export function SimulatorSection({
           </header>
 
           <div className="table-wrap">
-            <table className="table">
+            <table className="table simulator-table">
               <thead>
                 <tr>
-                  <th>Fecha</th>
                   <th>Nombre</th>
                   <th>Escenario</th>
                   <th>Monto</th>
-                  <th>Compromiso mensual</th>
-                  <th>Disponible proyectado</th>
-                  <th>Deuda / ingreso</th>
-                  <th>Viabilidad</th>
+                  <th>Pago mensual</th>
+                  <th>Resultado</th>
                   <th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {isSimulationsLoading ? (
                   <tr>
-                    <td colSpan={9}>Cargando simulaciones...</td>
+                    <td colSpan={6}>Cargando simulaciones...</td>
                   </tr>
                 ) : null}
 
                 {!isSimulationsLoading && simulations.length === 0 ? (
                   <tr>
-                    <td colSpan={9}>No hay simulaciones registradas.</td>
+                    <td colSpan={6}>No hay simulaciones registradas.</td>
                   </tr>
                 ) : null}
 
                 {!isSimulationsLoading
                   ? simulations.map((simulation) => {
                     const result = simulation.resultJson as {
+                      warnings?: string[]
                       scenarioType?: SimulationScenarioType
                       amount?: number
                       monthlyImpact?: number
-                      projectedAvailable?: number
-                      debtServiceRatio?: number
                     }
-
+                    const warnings = result.warnings ?? []
                     const scenarioType = result.scenarioType ?? 'direct_purchase'
-                    const amount = result.amount ?? 0
-                    const monthlyCommitmentIncrease = result.monthlyImpact ?? 0
-                    const projectedAvailable = result.projectedAvailable ?? 0
 
                     return (
                       <tr key={simulation.id}>
-                        <td>{formatIsoDate(simulation.simulationDate)}</td>
-                        <td>{simulation.name}</td>
-                        <td>{getSimulationScenarioLabel(scenarioType)}</td>
-                        <td>{formatCurrency(amount)}</td>
-                        <td>{formatCurrency(monthlyCommitmentIncrease)}</td>
-                        <td>{formatCurrency(projectedAvailable)}</td>
-                        <td>{(result.debtServiceRatio ?? 0).toFixed(1)}%</td>
-                        <td>
-                          <span className={`badge ${simulation.isFavorable ? 'badge--success' : 'badge--warning'}`}>
-                            {simulation.isFavorable ? 'Favorable' : 'No favorable'}
+                        <td data-label="Nombre">{simulation.name}</td>
+                        <td data-label="Escenario">
+                          <div>
+                            {getSimulationScenarioLabel(scenarioType)}
+                            {scenarioType === 'msi' ? (
+                              <span className="simulator-table__term">{simulation.input.msiMonths === null ? 'Plazo no registrado' : `${simulation.input.msiMonths} meses`}</span>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td data-label="Monto">{formatCurrency(result.amount ?? 0)}</td>
+                        <td data-label="Pago mensual">{formatCurrency(result.monthlyImpact ?? 0)}</td>
+                        <td data-label="Resultado">
+                          <span className={`badge ${simulation.isFavorable && warnings.length === 0 ? 'badge--success' : 'badge--warning'}`}>
+                            {simulation.isFavorable ? (warnings.length > 0 ? 'Favorable con advertencias' : 'Favorable') : 'No favorable'}
                           </span>
                         </td>
-                        <td>
+                        <td data-label="Acciones">
                           <div className="table__actions">
+                            <ActionButton iconOnly
+                              className="button button--secondary"
+                              type="button"
+                              onClick={() => setDetailSimulationId(simulation.id)}
+                              icon="eye"
+                              label={`Ver detalle de ${simulation.name}`}
+                            />
+                            <ActionButton iconOnly
+                              className="button button--secondary"
+                              type="button"
+                              onClick={() => {
+                                onEdit(simulation)
+                                setIsFormOpen(true)
+                              }}
+                              icon="edit"
+                              label="Editar simulación"
+                            />
                             <ActionButton iconOnly
                               className="button button--danger"
                               type="button"

@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3'
 import { getDatabase, getDatabasePath } from './local-db.js'
 import { getValidationFieldLabel } from './validation-labels.js'
 import type { ApiResponse, DatabaseInfo } from '../src/types/config.js'
+import { SIDEBAR_GROUP_IDS, type SidebarPreferences } from '../src/types/navigation.js'
 
 export type LocalRequestPayload = {
   path: string
@@ -35,7 +36,7 @@ const BILLING_CYCLES = new Set(['monthly', 'yearly', 'weekly'])
 const SIMULATION_TYPES = new Set(['direct_purchase', 'msi', 'loan'])
 const REMINDER_TYPES = new Set(['payment', 'cutoff', 'subscription', 'loan', 'custom'])
 const RECURRING_INCOME_FREQUENCIES = new Set(['weekly', 'biweekly', 'monthly', 'yearly'])
-const MSI_MONTHS = new Set([3, 6, 9, 12, 18, 24])
+const LEGACY_MSI_MONTHS = [3, 6, 9, 12, 18, 24]
 const DASHBOARD_EXPENSE_PERIODS = new Set(['current_month', 'previous_month', 'last_3_months', 'last_year'])
 const DASHBOARD_EXPENSE_PERIOD_DEFAULT = 'current_month'
 const DASHBOARD_BALANCE_EVOLUTION_PERIODS = new Set(['one_month', 'three_months', 'six_months'])
@@ -1128,6 +1129,11 @@ function deleteSubcategory(db: Database.Database, id: number): { id: number } {
   return { id }
 }
 
+function calculateMsiMonthlyAmountCents(amountCents: number, months: number): number {
+  // Keep the final installment nonnegative even when long terms amplify cent rounding.
+  return Math.min(Math.round(amountCents / months), Math.floor(amountCents / (months - 1)))
+}
+
 function validateTransaction(db: Database.Database, body: Input): {
   instrumentId: number
   categoryId: number | null
@@ -1160,9 +1166,9 @@ function validateTransaction(db: Database.Database, body: Input): {
   }
   const amountCents = moneyToCents(body.amount, 'amount')
   const isMsi = requiredBoolean(body, 'isMsi', false)
-  const msiMonths = isMsi ? requiredInteger(body, 'msiMonths', 1, 24) : null
-  if (isMsi && (!MSI_MONTHS.has(msiMonths ?? 0) || type !== 'expense' || instrument.type !== 'credit_card')) {
-    throw new ValidationError('MSI solo admite compras con tarjeta a 3, 6, 9, 12, 18 o 24 meses.')
+  const msiMonths = isMsi ? requiredInteger(body, 'msiMonths', 2) : null
+  if (isMsi && (type !== 'expense' || instrument.type !== 'credit_card')) {
+    throw new ValidationError('MSI solo admite compras con tarjeta de crédito.')
   }
   const transactionDate = requiredDate(body, 'transactionDate')
   const currencyId = requiredInteger(body, 'currencyId')
@@ -1181,7 +1187,7 @@ function validateTransaction(db: Database.Database, body: Input): {
     notes: optionalString(body, 'notes', 2000),
     isMsi,
     msiMonths,
-    msiMonthlyAmountCents: isMsi ? Math.round(amountCents / (msiMonths ?? 1)) : null,
+    msiMonthlyAmountCents: msiMonths === null ? null : calculateMsiMonthlyAmountCents(amountCents, msiMonths),
     msiStartDate: isMsi ? computeMsiStartDate(transactionDate, toNumber(instrument.cut_off_day ?? 31)) : null,
     affectsBalance: requiredBoolean(body, 'affectsBalance', true),
     sourceType: optionalString(body, 'sourceType', 30),
@@ -1197,19 +1203,22 @@ function listTransactions(db: Database.Database, url: URL): Record<string, unkno
     clauses.push(clause)
     params.push(...values)
   }
-  const fromDate = url.searchParams.get('from_date')
-  const toDate = url.searchParams.get('to_date')
-  const categoryId = Number(url.searchParams.get('category_id'))
-  const instrumentId = Number(url.searchParams.get('instrument_id'))
+  const fromDateValue = url.searchParams.get('from_date')
+  const toDateValue = url.searchParams.get('to_date')
+  const fromDate = fromDateValue === null ? null : requiredDate({ transactionDate: fromDateValue }, 'transactionDate')
+  const toDate = toDateValue === null ? null : requiredDate({ transactionDate: toDateValue }, 'transactionDate')
+  const categoryId = optionalPositiveSearchParam(url, 'category_id', Number.MAX_SAFE_INTEGER)
+  const instrumentId = optionalPositiveSearchParam(url, 'instrument_id', Number.MAX_SAFE_INTEGER)
   const type = url.searchParams.get('type')
+  if (type !== null && !TRANSACTION_TYPES.has(type)) throw new ValidationError('El tipo de movimiento no es válido.')
   const search = url.searchParams.get('search')?.trim()
   const autoAdjustmentsOnly = url.searchParams.get('auto_adjustments_only')
   const page = optionalPositiveSearchParam(url, 'page', TRANSACTIONS_MAX_PAGE)
   const automaticAdjustmentClause = '(t.notes LIKE ? OR t.description = ?)'
   if (fromDate) add('t.transaction_date >= ?', fromDate)
   if (toDate) add('t.transaction_date <= ?', toDate)
-  if (Number.isInteger(categoryId) && categoryId > 0) add('t.category_id = ?', categoryId)
-  if (Number.isInteger(instrumentId) && instrumentId > 0) add('t.instrument_id = ?', instrumentId)
+  if (categoryId !== null) add('t.category_id = ?', categoryId)
+  if (instrumentId !== null) add('t.instrument_id = ?', instrumentId)
   if (type && TRANSACTION_TYPES.has(type)) add('t.type = ?', type)
   if (search && search.length > 255) throw new ValidationError('La búsqueda no puede superar 255 caracteres.')
   if (search) {
@@ -1235,17 +1244,54 @@ function listTransactions(db: Database.Database, url: URL): Record<string, unkno
       .map(mapTransaction)
   }
 
-  const totalRow = db.prepare(`SELECT COUNT(*) AS total ${transactionFrom()} ${where}`)
-    .get(...params) as { total: number }
+  const paymentClauses = ["tr.type = 'card_payment'"]
+  const paymentParams: unknown[] = []
+  const addPayment = (clause: string, ...values: unknown[]): void => {
+    paymentClauses.push(clause)
+    paymentParams.push(...values)
+  }
+  if (fromDate) addPayment('tr.transfer_date >= ?', fromDate)
+  if (toDate) addPayment('tr.transfer_date <= ?', toDate)
+  if (instrumentId !== null) {
+    addPayment('(tr.source_instrument_id = ? OR tr.destination_instrument_id = ?)', instrumentId, instrumentId)
+  }
+  // Card payments are transfers, so expense/income and category filters exclude them.
+  if ((type && TRANSACTION_TYPES.has(type)) || categoryId !== null
+    || autoAdjustmentsOnly === 'true') {
+    addPayment('0 = 1')
+  }
+  if (search) {
+    const searchValue = `%${search}%`
+    addPayment(
+      '(tr.description LIKE ? OR tr.notes LIKE ? OR tr.source_instrument_name LIKE ? OR tr.destination_instrument_name LIKE ?)',
+      searchValue, searchValue, searchValue, searchValue,
+    )
+  }
+  const movementsQuery = `
+    SELECT t.id, t.transaction_date AS movement_date, 'transaction' AS entry_type
+    ${transactionFrom()} ${where}
+    UNION ALL
+    SELECT tr.id, tr.transfer_date AS movement_date, 'card_payment' AS entry_type
+    FROM (${transferSelect()}) tr
+    WHERE ${paymentClauses.join(' AND ')}
+  `
+  const movementParams = [...params, ...paymentParams]
+  const totalRow = db.prepare(`SELECT COUNT(*) AS total FROM (${movementsQuery})`)
+    .get(...movementParams) as { total: number }
   const total = toNumber(totalRow.total)
   const totalPages = Math.max(1, Math.ceil(total / TRANSACTIONS_PAGE_SIZE))
   const resolvedPage = Math.min(page, totalPages)
   const offset = (resolvedPage - 1) * TRANSACTIONS_PAGE_SIZE
-  const transactions = (db.prepare(`
-    ${transactionSelect(where)}
-    ORDER BY t.transaction_date DESC, t.id DESC
+  const movementRows = db.prepare(`
+    SELECT * FROM (${movementsQuery})
+    ORDER BY movement_date DESC, id DESC, entry_type ASC
     LIMIT ? OFFSET ?
-  `).all(...params, TRANSACTIONS_PAGE_SIZE, offset) as DbRow[]).map(mapTransaction)
+  `).all(...movementParams, TRANSACTIONS_PAGE_SIZE, offset) as DbRow[]
+  const selectTransaction = db.prepare(transactionSelect('WHERE t.id = ?'))
+  const selectPayment = db.prepare(transferSelect('WHERE tr.id = ?'))
+  const transactions = movementRows.map((row) => row.entry_type === 'card_payment'
+    ? mapTransfer(asRow(selectPayment.get(row.id)))
+    : mapTransaction(asRow(selectTransaction.get(row.id))))
   const activeMsiWhere = `${where}${where ? ' AND' : 'WHERE'} t.is_msi = 1 AND t.msi_remaining > 0`
   const activeMsiTransactions = (db.prepare(`
     ${transactionSelect(activeMsiWhere)}
@@ -3317,13 +3363,34 @@ function deleteBudget(db: Database.Database, id: number): { id: number } {
 }
 
 function mapSimulation(row: DbRow): Record<string, unknown> {
+  const snapshot = JSON.parse(String(row.snapshot_json)) as Record<string, unknown>
+  const result = JSON.parse(String(row.result_json)) as Record<string, unknown>
+  const instrument = snapshot.instrument as { id?: number } | null
+  // Older snapshots used a fixed set of terms; recover only a unique historical match.
+  const legacyMsiMonths = result.scenarioType === 'msi'
+    ? LEGACY_MSI_MONTHS.filter((months) =>
+        Math.round(toNumber(result.amount) * 100 / months) === Math.round(toNumber(result.monthlyImpact) * 100))
+    : []
+  const input = snapshot.input ?? {
+    name: row.name,
+    description: row.description ?? '',
+    simulationDate: row.simulation_date,
+    scenarioType: result.scenarioType,
+    amount: result.amount,
+    instrumentId: instrument?.id ?? null,
+    msiMonths: legacyMsiMonths.length === 1 ? legacyMsiMonths[0] : null,
+    loanMonths: null,
+    annualRate: null,
+    creditUtilizationWarningThreshold: 50,
+  }
   return {
     id: toNumber(row.id),
     name: row.name,
     description: row.description ?? null,
     simulationDate: row.simulation_date,
-    snapshotJson: JSON.parse(String(row.snapshot_json)) as Record<string, unknown>,
-    resultJson: JSON.parse(String(row.result_json)) as Record<string, unknown>,
+    snapshotJson: snapshot,
+    resultJson: result,
+    input,
     isFavorable: row.is_favorable === null ? null : toBoolean(row.is_favorable),
     createdAt: row.created_at,
   }
@@ -3334,37 +3401,61 @@ function listSimulations(db: Database.Database): Record<string, unknown>[] {
     .map(mapSimulation)
 }
 
-function saveSimulation(db: Database.Database, body: Input): Record<string, unknown> {
+function saveSimulation(db: Database.Database, body: Input, id?: number): Record<string, unknown> {
+  if (id !== undefined) requireEntity(db, 'simulations', id)
   const name = requiredString(body, 'name', 150)
   const description = optionalString(body, 'description', 2000)
   const simulationDate = optionalDate(body, 'simulationDate') ?? todayIso()
   const scenarioType = requiredEnum(body, 'scenarioType', SIMULATION_TYPES)
   const amountCents = moneyToCents(body.amount, 'amount')
   const instrumentId = optionalInteger(body, 'instrumentId')
-  const instrument = instrumentId === null ? null : getInstrument(db, instrumentId)
-  const msiMonths = optionalInteger(body, 'msiMonths', 1, 24)
+  const instrument = instrumentId === null || scenarioType === 'loan' ? null : getInstrument(db, instrumentId)
+  const msiMonths = optionalInteger(body, 'msiMonths', 2)
   const loanMonths = optionalInteger(body, 'loanMonths', 1, 600)
   const annualRate = optionalRate(body, 'annualRate')
-  if (scenarioType === 'msi' && (!msiMonths || !MSI_MONTHS.has(msiMonths))) {
-    throw new ValidationError('La simulacion MSI requiere un plazo permitido.')
+  if (scenarioType === 'msi' && msiMonths === null) {
+    throw new ValidationError('La simulación MSI requiere un número entero de meses desde 2.')
+  }
+  if (scenarioType === 'msi' && instrument?.type !== 'credit_card') {
+    throw new ValidationError('La simulacion MSI requiere una tarjeta de credito.')
+  }
+  if (scenarioType === 'loan' && annualRate === null) {
+    throw new ValidationError('La simulacion de prestamo requiere una tasa anual.')
   }
   if (scenarioType === 'loan' && !loanMonths) {
     throw new ValidationError('La simulacion de prestamo requiere el numero de meses.')
   }
+  const creditUtilizationWarningThreshold = optionalInteger(body, 'creditUtilizationWarningThreshold', 1, 100) ?? 50
   const summary = getDashboardSummary(db)
-  const obligations = getMonthlyObligationsCents(db)
-  const threeMonthsAgo = addMonths(`${todayIso().slice(0, 7)}-01`, -3)
+  const commitments = getMonthlyObligationsBreakdown(db)
+  const msiRows = db.prepare(`
+    SELECT t.amount_cents, t.msi_monthly_amount_cents, t.msi_months, t.msi_remaining
+    FROM transactions t
+    JOIN financial_instruments i ON i.id = t.instrument_id
+    WHERE t.type = 'expense' AND t.is_msi = 1 AND t.msi_remaining > 0
+      AND i.type = 'credit_card' AND i.is_active = 1
+      AND COALESCE(t.source_type, '') NOT IN ('reconciliation', 'opening_balance')
+  `).all() as DbRow[]
+  const existingMsiCents = msiRows.reduce((total, row) => total + (
+    toNumber(row.msi_remaining) === 1
+      ? toNumber(row.amount_cents) - toNumber(row.msi_monthly_amount_cents) * (toNumber(row.msi_months) - 1)
+      : toNumber(row.msi_monthly_amount_cents)
+  ), 0)
+  const monthlyDebtCents = commitments.loans + existingMsiCents
+  const obligations = commitments.recurring + monthlyDebtCents
+  const periodEnd = `${todayIso().slice(0, 7)}-01`
+  const threeMonthsAgo = addMonths(periodEnd, -3)
   const averages = db.prepare(`
     SELECT
       COALESCE(SUM(CASE WHEN type = 'income' THEN amount_cents ELSE 0 END), 0) / 3 AS income,
-      COALESCE(SUM(CASE WHEN type = 'expense' THEN amount_cents ELSE 0 END), 0) / 3 AS expense
+      COALESCE(SUM(CASE WHEN type = 'expense' AND is_msi = 0 THEN amount_cents ELSE 0 END), 0) / 3 AS expense
     FROM transactions
-    WHERE transaction_date >= ?
+    WHERE transaction_date >= ? AND transaction_date < ?
       AND COALESCE(source_type, '') NOT IN ('reconciliation', 'opening_balance')
-  `).get(threeMonthsAgo) as { income: number; expense: number }
+  `).get(threeMonthsAgo, periodEnd) as { income: number; expense: number }
   let monthlyImpact = amountCents
-  if (scenarioType === 'msi') {
-    monthlyImpact = Math.round(amountCents / (msiMonths ?? 1))
+  if (scenarioType === 'msi' && msiMonths !== null) {
+    monthlyImpact = calculateMsiMonthlyAmountCents(amountCents, msiMonths)
   } else if (scenarioType === 'loan') {
     const rate = (annualRate ?? 0) / 100 / 12
     monthlyImpact = rate === 0
@@ -3378,28 +3469,55 @@ function saveSimulation(db: Database.Database, body: Input): Record<string, unkn
     : null
   const averageIncomeCents = Math.round(toNumber(averages.income))
   const averageExpenseCents = Math.round(toNumber(averages.expense))
-  const monthlyDisposableCents = averageIncomeCents - Math.max(averageExpenseCents, obligations)
-  const emergencyReserveCents = averageExpenseCents * 3
+  // Historical ordinary spending already includes recurring charges; MSI principal is excluded above.
+  const monthlyLivingCostsCents = Math.max(averageExpenseCents, commitments.recurring)
+  const monthlyDisposableCents = averageIncomeCents - monthlyLivingCostsCents - monthlyDebtCents
+  const emergencyReserveCents = (monthlyLivingCostsCents + monthlyDebtCents) * 3
+  const newDebtPaymentCents = scenarioType === 'direct_purchase' && instrument?.type !== 'credit_card' ? 0 : monthlyImpact
   const debtServiceRatio = averageIncomeCents > 0
-    ? (obligations + monthlyImpact) / averageIncomeCents
+    ? (monthlyDebtCents + newDebtPaymentCents) / averageIncomeCents
     : 1
   const projectedCreditUtilization = instrument?.type === 'credit_card'
     ? (
         toNumber(instrument.current_balance_cents) + amountCents
       ) / Math.max(toNumber(instrument.credit_limit_cents), 1)
     : null
-  const favorable = projectedAvailableCents >= 0
-    && (creditAvailableCents === null || creditAvailableCents >= 0)
-    && monthlyDisposableCents >= monthlyImpact
-    && debtServiceRatio <= 0.4
-    && (projectedCreditUtilization === null || projectedCreditUtilization <= 0.5)
-    && (
-      scenarioType !== 'direct_purchase'
-      || instrument?.type === 'credit_card'
-      || projectedAvailableCents >= emergencyReserveCents
-    )
+  const reasons: string[] = []
+  const warnings: string[] = []
+  if (projectedAvailableCents < 0) reasons.push('El disponible proyectado quedaría negativo.')
+  if (creditAvailableCents !== null && creditAvailableCents < 0) reasons.push('La compra excede el crédito disponible de la tarjeta.')
+  if (averageIncomeCents <= 0) reasons.push('No hay ingresos registrados en los tres meses completos analizados para evaluar la capacidad de pago.')
+  if (monthlyDisposableCents < monthlyImpact) reasons.push('El margen mensual no alcanza para cubrir el nuevo compromiso.')
+  if (averageIncomeCents > 0 && debtServiceRatio > 0.4) reasons.push('Los pagos de deuda con el nuevo compromiso superan el 40% del ingreso promedio.')
+  if (scenarioType === 'direct_purchase' && instrument?.type !== 'credit_card'
+    && projectedAvailableCents < emergencyReserveCents) {
+    reasons.push('La compra dejaría menos de tres meses de gastos y pagos comprometidos como reserva.')
+  }
+  if (projectedCreditUtilization !== null && projectedCreditUtilization > creditUtilizationWarningThreshold / 100) {
+    warnings.push(`La utilización proyectada de la tarjeta supera el umbral de advertencia de ${creditUtilizationWarningThreshold}%.`)
+  }
+  if (toNumber(summary.totalCreditDebt) > 0) {
+    warnings.push('Se incluyen los MSI vigentes. Los pagos de saldos revolventes o estados de cuenta pendientes deben revisarse por separado.')
+  }
+  const favorable = reasons.length === 0
   const snapshot = {
+    input: {
+      name, description: description ?? '', simulationDate, scenarioType,
+      amount: amountCents / 100,
+      instrumentId: scenarioType === 'loan' ? null : instrumentId,
+      msiMonths: scenarioType === 'msi' ? msiMonths : null,
+      loanMonths: scenarioType === 'loan' ? loanMonths : null,
+      annualRate: scenarioType === 'loan' ? annualRate : null,
+      creditUtilizationWarningThreshold,
+    },
     summary,
+    calculationVersion: 2,
+    averagePeriodStart: threeMonthsAgo,
+    averagePeriodEndExclusive: periodEnd,
+    monthlyRecurringExpenses: commitments.recurring / 100,
+    monthlyLoanPayments: commitments.loans / 100,
+    monthlyMsiPayments: existingMsiCents / 100,
+    monthlyDebtPayments: monthlyDebtCents / 100,
     monthlyObligations: obligations / 100,
     averageMonthlyIncome: averageIncomeCents / 100,
     averageMonthlyExpense: averageExpenseCents / 100,
@@ -3407,6 +3525,10 @@ function saveSimulation(db: Database.Database, body: Input): Record<string, unkn
     instrument: instrument ? mapInstrument(instrument) : null,
   }
   const resultJson = {
+    calculationVersion: 2,
+    reasons,
+    warnings,
+    creditUtilizationWarningThreshold,
     scenarioType,
     amount: amountCents / 100,
     monthlyImpact: monthlyImpact / 100,
@@ -3418,6 +3540,13 @@ function saveSimulation(db: Database.Database, body: Input): Record<string, unkn
       ? null
       : Math.round(projectedCreditUtilization * 10_000) / 100,
     isFavorable: favorable,
+  }
+  if (id !== undefined) {
+    db.prepare(`
+      UPDATE simulations SET name = ?, description = ?, simulation_date = ?,
+        snapshot_json = ?, result_json = ?, is_favorable = ? WHERE id = ?
+    `).run(name, description, simulationDate, JSON.stringify(snapshot), JSON.stringify(resultJson), Number(favorable), id)
+    return mapSimulation(asRow(db.prepare('SELECT * FROM simulations WHERE id = ?').get(id)))
   }
   const result = db.prepare(`
     INSERT INTO simulations (
@@ -3781,6 +3910,33 @@ function getDashboardPreferences(db: Database.Database): Record<string, unknown>
   }
 }
 
+function getSidebarPreferences(db: Database.Database): SidebarPreferences {
+  const readPreference = db.prepare('SELECT value FROM app_metadata WHERE key = ?')
+  const collapsedGroups = {} as SidebarPreferences['collapsedGroups']
+  for (const groupId of SIDEBAR_GROUP_IDS) {
+    const row = readPreference.get(`sidebar_group_${groupId}_collapsed`) as { value: string } | undefined
+    collapsedGroups[groupId] = row?.value === 'true'
+  }
+  return { collapsedGroups }
+}
+
+function saveSidebarPreference(db: Database.Database, body: Input): SidebarPreferences {
+  if (Object.keys(body).some((key) => key !== 'groupId' && key !== 'collapsed')) {
+    throw new ValidationError('La preferencia del menú contiene campos no permitidos.')
+  }
+  if (!SIDEBAR_GROUP_IDS.some((groupId) => groupId === body.groupId)) {
+    throw new ValidationError('La sección del menú no es válida.')
+  }
+  if (typeof body.collapsed !== 'boolean') {
+    throw new ValidationError('El estado contraído del menú solo admite sí o no.')
+  }
+  db.prepare(`
+    INSERT INTO app_metadata (key, value) VALUES (?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `).run(`sidebar_group_${body.groupId}_collapsed`, String(body.collapsed))
+  return getSidebarPreferences(db)
+}
+
 function saveDashboardPreferences(db: Database.Database, body: Input): Record<string, unknown> {
   const hasExpensePeriod = body.expensePeriod !== undefined
   const hasBalanceEvolutionPeriod = body.balanceEvolutionPeriod !== undefined
@@ -4023,7 +4179,7 @@ function getDashboardBalanceEvolution(db: Database.Database): Record<string, unk
   return { series, points }
 }
 
-function getMonthlyObligationsCents(db: Database.Database): number {
+function getMonthlyObligationsBreakdown(db: Database.Database): { recurring: number; loans: number } {
   const subscriptions = db.prepare(`
     SELECT COALESCE(SUM(CASE
       WHEN billing_cycle = 'weekly' THEN amount_cents * 52 / 12
@@ -4047,7 +4203,10 @@ function getMonthlyObligationsCents(db: Database.Database): number {
         WHERE next_payment.loan_id = p.loan_id AND next_payment.is_paid = 0
       )
   `).get() as { total: number }
-  return Math.round(toNumber(subscriptions.total) + toNumber(fixed.total) + toNumber(loans.total))
+  return {
+    recurring: Math.round(toNumber(subscriptions.total) + toNumber(fixed.total)),
+    loans: Math.round(toNumber(loans.total)),
+  }
 }
 
 function getDashboardFutureExpenses(db: Database.Database): Record<string, unknown>[] {
@@ -4255,6 +4414,8 @@ function routeRequest(
 
   if (path === '/health' && method === 'GET') return { status: 'ready' }
   if (path === '/database/info' && method === 'GET') return databaseInfo(db)
+  if (path === '/sidebar/preferences' && method === 'GET') return getSidebarPreferences(db)
+  if (path === '/sidebar/preferences' && method === 'PUT') return saveSidebarPreference(db, input())
   if (path === '/dashboard/summary' && method === 'GET') return getDashboardSummary(db)
   if (path === '/dashboard/charts/expenses-by-category' && method === 'GET') {
     return getDashboardExpensesByCategory(db, url.searchParams.get('period') ?? DASHBOARD_EXPENSE_PERIOD_DEFAULT)
@@ -4457,6 +4618,7 @@ function routeRequest(
   if (path === '/simulations' && method === 'GET') return listSimulations(db)
   if (path === '/simulations' && method === 'POST') return saveSimulation(db, input())
   const simulation = path.match(/^\/simulations\/(\d+)$/)
+  if (simulation && method === 'PUT') return saveSimulation(db, input(), requireId(simulation))
   if (simulation && method === 'DELETE') return deleteSimulation(db, requireId(simulation))
 
   if (path === '/reminders/pending' && method === 'GET') return listReminders(db, true)
@@ -4490,7 +4652,8 @@ export function handleLocalRequest(payload: LocalRequestPayload): ApiResponse<un
     const db = getDatabase()
     const url = new URL(payload.path, 'local://finanzas')
     const data = routeRequest(db, url, method, payload.body)
-    if (method !== 'GET') {
+    // Changing navigation preferences must not trigger scheduled financial operations.
+    if (method !== 'GET' && url.pathname !== '/sidebar/preferences') {
       processDueSubscriptions(db)
       processDueRecurringIncomes(db)
       ensureAutomaticReminders(db)

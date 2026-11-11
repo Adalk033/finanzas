@@ -246,6 +246,7 @@
 
 .section-toolbar {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
   gap: var(--space-2);
   margin-bottom: var(--space-3);
@@ -253,6 +254,12 @@
 
 .section-toolbar__spacer {
   flex: 1 1 auto;
+}
+
+.section-toolbar:last-child,
+.section-toolbar:has(+ .table-wrap),
+.section-stack > .section-toolbar {
+  margin-bottom: 0;
 }
 
 .transaction-table-toolbar {
@@ -298,6 +305,24 @@
 .transaction-pagination__status {
   color: var(--color-text-secondary);
   font-size: 14px;
+}
+
+.transaction-type {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
+
+.transaction-type--income {
+  color: var(--color-income);
+}
+
+.transaction-type--expense {
+  color: var(--color-expense);
+}
+
+.transaction-type--card-payment {
+  color: var(--color-warning);
 }
 
 .transaction-table-wrap {
@@ -409,6 +434,7 @@ input[type='month']::-webkit-calendar-picker-indicator {
 .form-grid__actions {
   grid-column: 1 / -1;
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: var(--space-2);
@@ -492,8 +518,20 @@ input[type='month']::-webkit-calendar-picker-indicator {
 
 .table__actions {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
   gap: var(--space-1);
+}
+
+.table td:has(> .table__actions) {
+  vertical-align: middle;
+}
+
+.category-card__header + .table-wrap,
+.mini-card__header + .table-wrap,
+.section-stack > .table-wrap,
+.section-stack > .category-list {
+  margin-top: 0;
 }
 
 .group-list {
@@ -1421,7 +1459,7 @@ input[type='month']::-webkit-calendar-picker-indicator {
   border-top: 1px solid var(--color-border);
 }
 
-.reminder-item__actions .button {
+.reminder-item__actions .button:not(.action-button--icon-only) {
   padding: 9px 12px;
   font-size: 13px;
 }

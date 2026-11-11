@@ -59,7 +59,7 @@ on the local machine.
 - An expense reduces an account balance or increases credit-card debt.
 - Income increases an account balance.
 - Payments and movements between financial instruments are transfers.
-- MSI applies only to credit-card purchases with 3, 6, 9, 12, 18, or 24 months.
+- MSI applies only to credit-card purchases with any safe integer term of at least 2 months.
 - MSI, amortization, balance, budget, statement, and simulation calculations
   occur in the main process, never in the renderer.
 
@@ -116,7 +116,3 @@ After every implementation, verify:
 - No new unauthorized dependencies.
 - Dependency installation scripts are blocked by pnpm.
 - No network communication for financial data.
-
-
-## Rules
-- Don't run `pnpm run check`

@@ -71,12 +71,14 @@ export function LoansSection({
   const [isRegisterFormOpen, setIsRegisterFormOpen] = useState(false)
   const [selectedInstallment, setSelectedInstallment] = useState<number | null>(null)
   const [reconciliationLoan, setReconciliationLoan] = useState<Loan | null>(null)
+  const [isSettlement, setIsSettlement] = useState(false)
+  const [isReconciling, setIsReconciling] = useState(false)
   const [reconciliationBalance, setReconciliationBalance] = useState('')
   const [reconciliationDate, setReconciliationDate] = useState('')
   const [reconciliationNotes, setReconciliationNotes] = useState('Saldo confirmado con el acreedor')
   const isLoanFormVisible = isLoanFormOpen || editingLoanId !== null
 
-  const startReconciliation = (loan: Loan): void => {
+  const startReconciliation = (loan: Loan, settle = false): void => {
     const now = new Date()
     const today = [
       now.getFullYear(),
@@ -84,24 +86,30 @@ export function LoansSection({
       String(now.getDate()).padStart(2, '0'),
     ].join('-')
     setReconciliationLoan(loan)
-    setReconciliationBalance(String(loan.remainingAmount))
+    setIsSettlement(settle)
+    setReconciliationBalance(settle ? '0' : String(loan.remainingAmount))
     setReconciliationDate(today)
-    setReconciliationNotes('Saldo confirmado con el acreedor')
+    setReconciliationNotes(settle ? 'Liquidación confirmada con el acreedor' : 'Saldo confirmado con el acreedor')
   }
 
   const submitReconciliation = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault()
-    if (reconciliationLoan === null) return
-    const actualBalance = Number(reconciliationBalance)
+    if (reconciliationLoan === null || isReconciling) return
+    const actualBalance = isSettlement ? 0 : Number(reconciliationBalance)
     if (!Number.isFinite(actualBalance) || actualBalance < 0) return
 
-    const reconciled = await onReconcileLoan(reconciliationLoan.id, {
-      actualBalance,
-      reconciliationDate,
-      notes: reconciliationNotes,
-    })
-    if (reconciled) {
-      setReconciliationLoan(null)
+    setIsReconciling(true)
+    try {
+      const reconciled = await onReconcileLoan(reconciliationLoan.id, {
+        actualBalance,
+        reconciliationDate,
+        notes: reconciliationNotes,
+      })
+      if (reconciled) {
+        setReconciliationLoan(null)
+      }
+    } finally {
+      setIsReconciling(false)
     }
   }
 
@@ -124,6 +132,10 @@ export function LoansSection({
             }}
               icon={isLoanFormVisible ? 'close' : 'plus'}
               label={isLoanFormVisible ? 'Ocultar formulario' : 'Nuevo prestamo'}
+            />
+            <ActionButton className="button button--primary" type="button" onClick={() => setIsRegisterFormOpen((value) => !value)}
+              icon={isRegisterFormOpen ? 'close' : 'payment'}
+              label={isRegisterFormOpen ? 'Ocultar formulario' : 'Registrar cuota'}
             />
             <div className="section-toolbar__spacer" />
             <ActionButton iconOnly className="button button--secondary" type="button" onClick={onReload} icon="refresh" label="Recargar" />
@@ -363,13 +375,6 @@ export function LoansSection({
             </FormModal>
           ) : null}
 
-        <div className="section-toolbar">
-            <ActionButton className="button button--primary" type="button" onClick={() => setIsRegisterFormOpen((value) => !value)}
-              icon={isRegisterFormOpen ? 'close' : 'payment'}
-              label={isRegisterFormOpen ? 'Ocultar formulario' : 'Registrar cuota'}
-            />
-          </div>
-
           {isRegisterFormOpen ? (
             <FormModal title="Registrar cuota" onClose={() => setIsRegisterFormOpen(false)} error={loanError} message={loanMessage}>
               <p className="mini-card__subtitle">Selecciona un préstamo y la cuota pendiente que deseas registrar.</p>
@@ -453,10 +458,12 @@ export function LoansSection({
       </div>
 
       {reconciliationLoan !== null ? (
-        <FormModal title="Conciliar saldo pendiente" onClose={() => setReconciliationLoan(null)} error={loanError} message={loanMessage}>
+        <FormModal title={isSettlement ? 'Liquidar préstamo' : 'Conciliar saldo pendiente'} onClose={() => { if (!isReconciling) setReconciliationLoan(null) }} error={loanError} message={loanMessage}>
           <header className="loan-reconciliation__header form-modal__intro">
-            <h3 className="loan-reconciliation__title">Conciliar saldo pendiente · {reconciliationLoan.name}</h3>
-            <p className="loan-reconciliation__description">Captura el saldo real indicado por el acreedor. La aplicación no modifica tu cuenta vinculada y recalcula las cuotas futuras.</p>
+            <h3 className="loan-reconciliation__title">{isSettlement ? 'Liquidar préstamo' : 'Conciliar saldo pendiente'} · {reconciliationLoan.name}</h3>
+            <p className="loan-reconciliation__description">{isSettlement
+              ? `Confirma que el préstamo ya fue liquidado con el acreedor. El saldo registrado de ${formatCurrency(reconciliationLoan.remainingAmount)} quedará en cero y se eliminarán las cuotas pendientes. Se conservarán los pagos anteriores. Esta acción no descuenta dinero de tu cuenta vinculada.`
+              : 'Captura el saldo real indicado por el acreedor. La aplicación no modifica tu cuenta vinculada y recalcula las cuotas futuras.'}</p>
           </header>
           <form className="form-grid loan-reconciliation__form" onSubmit={(event) => { void submitReconciliation(event) }}>
             <label className="form-grid__field" htmlFor="loanReconciliationBalance">Saldo pendiente real</label>
@@ -467,11 +474,12 @@ export function LoansSection({
               min="0"
               step="0.01"
               value={reconciliationBalance}
+              readOnly={isSettlement}
               onChange={(event) => setReconciliationBalance(event.target.value)}
               required
             />
 
-            <label className="form-grid__field" htmlFor="loanReconciliationDate">Fecha de conciliacion</label>
+            <label className="form-grid__field" htmlFor="loanReconciliationDate">{isSettlement ? 'Fecha de liquidación' : 'Fecha de conciliacion'}</label>
             <input
               id="loanReconciliationDate"
               className="form-grid__input"
@@ -492,8 +500,9 @@ export function LoansSection({
             />
 
             <div className="form-grid__actions">
-              <ActionButton className="button button--primary" type="submit" icon="balance" label="Aplicar conciliacion" />
+              <ActionButton className="button button--primary" type="submit" icon={isSettlement ? 'check' : 'balance'} label={isSettlement ? 'Confirmar liquidación' : 'Aplicar conciliacion'} disabled={isReconciling} />
               <ActionButton iconOnly className="button button--secondary" type="button" onClick={() => setReconciliationLoan(null)}
+                disabled={isReconciling}
                 icon="close"
                 label="Cancelar"
               />
@@ -549,10 +558,10 @@ export function LoansSection({
                       </td>
                       <td>{formatCurrency(loan.originalAmount)}</td>
                       <td>{formatCurrency(loan.remainingAmount)}</td>
-                      <td>{loan.remainingAmount === 0 ? 'Liquidado' : `${loan.paidInstallments}/${loan.totalInstallments}`}</td>
+                      <td>{loan.remainingAmount === 0 ? 'Liquidado · Sin cuotas pendientes' : `${loan.paidInstallments}/${loan.totalInstallments}${loan.isActive ? '' : ' · Archivado'}`}</td>
                       <td>
                         <div className="table__actions">
-                          <ActionButton className="button button--secondary" type="button" onClick={() => onLoadLoanPayments(loan.id)}
+                          <ActionButton iconOnly className="button button--secondary" type="button" onClick={() => onLoadLoanPayments(loan.id)}
                             icon="eye"
                             label="Ver detalle"
                           />
@@ -561,15 +570,23 @@ export function LoansSection({
                             label="Editar"
                           />
                           {loan.isActive ? (
-                            <ActionButton className="button button--secondary" type="button" onClick={() => startReconciliation(loan)}
+                            <ActionButton iconOnly className="button button--secondary" type="button" onClick={() => startReconciliation(loan)}
                               icon="balance"
                               label="Conciliar saldo"
                             />
                           ) : null}
-                          <ActionButton iconOnly className="button button--danger" type="button" onClick={() => onDeleteLoan(loan.id)}
-                            icon="trash"
-                            label="Eliminar"
-                          />
+                          {loan.remainingAmount > 0 ? (
+                            <ActionButton iconOnly className="button button--primary" type="button" onClick={() => startReconciliation(loan, true)}
+                              icon="check"
+                              label="Liquidar"
+                            />
+                          ) : null}
+                          {loan.isActive ? (
+                            <ActionButton iconOnly className="button button--secondary" type="button" onClick={() => onDeleteLoan(loan.id)}
+                              icon="archive"
+                              label="Archivar sin liquidar"
+                            />
+                          ) : null}
                         </div>
                       </td>
                     </tr>
@@ -613,7 +630,7 @@ export function LoansSection({
 
                   {!isLoanPaymentsLoading && loanPayments.length === 0 ? (
                     <tr>
-                      <td colSpan={7}>No hay cuotas para este prestamo.</td>
+                      <td colSpan={7}>{selectedLoan.remainingAmount === 0 ? 'Préstamo liquidado. No hay cuotas pendientes.' : 'No hay cuotas para este prestamo.'}</td>
                     </tr>
                   ) : null}
 
@@ -628,7 +645,7 @@ export function LoansSection({
                         <td>{payment.isPaid ? `Pagada${payment.paidDate ? ` ${formatIsoDate(payment.paidDate)}` : ''}${payment.affectsInstrumentBalance ? '' : ' · Descontada del ingreso'}` : 'Pendiente'}</td>
                         <td>
                           <div className="table__actions">
-                            <ActionButton
+                            <ActionButton iconOnly
                               className="button button--primary"
                               type="button"
                               disabled={payment.isPaid}
@@ -637,7 +654,7 @@ export function LoansSection({
                               label={selectedLoan.affectsInstrumentBalance ? 'Pagar' : 'Registrar descuento'}
                             />
                             {payment.isPaid ? (
-                              <ActionButton
+                              <ActionButton iconOnly
                                 className="button button--danger"
                                 type="button"
                                 onClick={() => onUndoInstallment(payment.installmentNum)}

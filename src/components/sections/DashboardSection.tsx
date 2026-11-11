@@ -319,8 +319,7 @@ export function DashboardSection({
         <article className="mini-card">
           <header className="mini-card__header">
             <h3 className="mini-card__title">Ahorro por mes</h3>
-            <p className="mini-card__subtitle">Últimos 6 meses · Ahorro neto = ingresos − gastos. El porcentaje indica cuánto de tus ingresos conservaste.</p>
-            <p className="mini-card__subtitle">Incluye el mes actual en curso y las compras con tarjeta al registrarse, sin duplicar sus pagos. Sin ingresos, el porcentaje no aplica.</p>
+            <p className="mini-card__subtitle">Últimos 6 meses · Ahorro neto = ingresos - gastos. El porcentaje indica cuánto de tus ingresos conservaste.</p>
           </header>
           {dashboardCashFlow.length === 0 ? (
             <p className="card__subtitle">No hay datos suficientes para mostrar el ahorro mensual.</p>
