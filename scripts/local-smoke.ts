@@ -4,6 +4,8 @@ import path from 'node:path'
 import assert from 'node:assert/strict'
 import { mock } from 'node:test'
 import Database from 'better-sqlite3'
+import { filterNavigationGroups, NAV_GROUPS } from '../src/app/navigation.js'
+import { SIDEBAR_GROUP_IDS, type SidebarPreferences } from '../src/types/navigation.js'
 import {
   backupLocalDb,
   closeLocalDb,
@@ -163,9 +165,68 @@ function requestFailure(
 mock.timers.enable({ apis: ['Date'], now: new Date('2026-07-18T12:00:00Z') })
 
 try {
+  assert.deepEqual(NAV_GROUPS.map((group) => group.id), [...SIDEBAR_GROUP_IDS])
+  assert.equal(NAV_GROUPS.flatMap((group) => group.items).length, 17)
+  assert.deepEqual(filterNavigationGroups('   '), NAV_GROUPS)
+  const matchingSections = (query: string) => filterNavigationGroups(query).flatMap((group) => group.items.map((item) => item.key))
+  assert.deepEqual(matchingSections('RÉSPALDO'), ['settings'])
+  assert.deepEqual(matchingSections('respal'), ['settings'])
+  assert.deepEqual(matchingSections('¿Dónde puedo ver mi copia de seguridad?'), ['settings'])
+  assert.deepEqual(matchingSections('renta'), ['fixedExpenses'])
+  assert.deepEqual(matchingSections('NETFLIX'), ['subscriptions'])
+  assert.deepEqual(matchingSections('sueldo'), ['subscriptions'])
+  assert.deepEqual(matchingSections('ingresos recurrentes'), ['subscriptions'])
+  assert.deepEqual(matchingSections('metas de ahorro'), ['budgets'])
+  assert.deepEqual(matchingSections('tabla de amortización'), ['loans'])
+  assert.deepEqual(matchingSections('familia gastos'), ['familyDashboard', 'familyExpenses'])
+  assert.deepEqual(matchingSections('Familia'), ['familyDashboard', 'familyExpenses'])
+  assert.deepEqual(matchingSections('Cuentas y deudas'), ['creditCards', 'debitCards', 'transfers', 'loans', 'instruments'])
+  assert.ok(matchingSections('meses sin intereses').includes('transactions'))
+  assert.ok(matchingSections('MSI').includes('simulator'))
+  assert.deepEqual(filterNavigationGroups('renta').map((group) => group.id), ['planning'])
+  assert.deepEqual(matchingSections('renta netflix'), [])
+  assert.deepEqual(filterNavigationGroups('zzzinexistente'), [])
+  assert.deepEqual(filterNavigationGroups('<script>alert(1)</script>'), [])
+
   verifyDeprecatedBankColumnsMigration()
   verifyFixedExpensePaymentsMigration()
   initializeLocalDb(databasePath)
+
+  const defaultSidebarPreferences = request<SidebarPreferences>('/sidebar/preferences')
+  assert.deepEqual(Object.keys(defaultSidebarPreferences.collapsedGroups), [...SIDEBAR_GROUP_IDS])
+  assert.ok(Object.values(defaultSidebarPreferences.collapsedGroups).every((collapsed) => collapsed === false))
+  for (const groupId of SIDEBAR_GROUP_IDS) {
+    const saved = request<SidebarPreferences>('/sidebar/preferences', 'PUT', { groupId, collapsed: true })
+    assert.equal(saved.collapsedGroups[groupId], true)
+  }
+  closeLocalDb()
+  initializeLocalDb(databasePath)
+  assert.ok(Object.values(request<SidebarPreferences>('/sidebar/preferences').collapsedGroups).every(Boolean))
+  const expandedSidebarPreferences = request<SidebarPreferences>('/sidebar/preferences', 'PUT', {
+    groupId: 'planning', collapsed: false,
+  })
+  assert.equal(expandedSidebarPreferences.collapsedGroups.planning, false)
+  assert.equal(expandedSidebarPreferences.collapsedGroups.accounts, true)
+  for (const invalidPreference of [
+    {}, { collapsed: true }, { groupId: 'main' },
+    { groupId: 'unknown', collapsed: true },
+    { groupId: "main'; DROP TABLE app_metadata; --", collapsed: true },
+    { groupId: '__proto__', collapsed: true },
+    { groupId: 'constructor', collapsed: true },
+    { groupId: 1, collapsed: true },
+    { groupId: null, collapsed: true },
+    { groupId: ['main'], collapsed: true },
+    { groupId: 'main', collapsed: 'true' },
+    { groupId: 'main', collapsed: 1 },
+    { groupId: 'main', collapsed: null },
+    { groupId: 'main', collapsed: {} },
+    { groupId: 'main', collapsed: true, extra: 'unexpected' },
+  ]) {
+    const error = requestFailure('/sidebar/preferences', 'PUT', invalidPreference)
+    assert.ok(error.length > 0)
+    assert.doesNotMatch(error, /SQLITE|SELECT |INSERT |stack|\.sqlite/)
+    assert.deepEqual(request<SidebarPreferences>('/sidebar/preferences'), expandedSidebarPreferences)
+  }
 
   const defaultDashboardPreferences = request<{
     expensePeriod: string
@@ -1461,12 +1522,18 @@ try {
   assert.ok(importedCsv.skipped > 0)
 
   const backupPath = path.join(tempDirectory, 'backup.sqlite')
+  const balancesBeforeSidebarChange = request('/instruments')
+  request('/sidebar/preferences', 'PUT', { groupId: 'main', collapsed: false })
+  assert.deepEqual(request('/instruments'), balancesBeforeSidebarChange)
+  const sidebarBeforeBackup = request<SidebarPreferences>('/sidebar/preferences')
   await backupLocalDb(backupPath)
+  request('/sidebar/preferences', 'PUT', { groupId: 'tools', collapsed: false })
   request('/banks', 'POST', {
     name: 'Banco posterior al respaldo',
     isActive: true,
   })
   restoreLocalDb(backupPath)
+  assert.deepEqual(request<SidebarPreferences>('/sidebar/preferences'), sidebarBeforeBackup)
   const restoredBanks = request<Array<{ name: string }>>('/banks')
   assert.equal(restoredBanks.some((item) => item.name === 'Banco posterior al respaldo'), false)
 } finally {

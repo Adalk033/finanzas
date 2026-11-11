@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3'
 import { getDatabase, getDatabasePath } from './local-db.js'
 import { getValidationFieldLabel } from './validation-labels.js'
 import type { ApiResponse, DatabaseInfo } from '../src/types/config.js'
+import { SIDEBAR_GROUP_IDS, type SidebarPreferences } from '../src/types/navigation.js'
 
 export type LocalRequestPayload = {
   path: string
@@ -3904,6 +3905,33 @@ function getDashboardPreferences(db: Database.Database): Record<string, unknown>
   }
 }
 
+function getSidebarPreferences(db: Database.Database): SidebarPreferences {
+  const readPreference = db.prepare('SELECT value FROM app_metadata WHERE key = ?')
+  const collapsedGroups = {} as SidebarPreferences['collapsedGroups']
+  for (const groupId of SIDEBAR_GROUP_IDS) {
+    const row = readPreference.get(`sidebar_group_${groupId}_collapsed`) as { value: string } | undefined
+    collapsedGroups[groupId] = row?.value === 'true'
+  }
+  return { collapsedGroups }
+}
+
+function saveSidebarPreference(db: Database.Database, body: Input): SidebarPreferences {
+  if (Object.keys(body).some((key) => key !== 'groupId' && key !== 'collapsed')) {
+    throw new ValidationError('La preferencia del menú contiene campos no permitidos.')
+  }
+  if (!SIDEBAR_GROUP_IDS.some((groupId) => groupId === body.groupId)) {
+    throw new ValidationError('La sección del menú no es válida.')
+  }
+  if (typeof body.collapsed !== 'boolean') {
+    throw new ValidationError('El estado contraído del menú solo admite sí o no.')
+  }
+  db.prepare(`
+    INSERT INTO app_metadata (key, value) VALUES (?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `).run(`sidebar_group_${body.groupId}_collapsed`, String(body.collapsed))
+  return getSidebarPreferences(db)
+}
+
 function saveDashboardPreferences(db: Database.Database, body: Input): Record<string, unknown> {
   const hasExpensePeriod = body.expensePeriod !== undefined
   const hasBalanceEvolutionPeriod = body.balanceEvolutionPeriod !== undefined
@@ -4381,6 +4409,8 @@ function routeRequest(
 
   if (path === '/health' && method === 'GET') return { status: 'ready' }
   if (path === '/database/info' && method === 'GET') return databaseInfo(db)
+  if (path === '/sidebar/preferences' && method === 'GET') return getSidebarPreferences(db)
+  if (path === '/sidebar/preferences' && method === 'PUT') return saveSidebarPreference(db, input())
   if (path === '/dashboard/summary' && method === 'GET') return getDashboardSummary(db)
   if (path === '/dashboard/charts/expenses-by-category' && method === 'GET') {
     return getDashboardExpensesByCategory(db, url.searchParams.get('period') ?? DASHBOARD_EXPENSE_PERIOD_DEFAULT)
@@ -4617,7 +4647,8 @@ export function handleLocalRequest(payload: LocalRequestPayload): ApiResponse<un
     const db = getDatabase()
     const url = new URL(payload.path, 'local://finanzas')
     const data = routeRequest(db, url, method, payload.body)
-    if (method !== 'GET') {
+    // Changing navigation preferences must not trigger scheduled financial operations.
+    if (method !== 'GET' && url.pathname !== '/sidebar/preferences') {
       processDueSubscriptions(db)
       processDueRecurringIncomes(db)
       ensureAutomaticReminders(db)

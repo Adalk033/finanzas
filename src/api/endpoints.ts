@@ -1,6 +1,7 @@
 export const ENDPOINTS = {
   HEALTH: '/health',
   DATABASE_INFO: '/database/info',
+  SIDEBAR_PREFERENCES: '/sidebar/preferences',
   DASHBOARD_SUMMARY: '/dashboard/summary',
   DASHBOARD_PREFERENCES: '/dashboard/preferences',
   DASHBOARD_EXPENSES_BY_CATEGORY: '/dashboard/charts/expenses-by-category',

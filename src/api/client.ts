@@ -1,5 +1,6 @@
 import { ENDPOINTS } from './endpoints'
 import type { ApiResponse } from '../types/config'
+import type { SidebarGroupPreferenceInput, SidebarPreferences } from '../types/navigation'
 import {
   getLocalDatabaseBridge,
   MISSING_DATABASE_BRIDGE_MESSAGE,
@@ -457,6 +458,12 @@ function buildTransactionQuery(filters: TransactionFilters, page?: number): stri
 
 export const apiClient = {
   health: () => request<{ status: string }>(ENDPOINTS.HEALTH, { method: 'GET' }),
+  getSidebarPreferences: () => request<SidebarPreferences>(ENDPOINTS.SIDEBAR_PREFERENCES),
+  updateSidebarPreference: (preference: SidebarGroupPreferenceInput) =>
+    request<SidebarPreferences>(ENDPOINTS.SIDEBAR_PREFERENCES, {
+      method: 'PUT',
+      body: JSON.stringify(preference),
+    }),
   getDashboardSummary: () => request<DashboardSummary>(ENDPOINTS.DASHBOARD_SUMMARY, { method: 'GET' }),
   getDashboardPreferences: () => request<DashboardPreferences>(ENDPOINTS.DASHBOARD_PREFERENCES, { method: 'GET' }),
   updateDashboardPreferences: (preferences: Partial<DashboardPreferences>) =>
