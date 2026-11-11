@@ -1,6 +1,6 @@
 import { useMemo, useState, type SyntheticEvent } from 'react'
 import { apiClient } from '../api/client'
-import { EMPTY_SIMULATION_FORM, MSI_OPTIONS } from '../app/appHelpers'
+import { EMPTY_SIMULATION_FORM } from '../app/appHelpers'
 import type {
   FinancialInstrument,
   Simulation,
@@ -74,7 +74,7 @@ export function useSimulatorController({ instruments }: UseSimulatorControllerPa
       ...previous,
       scenarioType,
       instrumentId: scenarioType === 'loan' ? null : previous.instrumentId,
-      msiMonths: scenarioType === 'msi' ? (previous.msiMonths ?? MSI_OPTIONS[0]) : null,
+      msiMonths: scenarioType === 'msi' ? (previous.msiMonths ?? 2) : null,
       loanMonths: scenarioType === 'loan' ? (previous.loanMonths ?? 12) : null,
       annualRate: scenarioType === 'loan' ? (previous.annualRate ?? 0) : null,
     }))
@@ -96,8 +96,8 @@ export function useSimulatorController({ instruments }: UseSimulatorControllerPa
         return false
       }
 
-      if (!simulationForm.msiMonths) {
-        setSimulationError('Selecciona los meses MSI.')
+      if (!Number.isSafeInteger(simulationForm.msiMonths) || (simulationForm.msiMonths ?? 0) < 2) {
+        setSimulationError('Ingresa un número entero de meses desde 2 para MSI.')
         return false
       }
     }

@@ -56,7 +56,7 @@ export function SettingsSection({
       </header>
 
       <div className="section-toolbar">
-        <ActionButton
+        <ActionButton iconOnly
           className="button button--secondary"
           type="button"
           disabled={isLoading}

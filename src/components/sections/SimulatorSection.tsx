@@ -1,7 +1,7 @@
 import { ActionButton } from '../ActionButton'
 import { FormModal } from '../FormModal'
 import { useState, type SyntheticEvent } from 'react'
-import { MSI_OPTIONS, formatCurrency, getSimulationScenarioLabel } from '../../app/appHelpers'
+import { formatCurrency, getSimulationScenarioLabel } from '../../app/appHelpers'
 import type {
   FinancialInstrument,
   Simulation,
@@ -161,20 +161,17 @@ export function SimulatorSection({
 
             {simulationForm.scenarioType === 'msi' ? (
               <>
-                <label className="form-grid__field" htmlFor="simulationMsiMonths">Meses MSI</label>
-                <select
+                <label className="form-grid__field" htmlFor="simulationMsiMonths">Plazo MSI (meses, mínimo 2)</label>
+                <NumberInput
                   id="simulationMsiMonths"
                   className="form-grid__input"
-                  value={simulationForm.msiMonths ?? ''}
-                  onChange={(event) => {
-                    onSimulationFormChange({ ...simulationForm, msiMonths: Number.parseInt(event.target.value, 10) })
-                  }}
-                >
-                  <option value="" disabled>Seleccionar plazo</option>
-                  {MSI_OPTIONS.map((months) => (
-                    <option key={months} value={months}>{months} meses</option>
-                  ))}
-                </select>
+                  min={2}
+                  step={1}
+                  value={simulationForm.msiMonths}
+                  emptyValue={null}
+                  onValueChange={(msiMonths) => onSimulationFormChange({ ...simulationForm, msiMonths })}
+                  required
+                />
               </>
             ) : null}
 
@@ -239,7 +236,7 @@ export function SimulatorSection({
             />
 
                 <div className="form-grid__actions">
-                  <ActionButton iconOnly className="button button--primary" type="submit" disabled={!hasConfig || isSimulationsLoading}
+                  <ActionButton className="button button--primary" type="submit" disabled={!hasConfig || isSimulationsLoading}
                     icon="save"
                     label="Guardar simulacion"
                   />

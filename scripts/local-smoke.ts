@@ -437,6 +437,76 @@ try {
     msiMonths: 6,
   })
 
+  getDatabase().exec('SAVEPOINT flexible_msi_terms')
+  try {
+    const purchaseInput = {
+      instrumentId: credit.id, currencyId: 1, type: 'expense', amount: 100.01,
+      description: 'MSI con plazo libre', transactionDate: '2026-07-18', isMsi: true,
+    }
+    const creditBalance = () => request<Array<{ id: number; currentBalance: number }>>('/instruments')
+      .find((item) => item.id === credit.id)!.currentBalance
+    const balanceBefore = creditBalance()
+    for (const months of [2, 5, 7, 25, 37, 60, 360, 10000, Number.MAX_SAFE_INTEGER]) {
+      const purchase = request<{ id: number; msiMonths: number; msiMonthlyAmount: number }>(
+        '/transactions', 'POST', { ...purchaseInput, msiMonths: months },
+      )
+      assert.equal(purchase.msiMonths, months)
+      assert.equal(creditBalance(), (Math.round(balanceBefore * 100) + 10001) / 100)
+      const stored = getDatabase().prepare(`
+        SELECT msi_months, msi_monthly_amount_cents FROM transactions WHERE id = ?
+      `).get(purchase.id) as { msi_months: number; msi_monthly_amount_cents: number }
+      assert.equal(stored.msi_months, months)
+      assert.ok(Number.isSafeInteger(stored.msi_monthly_amount_cents))
+      assert.ok(stored.msi_monthly_amount_cents >= 0)
+      assert.ok(stored.msi_monthly_amount_cents * (months - 1) <= 10001)
+      const editedMonths = months === Number.MAX_SAFE_INTEGER ? 2 : months + 1
+      const edited = request<{ msiMonths: number }>(`/transactions/${purchase.id}`, 'PUT', {
+        ...purchaseInput, msiMonths: editedMonths,
+      })
+      assert.equal(edited.msiMonths, editedMonths)
+      assert.equal(creditBalance(), (Math.round(balanceBefore * 100) + 10001) / 100)
+      request(`/transactions/${purchase.id}`, 'DELETE')
+      assert.equal(creditBalance(), balanceBefore)
+    }
+
+    const validPurchase = request<{ id: number }>('/transactions', 'POST', { ...purchaseInput, msiMonths: 2 })
+    const balancesBeforeRejection = request('/instruments')
+    const purchasesBeforeRejection = request('/transactions')
+    for (const msiMonths of [null, 0, 1, -2, 2.5, '5', true, [], {}, Number.MAX_SAFE_INTEGER + 1]) {
+      for (const [route, method] of [['/transactions', 'POST'], [`/transactions/${validPurchase.id}`, 'PUT']]) {
+        requestFailure(route, method, { ...purchaseInput, msiMonths })
+      }
+    }
+    requestFailure('/transactions', 'POST', purchaseInput)
+    requestFailure('/transactions', 'POST', { ...purchaseInput, instrumentId: debit.id, msiMonths: 5 })
+    requestFailure('/transactions', 'POST', { ...purchaseInput, type: 'income', msiMonths: 5 })
+    assert.deepEqual(request('/instruments'), balancesBeforeRejection)
+    assert.deepEqual(request('/transactions'), purchasesBeforeRejection)
+
+    for (const months of [2, 5, 7, 37, 52]) {
+      const card = request<{ id: number }>('/instruments', 'POST', {
+        bankId: bank.id, name: `Tarjeta de prueba ${months}`, type: 'credit_card',
+        currencyId: 1, creditLimit: 1000, currentBalance: 0, cutOffDay: 15, paymentDueDay: 5,
+      })
+      const amount = months === 52 ? 0.26 : 100.01
+      request('/transactions', 'POST', { ...purchaseInput, instrumentId: card.id, amount, msiMonths: months })
+      let totalCents = 0
+      for (let installment = 0; installment < months; installment++) {
+        const cutOffDate = new Date(Date.UTC(2026, 7 + installment, 15)).toISOString().slice(0, 10)
+        const statement = request<{ totalAmount: number }>('/statements', 'POST', { instrumentId: card.id, cutOffDate })
+        assert.ok(statement.totalAmount >= 0)
+        totalCents += Math.round(statement.totalAmount * 100)
+      }
+      assert.equal(totalCents, Math.round(amount * 100))
+      const afterTermDate = new Date(Date.UTC(2026, 7 + months, 15)).toISOString().slice(0, 10)
+      const afterTerm = request<{ totalAmount: number }>('/statements', 'POST', { instrumentId: card.id, cutOffDate: afterTermDate })
+      assert.equal(afterTerm.totalAmount, 0)
+    }
+  } finally {
+    getDatabase().exec('ROLLBACK TO flexible_msi_terms')
+    getDatabase().exec('RELEASE flexible_msi_terms')
+  }
+
   getDatabase().exec('SAVEPOINT duplicate_to_family')
   try {
     const readBalances = () => request<Array<{
@@ -864,21 +934,29 @@ try {
     input: typeof simulationInput & { loanMonths: number | null; annualRate: number | null }
     resultJson: { monthlyImpact: number }
   }
+  for (const [months, monthlyImpact] of [[2, 6000], [5, 2400], [25, 480], [37, 324.32], [60, 200], [Number.MAX_SAFE_INTEGER, 0]]) {
+    const customSimulation = request<SavedSimulation>('/simulations', 'POST', { ...simulationInput, msiMonths: months })
+    assert.equal(customSimulation.input.msiMonths, months)
+    assert.equal(customSimulation.resultJson.monthlyImpact, monthlyImpact)
+    assert.equal(request<SavedSimulation[]>('/simulations').find((item) => item.id === customSimulation.id)?.input.msiMonths, months)
+    request(`/simulations/${customSimulation.id}`, 'DELETE')
+  }
   const msiSimulation = request<SavedSimulation>('/simulations', 'POST', simulationInput)
   assert.equal(msiSimulation.input.msiMonths, 12)
   assert.equal(msiSimulation.resultJson.monthlyImpact, 1000)
   const simulationCount = request<unknown[]>('/simulations').length
   const updatedSimulation = request<SavedSimulation>(`/simulations/${msiSimulation.id}`, 'PUT', {
-    ...simulationInput, name: 'MSI editado', msiMonths: 6,
+    ...simulationInput, name: 'MSI editado', msiMonths: 5,
   })
   assert.equal(updatedSimulation.id, msiSimulation.id)
   assert.equal(updatedSimulation.input.name, 'MSI editado')
-  assert.equal(updatedSimulation.input.msiMonths, 6)
-  assert.equal(updatedSimulation.resultJson.monthlyImpact, 2000)
+  assert.equal(updatedSimulation.input.msiMonths, 5)
+  assert.equal(updatedSimulation.resultJson.monthlyImpact, 2400)
   assert.equal(request<unknown[]>('/simulations').length, simulationCount)
-  assert.equal(request<SavedSimulation[]>('/simulations').find((item) => item.id === msiSimulation.id)?.input.msiMonths, 6)
+  assert.equal(request<SavedSimulation[]>('/simulations').find((item) => item.id === msiSimulation.id)?.input.msiMonths, 5)
   for (const invalidInput of [
-    { ...simulationInput, msiMonths: 5 },
+    ...[null, 0, 1, -2, 2.5, '5', true, [], {}, Number.MAX_SAFE_INTEGER + 1]
+      .map((msiMonths) => ({ ...simulationInput, msiMonths })),
     { ...simulationInput, instrumentId: debit.id },
     { ...simulationInput, amount: -1 },
     { ...simulationInput, instrumentId: 999999 },
@@ -886,7 +964,7 @@ try {
   ]) {
     requestFailure(`/simulations/${msiSimulation.id}`, 'PUT', invalidInput)
   }
-  assert.equal(request<SavedSimulation[]>('/simulations').find((item) => item.id === msiSimulation.id)?.input.msiMonths, 6)
+  assert.equal(request<SavedSimulation[]>('/simulations').find((item) => item.id === msiSimulation.id)?.input.msiMonths, 5)
   requestFailure('/simulations/999999', 'PUT', simulationInput)
   const loanSimulation = request<SavedSimulation>(`/simulations/${msiSimulation.id}`, 'PUT', {
     ...simulationInput, scenarioType: 'loan', loanMonths: 24, annualRate: 18,

@@ -446,7 +446,7 @@ export function TransactionsSection({
                           onTransactionFormChange({
                             ...transactionForm,
                             isMsi: enabled,
-                            msiMonths: enabled ? (transactionForm.msiMonths ?? 3) : null,
+                            msiMonths: enabled ? (transactionForm.msiMonths ?? 2) : null,
                           })
                         }}
                       >
@@ -457,20 +457,17 @@ export function TransactionsSection({
 
                     {transactionForm.isMsi ? (
                       <div className="transaction-form__field">
-                        <label className="transaction-form__label" htmlFor="transactionMsiMonths">Plazo MSI</label>
-                        <select
+                        <label className="transaction-form__label" htmlFor="transactionMsiMonths">Plazo MSI (meses, mínimo 2)</label>
+                        <NumberInput
                           id="transactionMsiMonths"
                           className="form-grid__input"
-                          value={transactionForm.msiMonths ?? 3}
-                          onChange={(event) => {
-                            const value = Number(event.target.value)
-                            onTransactionFormChange({ ...transactionForm, msiMonths: value })
-                          }}
-                        >
-                          {[3, 6, 9, 12, 18, 24].map((months) => (
-                            <option key={months} value={months}>{months} meses</option>
-                          ))}
-                        </select>
+                          min={2}
+                          step={1}
+                          value={transactionForm.msiMonths}
+                          emptyValue={null}
+                          onValueChange={(msiMonths) => onTransactionFormChange({ ...transactionForm, msiMonths })}
+                          required
+                        />
                       </div>
                     ) : null}
                   </div>
@@ -692,7 +689,7 @@ export function TransactionsSection({
                       ) : (
                         <>
                           {transaction.type === 'expense' && transaction.sourceType === null ? (
-                            <ActionButton
+                            <ActionButton iconOnly
                               className="button button--secondary"
                               type="button"
                               disabled={duplicatingTransactionId !== null}

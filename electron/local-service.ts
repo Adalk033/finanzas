@@ -36,7 +36,7 @@ const BILLING_CYCLES = new Set(['monthly', 'yearly', 'weekly'])
 const SIMULATION_TYPES = new Set(['direct_purchase', 'msi', 'loan'])
 const REMINDER_TYPES = new Set(['payment', 'cutoff', 'subscription', 'loan', 'custom'])
 const RECURRING_INCOME_FREQUENCIES = new Set(['weekly', 'biweekly', 'monthly', 'yearly'])
-const MSI_MONTHS = new Set([3, 6, 9, 12, 18, 24])
+const LEGACY_MSI_MONTHS = [3, 6, 9, 12, 18, 24]
 const DASHBOARD_EXPENSE_PERIODS = new Set(['current_month', 'previous_month', 'last_3_months', 'last_year'])
 const DASHBOARD_EXPENSE_PERIOD_DEFAULT = 'current_month'
 const DASHBOARD_BALANCE_EVOLUTION_PERIODS = new Set(['one_month', 'three_months', 'six_months'])
@@ -1129,6 +1129,11 @@ function deleteSubcategory(db: Database.Database, id: number): { id: number } {
   return { id }
 }
 
+function calculateMsiMonthlyAmountCents(amountCents: number, months: number): number {
+  // Keep the final installment nonnegative even when long terms amplify cent rounding.
+  return Math.min(Math.round(amountCents / months), Math.floor(amountCents / (months - 1)))
+}
+
 function validateTransaction(db: Database.Database, body: Input): {
   instrumentId: number
   categoryId: number | null
@@ -1161,9 +1166,9 @@ function validateTransaction(db: Database.Database, body: Input): {
   }
   const amountCents = moneyToCents(body.amount, 'amount')
   const isMsi = requiredBoolean(body, 'isMsi', false)
-  const msiMonths = isMsi ? requiredInteger(body, 'msiMonths', 1, 24) : null
-  if (isMsi && (!MSI_MONTHS.has(msiMonths ?? 0) || type !== 'expense' || instrument.type !== 'credit_card')) {
-    throw new ValidationError('MSI solo admite compras con tarjeta a 3, 6, 9, 12, 18 o 24 meses.')
+  const msiMonths = isMsi ? requiredInteger(body, 'msiMonths', 2) : null
+  if (isMsi && (type !== 'expense' || instrument.type !== 'credit_card')) {
+    throw new ValidationError('MSI solo admite compras con tarjeta de crédito.')
   }
   const transactionDate = requiredDate(body, 'transactionDate')
   const currencyId = requiredInteger(body, 'currencyId')
@@ -1182,7 +1187,7 @@ function validateTransaction(db: Database.Database, body: Input): {
     notes: optionalString(body, 'notes', 2000),
     isMsi,
     msiMonths,
-    msiMonthlyAmountCents: isMsi ? Math.round(amountCents / (msiMonths ?? 1)) : null,
+    msiMonthlyAmountCents: msiMonths === null ? null : calculateMsiMonthlyAmountCents(amountCents, msiMonths),
     msiStartDate: isMsi ? computeMsiStartDate(transactionDate, toNumber(instrument.cut_off_day ?? 31)) : null,
     affectsBalance: requiredBoolean(body, 'affectsBalance', true),
     sourceType: optionalString(body, 'sourceType', 30),
@@ -3361,9 +3366,9 @@ function mapSimulation(row: DbRow): Record<string, unknown> {
   const snapshot = JSON.parse(String(row.snapshot_json)) as Record<string, unknown>
   const result = JSON.parse(String(row.result_json)) as Record<string, unknown>
   const instrument = snapshot.instrument as { id?: number } | null
-  // Older snapshots omitted the terms; recover MSI only when rounding gives one unique match.
+  // Older snapshots used a fixed set of terms; recover only a unique historical match.
   const legacyMsiMonths = result.scenarioType === 'msi'
-    ? [...MSI_MONTHS].filter((months) =>
+    ? LEGACY_MSI_MONTHS.filter((months) =>
         Math.round(toNumber(result.amount) * 100 / months) === Math.round(toNumber(result.monthlyImpact) * 100))
     : []
   const input = snapshot.input ?? {
@@ -3405,11 +3410,11 @@ function saveSimulation(db: Database.Database, body: Input, id?: number): Record
   const amountCents = moneyToCents(body.amount, 'amount')
   const instrumentId = optionalInteger(body, 'instrumentId')
   const instrument = instrumentId === null || scenarioType === 'loan' ? null : getInstrument(db, instrumentId)
-  const msiMonths = optionalInteger(body, 'msiMonths', 1, 24)
+  const msiMonths = optionalInteger(body, 'msiMonths', 2)
   const loanMonths = optionalInteger(body, 'loanMonths', 1, 600)
   const annualRate = optionalRate(body, 'annualRate')
-  if (scenarioType === 'msi' && (!msiMonths || !MSI_MONTHS.has(msiMonths))) {
-    throw new ValidationError('La simulacion MSI requiere un plazo permitido.')
+  if (scenarioType === 'msi' && msiMonths === null) {
+    throw new ValidationError('La simulación MSI requiere un número entero de meses desde 2.')
   }
   if (scenarioType === 'msi' && instrument?.type !== 'credit_card') {
     throw new ValidationError('La simulacion MSI requiere una tarjeta de credito.')
@@ -3449,8 +3454,8 @@ function saveSimulation(db: Database.Database, body: Input, id?: number): Record
       AND COALESCE(source_type, '') NOT IN ('reconciliation', 'opening_balance')
   `).get(threeMonthsAgo, periodEnd) as { income: number; expense: number }
   let monthlyImpact = amountCents
-  if (scenarioType === 'msi') {
-    monthlyImpact = Math.round(amountCents / (msiMonths ?? 1))
+  if (scenarioType === 'msi' && msiMonths !== null) {
+    monthlyImpact = calculateMsiMonthlyAmountCents(amountCents, msiMonths)
   } else if (scenarioType === 'loan') {
     const rate = (annualRate ?? 0) / 100 / 12
     monthlyImpact = rate === 0

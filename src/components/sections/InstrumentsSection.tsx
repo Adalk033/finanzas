@@ -365,7 +365,7 @@ export function InstrumentsSection({
                               label="Editar"
                             />
                             {instrument.isActive ? (
-                              <ActionButton className="button button--secondary" type="button" onClick={() => startReconciliation(instrument)}
+                              <ActionButton iconOnly className="button button--secondary" type="button" onClick={() => startReconciliation(instrument)}
                                 icon="balance"
                                 label="Conciliar"
                               />

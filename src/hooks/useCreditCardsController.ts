@@ -235,8 +235,8 @@ export function useCreditCardsController({
       setActionError('Captura un monto y una fecha válidos.')
       return
     }
-    if (payload.isMsi && !payload.msiMonths) {
-      setActionError('Selecciona el plazo de la compra a MSI.')
+    if (payload.isMsi && (!Number.isSafeInteger(payload.msiMonths) || (payload.msiMonths ?? 0) < 2)) {
+      setActionError('Ingresa un número entero de meses desde 2 para la compra a MSI.')
       return
     }
     const result = await apiClient.createTransaction(payload)

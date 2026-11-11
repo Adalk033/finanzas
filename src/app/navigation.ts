@@ -117,6 +117,12 @@ export const NAV_GROUPS: NavGroup[] = [
         keywords: ['recordatorio', 'recordar', 'aviso', 'alerta', 'notificación', 'calendario', 'agenda', 'fecha', 'vencimiento', 'próximo', 'pendiente', 'pagar', 'pago', 'corte', 'tarjeta', 'préstamo', 'suscripción', 'personalizado', 'leído', 'descartar'],
         showPendingBadge: true,
       },
+      {
+        key: 'simulator',
+        label: 'Simulador',
+        description: 'Comparar una compra directa, meses sin intereses o un préstamo antes de decidir.',
+        keywords: ['simular', 'simulación', 'escenario', 'proyección', 'calcular', 'calculadora', 'comparar', 'comparación', 'compra', 'contado', 'msi', 'meses sin intereses', 'crédito', 'préstamo', 'financiamiento', 'tasa', 'interés', 'intereses', 'plazo', 'cuotas', 'mensualidades', 'capacidad de pago', 'impacto', 'utilización', 'qué pasa si'],
+      },
     ],
   },
   {
@@ -141,12 +147,6 @@ export const NAV_GROUPS: NavGroup[] = [
     id: 'tools',
     label: 'Herramientas',
     items: [
-      {
-        key: 'simulator',
-        label: 'Simulador',
-        description: 'Comparar una compra directa, meses sin intereses o un préstamo antes de decidir.',
-        keywords: ['simular', 'simulación', 'escenario', 'proyección', 'calcular', 'calculadora', 'comparar', 'comparación', 'compra', 'contado', 'msi', 'meses sin intereses', 'crédito', 'préstamo', 'financiamiento', 'tasa', 'interés', 'intereses', 'plazo', 'cuotas', 'mensualidades', 'capacidad de pago', 'impacto', 'utilización', 'qué pasa si'],
-      },
       {
         key: 'settings',
         label: 'Configuración',

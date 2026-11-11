@@ -178,7 +178,7 @@ export function BudgetsSection({
             />
 
                 <div className="form-grid__actions">
-                  <ActionButton iconOnly className="button button--primary" type="submit" disabled={!hasConfig || isBudgetsLoading}
+                  <ActionButton className="button button--primary" type="submit" disabled={!hasConfig || isBudgetsLoading}
                     icon={editingBudgetId === null ? 'save' : 'refresh'}
                     label={editingBudgetId === null ? 'Guardar presupuesto' : 'Actualizar presupuesto'}
                   />

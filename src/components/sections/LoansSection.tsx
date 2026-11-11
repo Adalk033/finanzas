@@ -133,6 +133,10 @@ export function LoansSection({
               icon={isLoanFormVisible ? 'close' : 'plus'}
               label={isLoanFormVisible ? 'Ocultar formulario' : 'Nuevo prestamo'}
             />
+            <ActionButton className="button button--primary" type="button" onClick={() => setIsRegisterFormOpen((value) => !value)}
+              icon={isRegisterFormOpen ? 'close' : 'payment'}
+              label={isRegisterFormOpen ? 'Ocultar formulario' : 'Registrar cuota'}
+            />
             <div className="section-toolbar__spacer" />
             <ActionButton iconOnly className="button button--secondary" type="button" onClick={onReload} icon="refresh" label="Recargar" />
           </div>
@@ -371,13 +375,6 @@ export function LoansSection({
             </FormModal>
           ) : null}
 
-        <div className="section-toolbar">
-            <ActionButton className="button button--primary" type="button" onClick={() => setIsRegisterFormOpen((value) => !value)}
-              icon={isRegisterFormOpen ? 'close' : 'payment'}
-              label={isRegisterFormOpen ? 'Ocultar formulario' : 'Registrar cuota'}
-            />
-          </div>
-
           {isRegisterFormOpen ? (
             <FormModal title="Registrar cuota" onClose={() => setIsRegisterFormOpen(false)} error={loanError} message={loanMessage}>
               <p className="mini-card__subtitle">Selecciona un préstamo y la cuota pendiente que deseas registrar.</p>
@@ -564,7 +561,7 @@ export function LoansSection({
                       <td>{loan.remainingAmount === 0 ? 'Liquidado · Sin cuotas pendientes' : `${loan.paidInstallments}/${loan.totalInstallments}${loan.isActive ? '' : ' · Archivado'}`}</td>
                       <td>
                         <div className="table__actions">
-                          <ActionButton className="button button--secondary" type="button" onClick={() => onLoadLoanPayments(loan.id)}
+                          <ActionButton iconOnly className="button button--secondary" type="button" onClick={() => onLoadLoanPayments(loan.id)}
                             icon="eye"
                             label="Ver detalle"
                           />
@@ -573,13 +570,13 @@ export function LoansSection({
                             label="Editar"
                           />
                           {loan.isActive ? (
-                            <ActionButton className="button button--secondary" type="button" onClick={() => startReconciliation(loan)}
+                            <ActionButton iconOnly className="button button--secondary" type="button" onClick={() => startReconciliation(loan)}
                               icon="balance"
                               label="Conciliar saldo"
                             />
                           ) : null}
                           {loan.remainingAmount > 0 ? (
-                            <ActionButton className="button button--primary" type="button" onClick={() => startReconciliation(loan, true)}
+                            <ActionButton iconOnly className="button button--primary" type="button" onClick={() => startReconciliation(loan, true)}
                               icon="check"
                               label="Liquidar"
                             />
@@ -648,7 +645,7 @@ export function LoansSection({
                         <td>{payment.isPaid ? `Pagada${payment.paidDate ? ` ${formatIsoDate(payment.paidDate)}` : ''}${payment.affectsInstrumentBalance ? '' : ' · Descontada del ingreso'}` : 'Pendiente'}</td>
                         <td>
                           <div className="table__actions">
-                            <ActionButton
+                            <ActionButton iconOnly
                               className="button button--primary"
                               type="button"
                               disabled={payment.isPaid}
@@ -657,7 +654,7 @@ export function LoansSection({
                               label={selectedLoan.affectsInstrumentBalance ? 'Pagar' : 'Registrar descuento'}
                             />
                             {payment.isPaid ? (
-                              <ActionButton
+                              <ActionButton iconOnly
                                 className="button button--danger"
                                 type="button"
                                 onClick={() => onUndoInstallment(payment.installmentNum)}

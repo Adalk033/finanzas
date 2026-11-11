@@ -287,7 +287,6 @@ export const EMPTY_SAVINGS_GOAL_FORM: SavingsGoalInput = {
   isActive: true,
 }
 
-export const MSI_OPTIONS = [3, 6, 9, 12, 18, 24]
 export const FREQUENCY_LABELS: Record<RecurringIncomeFrequency, string> = {
   weekly: 'Semanal',
   biweekly: 'Quincenal',

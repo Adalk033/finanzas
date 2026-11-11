@@ -301,7 +301,7 @@ export function DebitCardsSection({
                     />
 
                     <div className="form-grid__actions">
-                      <ActionButton iconOnly className="button button--primary" type="submit" icon="save" label="Guardar movimiento" />
+                      <ActionButton className="button button--primary" type="submit" icon="save" label="Guardar movimiento" />
                       <ActionButton iconOnly
                         className="button button--secondary"
                         type="button"
