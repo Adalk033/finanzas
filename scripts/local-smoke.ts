@@ -207,11 +207,11 @@ try {
   const invalidDashboardPeriodError = requestFailure('/dashboard/preferences', 'PUT', {
     expensePeriod: 'all_time',
   })
-  assert.match(invalidDashboardPeriodError, /expensePeriod no contiene un valor permitido/)
+  assert.match(invalidDashboardPeriodError, /«Periodo de gastos» no contiene un valor permitido/)
   const invalidDashboardBalanceEvolutionPeriodError = requestFailure('/dashboard/preferences', 'PUT', {
     balanceEvolutionPeriod: 'all_time',
   })
-  assert.match(invalidDashboardBalanceEvolutionPeriodError, /balanceEvolutionPeriod no contiene un valor permitido/)
+  assert.match(invalidDashboardBalanceEvolutionPeriodError, /«Periodo de evolución de saldo» no contiene un valor permitido/)
 
   const bank = request<{ id: number }>('/banks', 'POST', {
     name: 'Banco local',
@@ -509,7 +509,7 @@ try {
   })
   assert.match(invalidFamilyCategoryError, /no corresponde a un gasto/)
   const invalidFamilyMonthError = requestFailure('/family/dashboard?month=2026-13', 'GET', {})
-  assert.match(invalidFamilyMonthError, /month no es un mes valido/)
+  assert.match(invalidFamilyMonthError, /El mes no es válido/)
   request(`/family-expenses/${familyExpense.id}`, 'DELETE')
   assert.equal(request<Array<{ id: number }>>('/family-expenses?month=2026-07').length, 0)
 
@@ -1450,7 +1450,7 @@ try {
   const instrumentSearchPage = request<{ total: number }>('/transactions?search=Cuenta%20principal&page=1')
   assert.ok(instrumentSearchPage.total >= 11)
   const invalidPageError = requestFailure('/transactions?page=0', 'GET', {})
-  assert.match(invalidPageError, /page debe ser un entero positivo/)
+  assert.match(invalidPageError, /«Página» debe ser un entero positivo/)
   for (const transactionId of paginatedTransactionIds) {
     request(`/transactions/${transactionId}`, 'DELETE')
   }
