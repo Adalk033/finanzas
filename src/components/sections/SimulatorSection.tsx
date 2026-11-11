@@ -1,7 +1,7 @@
 import { ActionButton } from '../ActionButton'
 import { FormModal } from '../FormModal'
 import { useState, type SyntheticEvent } from 'react'
-import { MSI_OPTIONS, formatCurrency, formatIsoDate, getSimulationScenarioLabel } from '../../app/appHelpers'
+import { MSI_OPTIONS, formatCurrency, getSimulationScenarioLabel } from '../../app/appHelpers'
 import type {
   FinancialInstrument,
   Simulation,
@@ -9,6 +9,7 @@ import type {
   SimulationScenarioType,
 } from '../../types/domain'
 import { NumberInput } from '../NumberInput'
+import { SimulationDetailsModal } from '../SimulationDetailsModal'
 import './SimulatorSection.css'
 
 type SimulatorSectionProps = {
@@ -47,6 +48,8 @@ export function SimulatorSection({
   onDelete,
 }: SimulatorSectionProps) {
   const [isFormOpen, setIsFormOpen] = useState(false)
+  const [detailSimulationId, setDetailSimulationId] = useState<number | null>(null)
+  const detailSimulation = simulations.find((simulation) => simulation.id === detailSimulationId)
 
   return (
     <section className="card">
@@ -72,6 +75,10 @@ export function SimulatorSection({
           label={isSimulationsLoading ? 'Cargando...' : 'Recargar historial'}
         />
       </div>
+
+      {detailSimulation ? (
+        <SimulationDetailsModal simulation={detailSimulation} onClose={() => setDetailSimulationId(null)} />
+      ) : null}
 
       <div className="section-stack">
         {isFormOpen ? (
@@ -248,109 +255,68 @@ export function SimulatorSection({
           </header>
 
           <div className="table-wrap">
-            <table className="table">
+            <table className="table simulator-table">
               <thead>
                 <tr>
-                  <th>Fecha</th>
                   <th>Nombre</th>
                   <th>Escenario</th>
-                  <th>Meses MSI</th>
                   <th>Monto</th>
-                  <th>Compromiso mensual</th>
-                  <th>Disponible proyectado</th>
-                  <th>Deuda / ingreso</th>
-                  <th>Capacidad de pago</th>
-                  <th>Motivos y advertencias</th>
+                  <th>Pago mensual</th>
+                  <th>Resultado</th>
                   <th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {isSimulationsLoading ? (
                   <tr>
-                    <td colSpan={11}>Cargando simulaciones...</td>
+                    <td colSpan={6}>Cargando simulaciones...</td>
                   </tr>
                 ) : null}
 
                 {!isSimulationsLoading && simulations.length === 0 ? (
                   <tr>
-                    <td colSpan={11}>No hay simulaciones registradas.</td>
+                    <td colSpan={6}>No hay simulaciones registradas.</td>
                   </tr>
                 ) : null}
 
                 {!isSimulationsLoading
                   ? simulations.map((simulation) => {
                     const result = simulation.resultJson as {
-                      calculationVersion?: number
-                      reasons?: string[]
                       warnings?: string[]
-                      projectedCreditUtilization?: number | null
                       scenarioType?: SimulationScenarioType
                       amount?: number
                       monthlyImpact?: number
-                      monthlyDisposable?: number
-                      projectedAvailable?: number
-                      debtServiceRatio?: number
                     }
-
-                    const snapshot = simulation.snapshotJson as {
-                      averagePeriodStart?: string
-                      averagePeriodEndExclusive?: string
-                      averageMonthlyIncome?: number
-                      averageMonthlyExpense?: number
-                      monthlyMsiPayments?: number
-                      monthlyLoanPayments?: number
-                    }
-                    const reasons = result.reasons ?? []
                     const warnings = result.warnings ?? []
                     const scenarioType = result.scenarioType ?? 'direct_purchase'
-                    const amount = result.amount ?? 0
-                    const monthlyCommitmentIncrease = result.monthlyImpact ?? 0
-                    const projectedAvailable = result.projectedAvailable ?? 0
 
                     return (
                       <tr key={simulation.id}>
-                        <td>{formatIsoDate(simulation.simulationDate)}</td>
-                        <td>{simulation.name}</td>
-                        <td>{getSimulationScenarioLabel(scenarioType)}</td>
-                        <td>{scenarioType === 'msi' ? (simulation.input.msiMonths === null ? 'No registrado' : `${simulation.input.msiMonths} meses`) : '—'}</td>
-                        <td>{formatCurrency(amount)}</td>
-                        <td>{formatCurrency(monthlyCommitmentIncrease)}</td>
-                        <td>{formatCurrency(projectedAvailable)}</td>
-                        <td>{(result.debtServiceRatio ?? 0).toFixed(1)}%</td>
-                        <td>
+                        <td data-label="Nombre">{simulation.name}</td>
+                        <td data-label="Escenario">
+                          <div>
+                            {getSimulationScenarioLabel(scenarioType)}
+                            {scenarioType === 'msi' ? (
+                              <span className="simulator-table__term">{simulation.input.msiMonths === null ? 'Plazo no registrado' : `${simulation.input.msiMonths} meses`}</span>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td data-label="Monto">{formatCurrency(result.amount ?? 0)}</td>
+                        <td data-label="Pago mensual">{formatCurrency(result.monthlyImpact ?? 0)}</td>
+                        <td data-label="Resultado">
                           <span className={`badge ${simulation.isFavorable && warnings.length === 0 ? 'badge--success' : 'badge--warning'}`}>
                             {simulation.isFavorable ? (warnings.length > 0 ? 'Favorable con advertencias' : 'Favorable') : 'No favorable'}
                           </span>
                         </td>
-                        <td>
-                          <details className="simulator-details">
-                            <summary>Ver evaluación</summary>
-                            {result.calculationVersion !== 2 ? (
-                              <p>Evaluación anterior. Edita y guarda para aplicar las reglas actuales.</p>
-                            ) : (
-                              <>
-                                {reasons.length === 0 ? <p>El compromiso cabe en el margen mensual y cumple las condiciones de liquidez.</p> : (
-                                  <ul>{reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>
-                                )}
-                                {warnings.length > 0 ? <ul>{warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul> : null}
-                                <dl className="simulator-details__values">
-                                  <dt>Periodo desde</dt><dd>{formatIsoDate(snapshot.averagePeriodStart ?? '')}</dd>
-                                  <dt>Hasta (sin incluir)</dt><dd>{formatIsoDate(snapshot.averagePeriodEndExclusive ?? '')}</dd>
-                                  <dt>Ingreso mensual promedio</dt><dd>{formatCurrency(snapshot.averageMonthlyIncome ?? 0)}</dd>
-                                  <dt>Gasto ordinario promedio</dt><dd>{formatCurrency(snapshot.averageMonthlyExpense ?? 0)}</dd>
-                                  <dt>Pagos MSI vigentes</dt><dd>{formatCurrency(snapshot.monthlyMsiPayments ?? 0)}</dd>
-                                  <dt>Pagos de préstamos</dt><dd>{formatCurrency(snapshot.monthlyLoanPayments ?? 0)}</dd>
-                                  <dt>Margen mensual previo a la compra</dt><dd>{formatCurrency(result.monthlyDisposable ?? 0)}</dd>
-                                  {result.projectedCreditUtilization !== null && result.projectedCreditUtilization !== undefined ? (
-                                    <><dt>Utilización de tarjeta proyectada</dt><dd>{result.projectedCreditUtilization.toFixed(2)}%</dd></>
-                                  ) : null}
-                                </dl>
-                              </>
-                            )}
-                          </details>
-                        </td>
-                        <td>
+                        <td data-label="Acciones">
                           <div className="table__actions">
+                            <ActionButton iconOnly
+                              className="button button--secondary"
+                              type="button"
+                              onClick={() => setDetailSimulationId(simulation.id)}
+                              icon="eye"
+                              label={`Ver detalle de ${simulation.name}`}
+                            />
                             <ActionButton iconOnly
                               className="button button--secondary"
                               type="button"
