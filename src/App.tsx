@@ -606,6 +606,8 @@ export function App() {
               hasConfig={hasConfig}
               simulationMessage={simulatorController.simulationMessage}
               simulationError={simulatorController.simulationError}
+              editingSimulationId={simulatorController.editingSimulationId}
+              onEdit={simulatorController.handleSimulationEdit}
               simulationForm={simulatorController.simulationForm}
               simulationInstrumentOptions={simulatorController.simulationInstrumentOptions}
               simulations={simulatorController.simulations}

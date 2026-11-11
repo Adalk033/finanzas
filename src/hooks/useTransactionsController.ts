@@ -9,6 +9,7 @@ import type {
   Category,
   FinancialInstrument,
   Transaction,
+  Movement,
   TransactionFilters,
   TransactionInput,
   TransactionType,
@@ -29,7 +30,7 @@ export function useTransactionsController({
   categories,
   loadInstruments,
 }: UseTransactionsControllerParams) {
-  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [transactions, setTransactions] = useState<Movement[]>([])
   const [isTransactionsLoading, setIsTransactionsLoading] = useState(false)
   const [transactionMessage, setTransactionMessage] = useState('')
   const [transactionError, setTransactionError] = useState('')
@@ -231,7 +232,7 @@ export function useTransactionsController({
 
     setCardPaymentMessage('Abono registrado y aplicado a la tarjeta.')
     resetCardPaymentForm()
-    await Promise.all([loadInstruments(), loadTransactions()])
+    await Promise.all([loadInstruments(), loadTransactions(transactionFilters, 1)])
   }
 
   const resetTransactionForm = (): void => {

@@ -1,0 +1,27 @@
+.movement-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2) var(--space-3);
+  margin: 0;
+}
+
+.movement-details__field {
+  min-width: 0;
+}
+
+.movement-details__label {
+  margin-bottom: var(--space-1);
+  color: var(--color-text-secondary);
+}
+
+.movement-details__value {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 600px) {
+  .movement-details {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

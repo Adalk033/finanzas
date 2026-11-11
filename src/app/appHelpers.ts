@@ -239,6 +239,7 @@ export const EMPTY_BUDGET_FORM: BudgetInput = {
 }
 
 export const EMPTY_SIMULATION_FORM: SimulationInput = {
+  creditUtilizationWarningThreshold: 50,
   name: '',
   description: '',
   simulationDate: TODAY_ISO,

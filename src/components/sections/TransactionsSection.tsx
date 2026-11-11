@@ -1,21 +1,19 @@
 import { ActionButton } from '../ActionButton'
 import { FormModal } from '../FormModal'
+import { MovementDetailsModal } from '../MovementDetailsModal'
 import { useState, type SyntheticEvent } from 'react'
 import { formatCurrency, formatIsoDate } from '../../app/appHelpers'
 import type {
   Category,
   FinancialInstrument,
   Transaction,
+  Movement,
   TransactionFilters,
   TransactionInput,
   TransactionType,
   TransferInput,
 } from '../../types/domain'
 import { NumberInput } from '../NumberInput'
-
-const AUTO_ADJUSTMENT_NOTE_PREFIX = 'AUTO_ADJUSTMENT_TRANSFER:'
-const AUTO_ADJUSTMENT_DESCRIPTION = 'Otros (por ajuste)'
-const NO_BALANCE_IMPACT_NOTE_PREFIX = 'NO_BALANCE_IMPACT:'
 
 type TransactionsSectionProps = {
   hasConfig: boolean
@@ -37,7 +35,7 @@ type TransactionsSectionProps = {
   transactionFilters: TransactionFilters
   excludeFromBalance: boolean
   showAutoAdjustmentsOnly: boolean
-  transactions: Transaction[]
+  transactions: Movement[]
   activeMsiTransactions: Transaction[]
   transactionPagination: {
     page: number
@@ -115,6 +113,7 @@ export function TransactionsSection({
   onPageChange,
   onReload,
 }: TransactionsSectionProps) {
+  const [selectedMovement, setSelectedMovement] = useState<Movement | null>(null)
   const [duplicatingTransactionId, setDuplicatingTransactionId] = useState<number | null>(null)
   const [isTransactionFormOpen, setIsTransactionFormOpen] = useState(editingTransactionId !== null)
   const [isCardPaymentFormOpen, setIsCardPaymentFormOpen] = useState(false)
@@ -128,18 +127,6 @@ export function TransactionsSection({
     transactionPagination.page * transactionPagination.pageSize,
     transactionPagination.total,
   )
-
-  const isAutoAdjustmentTransaction = (transaction: Transaction): boolean => {
-    const notes = transaction.notes ?? ''
-    const description = transaction.description ?? ''
-
-    return notes.startsWith(AUTO_ADJUSTMENT_NOTE_PREFIX) || description === AUTO_ADJUSTMENT_DESCRIPTION
-  }
-
-  const isNoBalanceImpactTransaction = (transaction: Transaction): boolean => {
-    return !transaction.affectsBalance
-      || (transaction.notes ?? '').startsWith(NO_BALANCE_IMPACT_NOTE_PREFIX)
-  }
 
   const handleCancelTransactionForm = (): void => {
     onResetTransactionForm()
@@ -637,80 +624,101 @@ export function TransactionsSection({
               <th>Tipo</th>
               <th>Monto</th>
               <th>Instrumento</th>
-              <th>Categoria</th>
-              <th>MSI</th>
-              <th>Origen</th>
+              <th>Descripción</th>
               <th>Acciones</th>
             </tr>
           </thead>
           <tbody>
             {isTransactionsLoading ? (
               <tr>
-                <td colSpan={8}>Cargando transacciones...</td>
+                <td colSpan={6}>Cargando transacciones...</td>
               </tr>
             ) : null}
 
             {!isTransactionsLoading && transactions.length === 0 ? (
               <tr>
-                <td colSpan={8}>No hay transacciones registradas.</td>
+                <td colSpan={6}>No hay transacciones registradas.</td>
               </tr>
             ) : null}
 
             {!isTransactionsLoading
-              ? transactions.map((transaction) => (
-                <tr key={transaction.id}>
+              ? transactions.map((transaction) => 'transferDate' in transaction ? (
+                <tr key={`card-payment-${transaction.id}`}>
+                  <td>{formatIsoDate(transaction.transferDate)}</td>
+                  <td>
+                    <span
+                      className="transaction-type transaction-type--card-payment"
+                      role="img"
+                      aria-label="Abono a TDC"
+                      title="Abono a TDC"
+                    >
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+                        <path d="M8 3 4 7l4 4M4 7h16M16 21l4-4-4-4M20 17H4" />
+                      </svg>
+                    </span>
+                  </td>
+                  <td>{formatCurrency(transaction.amount)}</td>
+                  <td>{transaction.sourceInstrumentName ?? '-'} → {transaction.destinationInstrumentName ?? '-'}</td>
+                  <td>{transaction.description?.trim() || 'Sin descripción'}</td>
+                  <td>
+                    <ActionButton iconOnly type="button" icon="eye" label="Ver detalles" onClick={() => setSelectedMovement(transaction)} />
+                  </td>
+                </tr>
+              ) : (
+                <tr key={`transaction-${transaction.id}`}>
                   <td>{formatIsoDate(transaction.transactionDate)}</td>
-                  <td>{transaction.type === 'expense' ? 'Gasto' : 'Ingreso'}</td>
+                  <td>
+                    <span
+                      className={`transaction-type transaction-type--${transaction.type}`}
+                      role="img"
+                      aria-label={transaction.type === 'income' ? 'Ingreso' : 'Gasto'}
+                      title={transaction.type === 'income' ? 'Ingreso' : 'Gasto'}
+                    >
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="M8 12h8" />
+                        {transaction.type === 'income' ? <path d="M12 8v8" /> : null}
+                      </svg>
+                    </span>
+                  </td>
                   <td>{formatCurrency(transaction.amount)}</td>
                   <td>{transaction.instrumentName ?? '-'}</td>
+                  <td>{transaction.description?.trim() || 'Sin descripción'}</td>
                   <td>
-                    {transaction.categoryName ?? '-'}
-                    {transaction.subcategoryName ? ` / ${transaction.subcategoryName}` : ''}
-                  </td>
-                  <td>{transaction.isMsi ? `${transaction.msiMonths ?? '-'} meses` : '-'}</td>
-                  <td>
-                    {transaction.sourceType === 'opening_balance'
-                      ? 'Saldo inicial'
-                      : transaction.sourceType === 'reconciliation'
-                        ? 'Conciliacion'
-                        : isAutoAdjustmentTransaction(transaction)
-                      ? 'Ajuste automatico'
-                      : isNoBalanceImpactTransaction(transaction)
-                        ? 'Historico (sin impacto saldo)'
-                        : 'Manual'}
-                  </td>
-                  <td>
-                    {transaction.sourceType === 'opening_balance' ? (
-                      <span>Gestionado desde el instrumento</span>
-                    ) : (
-                      <div className="table__actions">
-                        {transaction.type === 'expense' && transaction.sourceType === null ? (
-                          <ActionButton
-                            className="button button--secondary"
-                            type="button"
-                            disabled={duplicatingTransactionId !== null}
-                            onClick={async () => {
-                              setDuplicatingTransactionId(transaction.id)
-                              try {
-                                await onDuplicateTransactionToFamily(transaction)
-                              } finally {
-                                setDuplicatingTransactionId(null)
-                              }
-                            }}
-                            icon="copy"
-                            label={duplicatingTransactionId === transaction.id ? 'Duplicando…' : 'Duplicar en Familia'}
+                    <div className="table__actions">
+                      <ActionButton iconOnly type="button" icon="eye" label="Ver detalles" onClick={() => setSelectedMovement(transaction)} />
+                      {transaction.sourceType === 'opening_balance' ? (
+                        <span>Gestionado desde el instrumento</span>
+                      ) : (
+                        <>
+                          {transaction.type === 'expense' && transaction.sourceType === null ? (
+                            <ActionButton
+                              className="button button--secondary"
+                              type="button"
+                              disabled={duplicatingTransactionId !== null}
+                              onClick={async () => {
+                                setDuplicatingTransactionId(transaction.id)
+                                try {
+                                  await onDuplicateTransactionToFamily(transaction)
+                                } finally {
+                                  setDuplicatingTransactionId(null)
+                                }
+                              }}
+                              icon="copy"
+                              label={duplicatingTransactionId === transaction.id ? 'Duplicando…' : 'Duplicar en Familia'}
+                            />
+                          ) : null}
+                          <ActionButton iconOnly className="button button--secondary" type="button" onClick={() => onTransactionEdit(transaction)}
+                            icon="edit"
+                            label="Editar"
                           />
-                        ) : null}
-                        <ActionButton iconOnly className="button button--secondary" type="button" onClick={() => onTransactionEdit(transaction)}
-                          icon="edit"
-                          label="Editar"
-                        />
-                        <ActionButton iconOnly className="button button--danger" type="button" onClick={() => onTransactionDelete(transaction.id)}
-                          icon="trash"
-                          label="Eliminar"
-                        />
-                      </div>
-                    )}
+                          <ActionButton iconOnly className="button button--danger" type="button" onClick={() => onTransactionDelete(transaction.id)}
+                            icon="trash"
+                            label="Eliminar"
+                          />
+                        </>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))
@@ -718,6 +726,10 @@ export function TransactionsSection({
           </tbody>
         </table>
       </div>
+
+      {selectedMovement !== null ? (
+        <MovementDetailsModal movement={selectedMovement} onClose={() => setSelectedMovement(null)} />
+      ) : null}
 
       <div className="transaction-pagination">
         <p className="card__subtitle">

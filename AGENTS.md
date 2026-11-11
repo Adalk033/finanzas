@@ -116,7 +116,3 @@ After every implementation, verify:
 - No new unauthorized dependencies.
 - Dependency installation scripts are blocked by pnpm.
 - No network communication for financial data.
-
-
-## Rules
-- Don't run `pnpm run check`

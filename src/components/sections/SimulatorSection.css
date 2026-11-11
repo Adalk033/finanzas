@@ -1,0 +1,36 @@
+.simulator-details {
+  min-width: 16rem;
+  max-width: 26rem;
+  white-space: normal;
+}
+
+.simulator-details summary {
+  cursor: pointer;
+  color: var(--color-text-primary);
+}
+
+.simulator-details p,
+.simulator-details ul {
+  margin: var(--space-1) 0;
+  color: var(--color-text-secondary);
+}
+
+.simulator-details ul {
+  padding-left: var(--space-3);
+}
+
+.simulator-details__values {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+
+.simulator-details__values dt {
+  color: var(--color-text-secondary);
+}
+
+.simulator-details__values dd {
+  margin: 0;
+  text-align: right;
+}

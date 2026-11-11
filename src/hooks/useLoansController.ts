@@ -173,11 +173,11 @@ export function useLoansController({ instruments }: UseLoansControllerParams) {
 
     const deleted = await apiClient.deleteLoan(id)
     if (!deleted.success) {
-      setLoanError(deleted.error ?? 'No se pudo eliminar el prestamo.')
+      setLoanError(deleted.error ?? 'No se pudo archivar el prestamo.')
       return
     }
 
-    setLoanMessage('Prestamo eliminado correctamente.')
+    setLoanMessage('Préstamo archivado. Se conservan el saldo y las cuotas pendientes; para dejarlos en cero, usa Liquidar.')
     if (editingLoanId === id) {
       resetLoanEditor()
     }
@@ -235,7 +235,9 @@ export function useLoansController({ instruments }: UseLoansControllerParams) {
       return false
     }
 
-    setLoanMessage('Saldo pendiente conciliado y cuotas futuras recalculadas.')
+    setLoanMessage(payload.actualBalance === 0
+      ? 'Préstamo liquidado: saldo en cero y sin cuotas pendientes. Se conservaron los pagos anteriores y el saldo de la cuenta vinculada.'
+      : 'Saldo pendiente conciliado y cuotas futuras recalculadas.')
     await loadLoans()
     if (selectedLoanId === loanId) {
       await loadLoanPayments(loanId)

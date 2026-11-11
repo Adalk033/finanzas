@@ -334,6 +334,7 @@ function sanitizeBudgetPayload(payload: BudgetInput): Record<string, unknown> {
 
 function sanitizeSimulationPayload(payload: SimulationInput): Record<string, unknown> {
   const sanitized: Record<string, unknown> = {
+    creditUtilizationWarningThreshold: payload.creditUtilizationWarningThreshold,
     name: payload.name.trim(),
     scenarioType: payload.scenarioType,
     amount: payload.amount,
@@ -784,6 +785,11 @@ export const apiClient = {
   createSimulation: (payload: SimulationInput) =>
     request<Simulation>(ENDPOINTS.SIMULATIONS, {
       method: 'POST',
+      body: JSON.stringify(sanitizeSimulationPayload(payload)),
+    }),
+  updateSimulation: (id: number, payload: SimulationInput) =>
+    request<Simulation>(`${ENDPOINTS.SIMULATIONS}/${id}`, {
+      method: 'PUT',
       body: JSON.stringify(sanitizeSimulationPayload(payload)),
     }),
   deleteSimulation: (id: number) =>

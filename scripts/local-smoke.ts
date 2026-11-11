@@ -793,6 +793,148 @@ try {
   })
   assert.equal(typeof simulation.isFavorable, 'boolean')
 
+  const balancesBeforeSimulation = request('/dashboard/summary')
+  const simulationInput = {
+    name: 'Escenario MSI', description: 'Prueba de edición', simulationDate: '2026-07-18',
+    scenarioType: 'msi', amount: 12000, instrumentId: credit.id, msiMonths: 12,
+  }
+  type SavedSimulation = {
+    id: number
+    input: typeof simulationInput & { loanMonths: number | null; annualRate: number | null }
+    resultJson: { monthlyImpact: number }
+  }
+  const msiSimulation = request<SavedSimulation>('/simulations', 'POST', simulationInput)
+  assert.equal(msiSimulation.input.msiMonths, 12)
+  assert.equal(msiSimulation.resultJson.monthlyImpact, 1000)
+  const simulationCount = request<unknown[]>('/simulations').length
+  const updatedSimulation = request<SavedSimulation>(`/simulations/${msiSimulation.id}`, 'PUT', {
+    ...simulationInput, name: 'MSI editado', msiMonths: 6,
+  })
+  assert.equal(updatedSimulation.id, msiSimulation.id)
+  assert.equal(updatedSimulation.input.name, 'MSI editado')
+  assert.equal(updatedSimulation.input.msiMonths, 6)
+  assert.equal(updatedSimulation.resultJson.monthlyImpact, 2000)
+  assert.equal(request<unknown[]>('/simulations').length, simulationCount)
+  assert.equal(request<SavedSimulation[]>('/simulations').find((item) => item.id === msiSimulation.id)?.input.msiMonths, 6)
+  for (const invalidInput of [
+    { ...simulationInput, msiMonths: 5 },
+    { ...simulationInput, instrumentId: debit.id },
+    { ...simulationInput, amount: -1 },
+    { ...simulationInput, instrumentId: 999999 },
+    { ...simulationInput, scenarioType: 'loan', loanMonths: 12 },
+  ]) {
+    requestFailure(`/simulations/${msiSimulation.id}`, 'PUT', invalidInput)
+  }
+  assert.equal(request<SavedSimulation[]>('/simulations').find((item) => item.id === msiSimulation.id)?.input.msiMonths, 6)
+  requestFailure('/simulations/999999', 'PUT', simulationInput)
+  const loanSimulation = request<SavedSimulation>(`/simulations/${msiSimulation.id}`, 'PUT', {
+    ...simulationInput, scenarioType: 'loan', loanMonths: 24, annualRate: 18,
+  })
+  assert.equal(loanSimulation.input.loanMonths, 24)
+  assert.equal(loanSimulation.input.annualRate, 18)
+  assert.equal(loanSimulation.input.msiMonths, null)
+  assert.equal(loanSimulation.input.instrumentId, null)
+  // Legacy MSI snapshots recover a unique term in the main process.
+  const legacySnapshot = { instrument: { id: credit.id } }
+  getDatabase().prepare('UPDATE simulations SET snapshot_json = ?, result_json = ? WHERE id = ?')
+    .run(JSON.stringify(legacySnapshot), JSON.stringify({ scenarioType: 'msi', amount: 12000, monthlyImpact: 1000 }), msiSimulation.id)
+  assert.equal(request<SavedSimulation[]>('/simulations').find((item) => item.id === msiSimulation.id)?.input.msiMonths, 12)
+  request(`/simulations/${msiSimulation.id}`, 'DELETE')
+  assert.deepEqual(request('/dashboard/summary'), balancesBeforeSimulation)
+
+  // Isolate the decision rules from the dated fixtures used by other operations.
+  const simulationDb = getDatabase()
+  simulationDb.exec('SAVEPOINT simulation_rules')
+  try {
+    simulationDb.prepare('UPDATE transactions SET transaction_date = ?, msi_remaining = 0').run('2026-07-01')
+    simulationDb.prepare('UPDATE subscriptions SET is_active = 0').run()
+    simulationDb.prepare('UPDATE fixed_expenses SET is_active = 0').run()
+    simulationDb.prepare('UPDATE loans SET is_active = 0').run()
+    simulationDb.prepare('UPDATE financial_instruments SET current_amount_cents = ? WHERE id = ?').run(10000000, debit.id)
+    simulationDb.prepare('UPDATE financial_instruments SET credit_limit_cents = ?, current_balance_cents = ? WHERE id = ?')
+      .run(7510000, 2606986, credit.id)
+    const insertSimulationTransaction = simulationDb.prepare(`
+      INSERT INTO transactions (instrument_id, currency_id, type, amount_cents, transaction_date,
+        is_msi, msi_months, msi_monthly_amount_cents, msi_remaining, source_type)
+      SELECT id, currency_id, ?, ?, ?, ?, ?, ?, ?, ? FROM financial_instruments WHERE id = ?
+    `)
+    for (const date of ['2026-04-01', '2026-05-01', '2026-06-30']) {
+      insertSimulationTransaction.run('income', 3000000, date, 0, null, null, null, null, debit.id)
+      insertSimulationTransaction.run('expense', 100000, date, 0, null, null, null, null, debit.id)
+    }
+    for (const date of ['2026-03-31', '2026-07-01', '2026-08-01']) {
+      insertSimulationTransaction.run('income', 90000000, date, 0, null, null, null, null, debit.id)
+    }
+    insertSimulationTransaction.run('income', 90000000, '2026-06-01', 0, null, null, null, 'opening_balance', debit.id)
+    insertSimulationTransaction.run('expense', 1200000, '2026-06-01', 1, 12, 100000, 6, null, credit.id)
+    insertSimulationTransaction.run('expense', 1200000, '2026-06-01', 1, 12, 100000, 0, null, credit.id)
+    type DecisionSimulation = {
+      isFavorable: boolean
+      input: { creditUtilizationWarningThreshold: number }
+      snapshotJson: {
+        averageMonthlyIncome: number; averageMonthlyExpense: number; monthlyMsiPayments: number
+        averagePeriodStart: string; averagePeriodEndExclusive: string
+      }
+      resultJson: {
+        reasons: string[]; warnings: string[]; projectedCreditUtilization: number
+        monthlyDisposable: number; debtServiceRatio: number
+      }
+    }
+    const decisionInput = { ...simulationInput, amount: 18499, msiMonths: 24 }
+    const decision = request<DecisionSimulation>('/simulations', 'POST', decisionInput)
+    assert.equal(decision.snapshotJson.averagePeriodStart, '2026-04-01')
+    assert.equal(decision.snapshotJson.averagePeriodEndExclusive, '2026-07-01')
+    assert.equal(decision.snapshotJson.averageMonthlyIncome, 30000)
+    assert.equal(decision.snapshotJson.averageMonthlyExpense, 1000)
+    assert.equal(decision.snapshotJson.monthlyMsiPayments, 1000)
+    assert.equal(decision.resultJson.monthlyDisposable, 28000)
+    assert.equal(decision.resultJson.projectedCreditUtilization, 59.35)
+    assert.equal(decision.isFavorable, true)
+    assert.deepEqual(decision.resultJson.reasons, [])
+    assert.ok(decision.resultJson.warnings.some((warning) => warning.includes('50%')))
+    const relaxed = request<DecisionSimulation>('/simulations', 'POST', { ...decisionInput, creditUtilizationWarningThreshold: 60 })
+    assert.equal(relaxed.input.creditUtilizationWarningThreshold, 60)
+    assert.equal(relaxed.isFavorable, true)
+    assert.equal(relaxed.resultJson.warnings.some((warning) => warning.includes('umbral')), false)
+    const exceedsCredit = request<DecisionSimulation>('/simulations', 'POST', { ...decisionInput, amount: 60000 })
+    assert.equal(exceedsCredit.isFavorable, false)
+    assert.ok(exceedsCredit.resultJson.reasons.some((reason) => reason.includes('excede el crédito')))
+    const debtOverLimit = request<DecisionSimulation>('/simulations', 'POST', {
+      ...decisionInput, scenarioType: 'loan', instrumentId: null, amount: 144000, loanMonths: 12, annualRate: 0,
+    })
+    assert.equal(debtOverLimit.isFavorable, false)
+    assert.ok(debtOverLimit.resultJson.reasons.some((reason) => reason.includes('40%')))
+    const debtAtLimit = request<DecisionSimulation>('/simulations', 'POST', {
+      ...decisionInput, scenarioType: 'loan', instrumentId: null, amount: 132000, loanMonths: 12, annualRate: 0,
+    })
+    assert.equal(debtAtLimit.isFavorable, true)
+    assert.equal(debtAtLimit.resultJson.debtServiceRatio, 40)
+    const insufficientMargin = request<DecisionSimulation>('/simulations', 'POST', {
+      ...decisionInput, scenarioType: 'loan', instrumentId: null, amount: 360000, loanMonths: 12, annualRate: 0,
+    })
+    assert.equal(insufficientMargin.isFavorable, false)
+    assert.ok(insufficientMargin.resultJson.reasons.some((reason) => reason.includes('margen mensual')))
+    const insufficientReserve = request<DecisionSimulation>('/simulations', 'POST', {
+      ...decisionInput, scenarioType: 'direct_purchase', instrumentId: debit.id, amount: 99999,
+    })
+    assert.equal(insufficientReserve.isFavorable, false)
+    assert.ok(insufficientReserve.resultJson.reasons.some((reason) => reason.includes('reserva')))
+    insertSimulationTransaction.run('expense', 100000, '2026-06-01', 1, 3, 33333, 1, null, credit.id)
+    const finalMsiPayment = request<DecisionSimulation>('/simulations', 'POST', decisionInput)
+    assert.equal(finalMsiPayment.snapshotJson.monthlyMsiPayments, 1333.34)
+    for (const threshold of [0, 101, 50.5, '50']) {
+      requestFailure('/simulations', 'POST', { ...decisionInput, creditUtilizationWarningThreshold: threshold })
+    }
+    simulationDb.prepare("UPDATE transactions SET transaction_date = ? WHERE type = 'income'").run('2026-07-01')
+    const noIncome = request<DecisionSimulation>('/simulations', 'POST', decisionInput)
+    assert.equal(noIncome.isFavorable, false)
+    assert.ok(noIncome.resultJson.reasons.some((reason) => reason.includes('No hay ingresos')))
+  } finally {
+    simulationDb.exec('ROLLBACK TO simulation_rules')
+    simulationDb.exec('RELEASE simulation_rules')
+  }
+  assert.deepEqual(request('/dashboard/summary'), balancesBeforeSimulation)
+
   const info = request<{ schemaVersion: string }>('/database/info')
   assert.equal(info.schemaVersion, '7')
 
@@ -969,6 +1111,73 @@ try {
   assert.equal(splitStatements.find((item) => item.cutOffDate === '2026-01-10')?.isPaid, true)
   assert.equal(splitStatements.find((item) => item.cutOffDate === '2026-02-10')?.outstandingAmount, 50)
 
+  const paymentMovementsPath = `/transactions?instrument_id=${splitCard.id}&page=1`
+  const balancesAfterSplitPayment = request('/instruments')
+  const paymentMovements = request<{
+    transactions: Array<{ id: number; type: string; amount: number; sourceInstrumentId?: number }>
+    total: number
+    activeMsiTransactions: Array<{ type: string }>
+  }>(paymentMovementsPath)
+  assert.equal(paymentMovements.total, 3)
+  assert.equal(paymentMovements.transactions[0]?.type, 'card_payment')
+  assert.equal(paymentMovements.transactions[0]?.id, splitPayment.id)
+  assert.equal(paymentMovements.transactions[0]?.amount, 200)
+  assert.equal(paymentMovements.transactions[0]?.sourceInstrumentId, splitSource.id)
+  assert.ok(paymentMovements.activeMsiTransactions.every((item) => item.type !== 'card_payment'))
+  const sourcePaymentMovements = request<{ transactions: Array<{ id: number; type: string }> }>(
+    `/transactions?instrument_id=${splitSource.id}&page=1`,
+  )
+  assert.ok(sourcePaymentMovements.transactions.some((item) => item.type === 'card_payment' && item.id === splitPayment.id))
+  for (const filter of [
+    'type=expense', 'type=income', `category_id=${category.id}`,
+    'auto_adjustments_only=true', 'from_date=2026-03-02', 'to_date=2026-02-28',
+    'search=Inexistente',
+  ]) {
+    const filtered = request<{ transactions: Array<{ type: string }> }>(`${paymentMovementsPath}&${filter}`)
+    assert.ok(filtered.transactions.every((item) => item.type !== 'card_payment'), filter)
+  }
+  for (const name of ['Cuenta para pagos divididos', 'Tarjeta pagos divididos']) {
+    const searched = request<{ transactions: Array<{ type: string }> }>(
+      `${paymentMovementsPath}&search=${encodeURIComponent(name)}`,
+    )
+    assert.ok(searched.transactions.some((item) => item.type === 'card_payment'))
+  }
+  assert.deepEqual(request('/instruments'), balancesAfterSplitPayment)
+  const rawCardTransactions = request<Array<{ type: string }>>(`/transactions?instrument_id=${splitCard.id}`)
+  assert.equal(rawCardTransactions.length, 2)
+  assert.ok(rawCardTransactions.every((item) => item.type === 'expense'))
+
+  const paymentPaginationIds: number[] = []
+  for (let index = 1; index <= 10; index += 1) {
+    const entry = request<{ id: number }>('/transactions', 'POST', {
+      instrumentId: splitSource.id,
+      currencyId: 1,
+      type: 'expense',
+      amount: 1,
+      transactionDate: `2026-02-${String(index).padStart(2, '0')}`,
+      affectsBalance: false,
+      isMsi: false,
+    })
+    paymentPaginationIds.push(entry.id)
+  }
+  const paymentPaginationFilter = `/transactions?instrument_id=${splitSource.id}&from_date=2026-02-01&to_date=2026-03-01`
+  const paymentFirstPage = request<{ total: number; totalPages: number; transactions: Array<{ type: string }> }>(
+    `${paymentPaginationFilter}&page=1`,
+  )
+  assert.equal(paymentFirstPage.total, 11)
+  assert.equal(paymentFirstPage.totalPages, 2)
+  assert.equal(paymentFirstPage.transactions.length, 10)
+  assert.equal(paymentFirstPage.transactions[0]?.type, 'card_payment')
+  const paymentLastPage = request<{ page: number; transactions: Array<{ id: number; type: string }> }>(
+    `${paymentPaginationFilter}&page=2`,
+  )
+  assert.equal(paymentLastPage.page, 2)
+  assert.equal(paymentLastPage.transactions.length, 1)
+  assert.equal(paymentLastPage.transactions[0]?.id, paymentPaginationIds[0])
+  assert.equal(paymentLastPage.transactions[0]?.type, 'expense')
+  for (const id of paymentPaginationIds) request(`/transactions/${id}`, 'DELETE')
+  assert.deepEqual(request('/instruments'), balancesAfterSplitPayment)
+
   const lowBalanceSource = request<{ id: number }>('/instruments', 'POST', {
     bankId: bank.id,
     name: 'Cuenta sin saldo suficiente',
@@ -1017,6 +1226,9 @@ try {
   request(`/instruments/${debitCardSource.id}`, 'DELETE')
 
   request(`/transfers/${splitPayment.id}`, 'DELETE')
+  const movementsAfterPaymentDelete = request<{ total: number; transactions: Array<{ type: string }> }>(paymentMovementsPath)
+  assert.equal(movementsAfterPaymentDelete.total, 2)
+  assert.ok(movementsAfterPaymentDelete.transactions.every((item) => item.type !== 'card_payment'))
   splitStatements = request(`/statements?instrument_id=${splitCard.id}`)
   assert.equal(splitStatements.find((item) => item.cutOffDate === '2026-01-10')?.outstandingAmount, 100)
   assert.equal(splitStatements.find((item) => item.cutOffDate === '2026-02-10')?.outstandingAmount, 150)
@@ -1098,6 +1310,41 @@ try {
   assert.equal(settledLoan.remainingAmount, 0)
   assert.equal(settledLoan.isActive, false)
   assert.equal(request<Array<{ isPaid: boolean }>>(`/loans/${adjustableLoan.id}/payments`).length, 0)
+
+  const archivedLoan = request<{ id: number }>('/loans', 'POST', {
+    name: 'Préstamo archivado para liquidar',
+    currencyId: 1,
+    originalAmount: 1000,
+    annualRate: 12,
+    totalInstallments: 10,
+    paymentType: 'variable',
+    paymentDay: 18,
+    startDate: '2026-07-18',
+    instrumentId: debit.id,
+    isActive: true,
+  })
+  request(`/loans/${archivedLoan.id}/payments/1/pay`, 'POST', { paidDate: '2026-07-18' })
+  const historyBeforeSettlement = request<Array<{ isPaid: boolean }>>(`/loans/${archivedLoan.id}/payments`)
+    .filter((payment) => payment.isPaid)
+  const accountBeforeSettlement = request<Array<{ id: number; currentAmount: number }>>('/instruments')
+    .find((item) => item.id === debit.id)?.currentAmount
+  request(`/loans/${archivedLoan.id}`, 'DELETE')
+  const archived = request<Array<{ id: number; remainingAmount: number; isActive: boolean }>>('/loans')
+    .find((item) => item.id === archivedLoan.id)
+  assert.equal(archived?.remainingAmount, 900)
+  assert.equal(archived?.isActive, false)
+  const settledArchivedLoan = request<{ remainingAmount: number; isActive: boolean }>(
+    `/loans/${archivedLoan.id}/reconcile`, 'POST', {
+      actualBalance: 0,
+      reconciliationDate: '2026-07-19',
+      notes: 'Liquidación confirmada con el acreedor',
+    },
+  )
+  assert.equal(settledArchivedLoan.remainingAmount, 0)
+  assert.equal(settledArchivedLoan.isActive, false)
+  assert.deepEqual(request(`/loans/${archivedLoan.id}/payments`), historyBeforeSettlement)
+  assert.equal(request<Array<{ id: number; currentAmount: number }>>('/instruments')
+    .find((item) => item.id === debit.id)?.currentAmount, accountBeforeSettlement)
 
   const payrollLoan = request<{ id: number }>('/loans', 'POST', {
     name: 'Prestamo descontado de nomina',

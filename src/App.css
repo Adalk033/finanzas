@@ -300,6 +300,24 @@
   font-size: 14px;
 }
 
+.transaction-type {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
+
+.transaction-type--income {
+  color: var(--color-income);
+}
+
+.transaction-type--expense {
+  color: var(--color-expense);
+}
+
+.transaction-type--card-payment {
+  color: var(--color-warning);
+}
+
 .transaction-table-wrap {
   margin-top: var(--space-2);
 }

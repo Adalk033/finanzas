@@ -10,6 +10,7 @@ const FIELD_LABELS = new Map<string, string>(Object.entries({
   billingDay: 'Día de cargo',
   categoryId: 'Categoría',
   creditLimit: 'Límite de crédito',
+  creditUtilizationWarningThreshold: 'Umbral de advertencia de utilización',
   currencyId: 'Moneda',
   currentAmount: 'Saldo actual',
   currentBalance: 'Deuda actual',

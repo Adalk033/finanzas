@@ -130,8 +130,10 @@ export interface Transaction {
   updatedAt: string
 }
 
+export type Movement = Transaction | (Transfer & { type: 'card_payment' })
+
 export interface TransactionPage {
-  transactions: Transaction[]
+  transactions: Movement[]
   activeMsiTransactions: Transaction[]
   page: number
   pageSize: number
@@ -470,6 +472,7 @@ export interface BudgetInput {
 }
 
 export interface Simulation {
+  input: SimulationInput
   id: number
   name: string
   description: string | null
@@ -481,6 +484,7 @@ export interface Simulation {
 }
 
 export interface SimulationInput {
+  creditUtilizationWarningThreshold: number
   name: string
   description: string
   simulationDate: string
