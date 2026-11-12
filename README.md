@@ -28,7 +28,7 @@ financiera.
 
 ## Requisitos
 
-- Node.js 24+
+- Node.js 24.22.3
 - pnpm 11+
 
 El proyecto usa pnpm como unico gestor de paquetes y conserva el archivo de
