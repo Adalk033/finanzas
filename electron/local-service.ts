@@ -3987,7 +3987,7 @@ function getDashboardExpensesByCategory(db: Database.Database, period: string): 
     FROM transactions t
     LEFT JOIN categories c ON c.id = t.category_id
     WHERE t.type = 'expense'
-      AND COALESCE(t.source_type, '') NOT IN ('reconciliation', 'opening_balance')
+      AND COALESCE(t.source_type, '') <> 'opening_balance'
       AND t.transaction_date >= ?
       AND t.transaction_date < ?
     GROUP BY COALESCE(c.name, 'Sin categoria')
@@ -4020,8 +4020,12 @@ function getDashboardCashFlow(db: Database.Database): Record<string, unknown>[] 
       SELECT
         COALESCE(SUM(CASE
           WHEN t.type = 'income' AND t.affects_balance = 1
-            AND i.type IN ('account', 'debit_card')
+            AND (i.type IN ('account', 'debit_card') OR t.source_type = 'reconciliation')
           THEN t.amount_cents ELSE 0 END), 0) AS income,
+        COALESCE(SUM(CASE
+          WHEN t.type = 'income' AND t.affects_balance = 1
+            AND i.type IN ('account', 'debit_card')
+          THEN t.amount_cents ELSE 0 END), 0) AS cash_income,
         COALESCE(SUM(CASE WHEN t.type = 'expense' THEN t.amount_cents ELSE 0 END), 0) AS expense,
         COALESCE(SUM(CASE
           WHEN t.affects_balance = 1 AND t.type = 'expense'
@@ -4030,8 +4034,8 @@ function getDashboardCashFlow(db: Database.Database): Record<string, unknown>[] 
       FROM transactions t
       JOIN financial_instruments i ON i.id = t.instrument_id
       WHERE t.transaction_date >= ? AND t.transaction_date < ?
-        AND COALESCE(t.source_type, '') NOT IN ('reconciliation', 'opening_balance')
-    `).get(start, end) as { income: number; expense: number; cash_expenses: number }
+        AND COALESCE(t.source_type, '') <> 'opening_balance'
+    `).get(start, end) as { income: number; cash_income: number; expense: number; cash_expenses: number }
     const debt = db.prepare(`
       SELECT
         (SELECT COALESCE(SUM(amount_cents), 0)
@@ -4044,6 +4048,8 @@ function getDashboardCashFlow(db: Database.Database): Record<string, unknown>[] 
             AND p.paid_date >= ? AND p.paid_date < ?) AS total
     `).get(start, end, start, end) as { total: number }
     const incomeCents = toNumber(row.income)
+    // Credit reconciliations change recognized income, but do not deposit cash into an account.
+    const cashIncomeCents = toNumber(row.cash_income)
     const expenseCents = toNumber(row.expense)
     const debtPaymentsCents = toNumber(debt.total)
     const cashExpensesCents = toNumber(row.cash_expenses)
@@ -4053,7 +4059,7 @@ function getDashboardCashFlow(db: Database.Database): Record<string, unknown>[] 
       income: incomeCents / 100,
       expense: expenseCents / 100,
       debtPayments: debtPaymentsCents / 100,
-      netCashFlow: (incomeCents - cashExpensesCents - debtPaymentsCents) / 100,
+      netCashFlow: (cashIncomeCents - cashExpensesCents - debtPaymentsCents) / 100,
       netSavings: netSavingsCents / 100,
       savingsRate: incomeCents > 0 ? Math.round(netSavingsCents / incomeCents * 10_000) / 100 : null,
     }

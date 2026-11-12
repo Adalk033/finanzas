@@ -246,6 +246,7 @@ export function DashboardSection({
         <article className="mini-card">
           <header className="mini-card__header">
             <h3 className="mini-card__title">Flujo de efectivo y gasto reconocido</h3>
+            <p className="mini-card__subtitle">Incluye conciliaciones como ingreso o gasto. Los ajustes de tarjetas de crédito no representan entradas o salidas de efectivo.</p>
           </header>
           {dashboardCashFlow.length === 0 ? (
             <p className="card__subtitle">No hay datos suficientes para el flujo mensual.</p>
@@ -258,7 +259,7 @@ export function DashboardSection({
                   <YAxis width={100} tickFormatter={formatCurrency} stroke="var(--color-chart-axis)" tick={{ fill: 'var(--color-chart-label)', fontSize: 11 }} tickLine={false} />
                   <Tooltip formatter={(value) => typeof value === 'number' ? formatCurrency(value) : '-'} />
                   <Legend />
-                  <Bar dataKey="income" fill="var(--color-chart-income)" fillOpacity={0.88} name="Ingresos" />
+                  <Bar dataKey="income" fill="var(--color-chart-income)" fillOpacity={0.88} name="Ingresos reconocidos" />
                   <Bar dataKey="expense" fill="var(--color-chart-expense)" fillOpacity={0.88} name="Gasto reconocido" />
                   <Bar dataKey="debtPayments" fill="var(--color-chart-debt)" fillOpacity={0.88} name="Pagos de deuda" />
                   <Line type="monotone" dataKey="netCashFlow" stroke="var(--color-chart-net)" strokeWidth={2.4} name="Flujo neto" />
@@ -319,7 +320,7 @@ export function DashboardSection({
         <article className="mini-card">
           <header className="mini-card__header">
             <h3 className="mini-card__title">Ahorro por mes</h3>
-            <p className="mini-card__subtitle">Últimos 6 meses · Ahorro neto = ingresos - gastos. El porcentaje indica cuánto de tus ingresos conservaste.</p>
+            <p className="mini-card__subtitle">Últimos 6 meses · Ahorro neto = ingresos - gastos, incluidos los ajustes de conciliación. El porcentaje indica cuánto de tus ingresos conservaste.</p>
           </header>
           {dashboardCashFlow.length === 0 ? (
             <p className="card__subtitle">No hay datos suficientes para mostrar el ahorro mensual.</p>

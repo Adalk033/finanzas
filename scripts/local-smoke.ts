@@ -6,6 +6,7 @@ import { mock } from 'node:test'
 import Database from 'better-sqlite3'
 import { filterNavigationGroups, NAV_GROUPS } from '../src/app/navigation.js'
 import { SIDEBAR_GROUP_IDS, type SidebarPreferences } from '../src/types/navigation.js'
+import type { DashboardCashFlowPoint, FinancialInstrument } from '../src/types/domain.js'
 import {
   backupLocalDb,
   closeLocalDb,
@@ -413,6 +414,77 @@ try {
   } finally {
     getDatabase().exec('ROLLBACK TO cash_flow_precision')
     getDatabase().exec('RELEASE cash_flow_precision')
+  }
+
+  getDatabase().exec('SAVEPOINT dashboard_reconciliations')
+  try {
+    const transactionDate = '2026-07-18'
+    const debitCard = request<FinancialInstrument>('/instruments', 'POST', {
+      bankId: bank.id,
+      name: 'Debito para conciliaciones',
+      type: 'debit_card',
+      currencyId: 1,
+      currentAmount: 100,
+      isActive: true,
+    })
+    const availableBefore = request<{ totalAvailable: number }>('/dashboard/summary').totalAvailable
+    for (const entry of [
+      { instrumentId: debit.id, actualBalance: 10010, type: 'income', amount: 10 },
+      { instrumentId: debit.id, actualBalance: 10006, type: 'expense', amount: 4 },
+      { instrumentId: debitCard.id, actualBalance: 102, type: 'income', amount: 2 },
+      { instrumentId: debitCard.id, actualBalance: 101, type: 'expense', amount: 1 },
+      { instrumentId: credit.id, actualBalance: 9, type: 'expense', amount: 9 },
+      { instrumentId: credit.id, actualBalance: 6, type: 'income', amount: 3 },
+    ]) {
+      const result = request<{ transaction: { type: string; amount: number; sourceType: string } }>(
+        `/instruments/${entry.instrumentId}/reconcile`, 'POST', {
+          actualBalance: entry.actualBalance,
+          reconciliationDate: transactionDate,
+        },
+      )
+      assert.equal(result.transaction.type, entry.type)
+      assert.equal(result.transaction.amount, entry.amount)
+      assert.equal(result.transaction.sourceType, 'reconciliation')
+    }
+    request('/transfers', 'POST', {
+      sourceInstrumentId: debit.id,
+      destinationInstrumentId: debitCard.id,
+      amount: 2,
+      currencyId: 1,
+      transferDate: transactionDate,
+      type: 'inter_account',
+    })
+    request('/transfers', 'POST', {
+      sourceInstrumentId: debit.id,
+      destinationInstrumentId: credit.id,
+      amount: 1,
+      currencyId: 1,
+      transferDate: transactionDate,
+      type: 'card_payment',
+    })
+    const instrumentsBeforeReads = request<FinancialInstrument[]>('/instruments')
+    const cashFlow = request<DashboardCashFlowPoint[]>('/dashboard/charts/cash-flow').at(-1)
+    assert.ok(cashFlow)
+    // Credit adjustments affect recognized results without creating cash deposits or withdrawals.
+    assert.equal(cashFlow.income, 15)
+    assert.equal(cashFlow.expense, 14)
+    assert.equal(cashFlow.debtPayments, 1)
+    assert.equal(cashFlow.netCashFlow, 6)
+    assert.equal(cashFlow.netSavings, 1)
+    assert.equal(cashFlow.savingsRate, 6.67)
+    const expenses = request<Array<{ category: string; total: number }>>(
+      '/dashboard/charts/expenses-by-category?period=current_month',
+    )
+    assert.deepEqual(expenses, [{ category: 'Sin categoria', total: 14 }])
+    assert.equal(instrumentsBeforeReads.find((item) => item.id === debit.id)?.currentAmount, 10003)
+    assert.equal(instrumentsBeforeReads.find((item) => item.id === debitCard.id)?.currentAmount, 103)
+    assert.equal(instrumentsBeforeReads.find((item) => item.id === credit.id)?.currentBalance, 5)
+    assert.equal(request<{ totalAvailable: number }>('/dashboard/summary').totalAvailable - availableBefore, 6)
+    assert.deepEqual(request<DashboardCashFlowPoint[]>('/dashboard/charts/cash-flow').at(-1), cashFlow)
+    assert.deepEqual(request<FinancialInstrument[]>('/instruments'), instrumentsBeforeReads)
+  } finally {
+    getDatabase().exec('ROLLBACK TO dashboard_reconciliations')
+    getDatabase().exec('RELEASE dashboard_reconciliations')
   }
 
   request('/transactions', 'POST', {
