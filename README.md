@@ -28,7 +28,7 @@ financiera.
 
 ## Requisitos
 
-- Node.js 24+
+- Node.js 24.22.3
 - pnpm 11+
 
 El proyecto usa pnpm como unico gestor de paquetes y conserva el archivo de
@@ -92,6 +92,13 @@ La aplicacion mantiene un historial auditable:
 - los gastos fijos pagados generan su movimiento financiero relacionado;
 - las tarjetas de debito pueden vincularse a una cuenta para no duplicar dinero;
 - suscripciones e ingresos recurrentes generan movimientos con un origen identificable.
+
+Las gráficas del Home incluyen las conciliaciones como ingreso o gasto según
+el movimiento registrado, también en el ahorro mensual y los gastos por
+categoría. Los ajustes de tarjetas de crédito afectan el resultado reconocido;
+el flujo de efectivo considera solo las entradas y salidas de cuentas y débito,
+además de los pagos de deuda. Los saldos iniciales siguen excluidos de ingresos
+y gastos.
 
 ## Respaldo e intercambio
 
