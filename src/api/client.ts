@@ -7,6 +7,7 @@ import {
 } from '../app/localDatabaseBridge'
 import type {
   Budget,
+  BudgetFilters,
   BudgetInput,
   Bank,
   BankInput,
@@ -67,17 +68,18 @@ async function request<T>(
   if (!bridge) {
     return { success: false, error: MISSING_DATABASE_BRIDGE_MESSAGE }
   }
+  const method = (init.method ?? 'GET').toUpperCase()
   try {
     const response = await bridge.request({
       path,
-      method: (init.method ?? 'GET').toUpperCase(),
+      method,
       body: typeof init.body === 'string' ? init.body : undefined,
     })
     return response as ApiResponse<T>
-  } catch (error) {
+  } catch {
     console.error('[localClient] database request failed', {
-      path,
-      error: error instanceof Error ? error.message : 'unknown',
+      endpoint: path.split(/[/?]/)[1],
+      method,
     })
     return {
       success: false,
@@ -411,10 +413,12 @@ function sanitizeFamilyExpensePayload(payload: FamilyExpenseInput): Record<strin
 }
 
 function buildFamilyExpenseQuery(filters: FamilyExpenseFilters): string {
-  const params = new URLSearchParams({ month: filters.month })
-  if (filters.categoryId) params.set('category_id', String(filters.categoryId))
+  const params = new URLSearchParams()
+  filters.months.forEach((month) => params.append('month', month))
+  filters.categoryIds?.forEach((id) => params.append('category_id', String(id)))
   if (filters.search?.trim()) params.set('search', filters.search.trim())
-  return `?${params.toString()}`
+  const query = params.toString()
+  return query ? `?${query}` : ''
 }
 
 function buildTransactionQuery(filters: TransactionFilters, page?: number): string {
@@ -428,17 +432,9 @@ function buildTransactionQuery(filters: TransactionFilters, page?: number): stri
     params.set('to_date', filters.toDate)
   }
 
-  if (filters.categoryId) {
-    params.set('category_id', String(filters.categoryId))
-  }
-
-  if (filters.instrumentId) {
-    params.set('instrument_id', String(filters.instrumentId))
-  }
-
-  if (filters.type) {
-    params.set('type', filters.type)
-  }
+  filters.categoryIds?.forEach((id) => params.append('category_id', String(id)))
+  filters.instrumentIds?.forEach((id) => params.append('instrument_id', String(id)))
+  filters.types?.forEach((type) => params.append('type', type))
 
   if (filters.search && filters.search.trim().length > 0) {
     params.set('search', filters.search.trim())
@@ -745,16 +741,10 @@ export const apiClient = {
     request<{ id: number }>(`${ENDPOINTS.FIXED_EXPENSES}/${fixedExpenseId}/payments/${paymentId}`, {
       method: 'DELETE',
     }),
-  getBudgets: (month?: number, year?: number) => {
+  getBudgets: ({ months, years }: BudgetFilters) => {
     const params = new URLSearchParams()
-
-    if (month) {
-      params.set('month', String(month))
-    }
-
-    if (year) {
-      params.set('year', String(year))
-    }
+    months.forEach((month) => params.append('month', String(month)))
+    years.forEach((year) => params.append('year', String(year)))
 
     const query = params.toString()
     const path = query.length > 0 ? `${ENDPOINTS.BUDGETS}?${query}` : ENDPOINTS.BUDGETS

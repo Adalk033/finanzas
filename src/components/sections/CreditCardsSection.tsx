@@ -795,6 +795,9 @@ export function CreditCardsSection({
                     {selectedStatementDetail ? (
                       <div className="statement-movements">
                         <h4>Movimientos del corte {formatIsoDate(selectedStatementDetail.cutOffDate)}</h4>
+                        {selectedStatementDetail.reconciliationApplied > 0 ? (
+                          <p>Ajustes a favor aplicados al corte {formatCurrency(selectedStatementDetail.reconciliationApplied)}</p>
+                        ) : null}
                         <MovementTable
                           movements={statementMovements}
                           isLoading={isStatementMovementsLoading}

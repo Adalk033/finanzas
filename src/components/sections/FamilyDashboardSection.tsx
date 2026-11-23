@@ -1,4 +1,5 @@
 import { ActionButton } from '../ActionButton'
+import { FilterChips } from '../FilterChips'
 import {
   Bar,
   BarChart,
@@ -8,7 +9,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { formatCurrency } from '../../app/appHelpers'
+import { CURRENT_MONTH_ISO, formatCurrency, formatMonth } from '../../app/appHelpers'
 import type { FamilyDashboard } from '../../types/domain'
 
 type FamilyDashboardSectionProps = {
@@ -30,6 +31,9 @@ export function FamilyDashboardSection({
   onMonthChange,
   onReload,
 }: FamilyDashboardSectionProps) {
+  const isMonthFiltered = selectedMonth !== CURRENT_MONTH_ISO
+  const clearMonth = (): void => { onMonthChange(CURRENT_MONTH_ISO) }
+
   return (
     <section className="card">
       <header className="card__header dashboard-header">
@@ -43,19 +47,27 @@ export function FamilyDashboardSection({
         />
       </header>
 
-      <div className="family-month-filter">
-        <label className="form-grid__field" htmlFor="familyDashboardMonth">Mes</label>
-        <input
-          id="familyDashboardMonth"
-          className="form-grid__input"
-          type="month"
-          value={selectedMonth}
-          onChange={(event) => {
-            if (event.target.value) onMonthChange(event.target.value)
-          }}
-          required
-        />
+      <div className="section-toolbar">
+        <div className="family-month-filter">
+          <label className="form-grid__field" htmlFor="familyDashboardMonth">Mes</label>
+          <input
+            id="familyDashboardMonth"
+            className="form-grid__input"
+            type="month"
+            value={selectedMonth}
+            onChange={(event) => {
+              if (event.target.value) onMonthChange(event.target.value)
+            }}
+            disabled={!hasConfig}
+            required
+          />
+        </div>
+        <ActionButton onClick={clearMonth} icon="reset" label="Limpiar filtros"
+          disabled={!hasConfig || (!isMonthFiltered && !isLoading)} />
       </div>
+      <FilterChips disabled={!hasConfig || isLoading} chips={isMonthFiltered
+        ? [{ key: 'month', label: `Mes: ${formatMonth(selectedMonth)}`, onRemove: clearMonth }]
+        : []} />
 
       {!hasConfig ? <p className="message message--info">Abre la aplicacion de escritorio para acceder a tus datos locales.</p> : null}
       {isLoading ? <p className="message message--info">Cargando gastos del mes...</p> : null}

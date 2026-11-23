@@ -57,7 +57,7 @@ export function useDebitCardsController({
 
     setIsDebitCardMovementsLoading(true)
     setDebitCardError('')
-    const result = await apiClient.getTransactions({ instrumentId: cardId })
+    const result = await apiClient.getTransactions({ instrumentIds: [cardId] })
     if (!result.success) {
       setDebitCardError(result.error ?? 'No se pudieron cargar los movimientos de la tarjeta.')
     } else {
@@ -71,7 +71,7 @@ export function useDebitCardsController({
       return
     }
     let isCurrent = true
-    void apiClient.getTransactions({ instrumentId: resolvedSelectedDebitCardId }).then((result) => {
+    void apiClient.getTransactions({ instrumentIds: [resolvedSelectedDebitCardId] }).then((result) => {
       if (!isCurrent) return
       if (result.success) {
         setDebitCardMovements(result.data ?? [])

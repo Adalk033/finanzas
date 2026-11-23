@@ -159,12 +159,14 @@ export interface TransactionInput {
 export interface TransactionFilters {
   fromDate?: string
   toDate?: string
-  categoryId?: number
-  instrumentId?: number
-  type?: TransactionType
+  categoryIds?: number[]
+  instrumentIds?: number[]
+  types?: MovementFilterType[]
   search?: string
   autoAdjustmentsOnly?: boolean
 }
+
+export type MovementFilterType = TransactionType | 'card_payment'
 
 export interface FamilyExpense {
   id: number
@@ -191,8 +193,8 @@ export interface FamilyExpenseInput {
 }
 
 export interface FamilyExpenseFilters {
-  month: string
-  categoryId?: number
+  months: string[]
+  categoryIds?: number[]
   search?: string
 }
 
@@ -225,6 +227,7 @@ export interface CreditCardStatement {
   noInterestPayment: number | null
   isPaid: boolean
   paidAmount: number | null
+  reconciliationApplied: number
   outstandingAmount: number
   paidDate: string | null
   createdAt: string
@@ -469,6 +472,11 @@ export interface BudgetInput {
   month: number
   year: number
   notes: string
+}
+
+export interface BudgetFilters {
+  months: number[]
+  years: number[]
 }
 
 export interface Simulation {

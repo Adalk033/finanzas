@@ -161,7 +161,7 @@ export function useCreditCardsController({
       return
     }
     setIsCardMovementsLoading(true)
-    const result = await apiClient.getTransactions({ instrumentId: cardId })
+    const result = await apiClient.getTransactions({ instrumentIds: [cardId] })
     if (!result.success) {
       setActionError(result.error ?? 'No se pudieron cargar los movimientos de la tarjeta.')
     } else {
@@ -175,7 +175,7 @@ export function useCreditCardsController({
       return
     }
     let active = true
-    void apiClient.getTransactions({ instrumentId: resolvedSelectedCardId }).then((result) => {
+    void apiClient.getTransactions({ instrumentIds: [resolvedSelectedCardId] }).then((result) => {
       if (!active) return
       if (result.success) {
         setCardMovements(result.data ?? [])

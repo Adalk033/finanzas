@@ -1,6 +1,7 @@
 import type {
   Bank,
   BankInput,
+  BudgetFilters,
   BudgetInput,
   BudgetStatus,
   Category,
@@ -8,6 +9,7 @@ import type {
   CategoryType,
   CreditCardStatementInput,
   CreditCardStatementUpdateInput,
+  DashboardPreferences,
   DashboardSummary,
   FinancialInstrument,
   FinancialInstrumentInput,
@@ -116,9 +118,6 @@ export const EMPTY_TRANSACTION_FORM: TransactionInput = {
 export const EMPTY_TRANSACTION_FILTERS: TransactionFilters = {
   fromDate: '',
   toDate: '',
-  categoryId: undefined,
-  instrumentId: undefined,
-  type: undefined,
   search: '',
 }
 
@@ -132,8 +131,7 @@ export const EMPTY_FAMILY_EXPENSE_FORM: FamilyExpenseInput = {
 }
 
 export const EMPTY_FAMILY_EXPENSE_FILTERS: FamilyExpenseFilters = {
-  month: CURRENT_MONTH_ISO,
-  categoryId: undefined,
+  months: [CURRENT_MONTH_ISO],
   search: '',
 }
 
@@ -238,6 +236,11 @@ export const EMPTY_BUDGET_FORM: BudgetInput = {
   notes: '',
 }
 
+export const DEFAULT_BUDGET_FILTERS: BudgetFilters = {
+  months: [EMPTY_BUDGET_FORM.month],
+  years: [EMPTY_BUDGET_FORM.year],
+}
+
 export const EMPTY_SIMULATION_FORM: SimulationInput = {
   creditUtilizationWarningThreshold: 50,
   name: '',
@@ -306,6 +309,10 @@ export const DASHBOARD_BALANCE_CHART_COLORS = [
   'var(--color-chart-debt)',
   'var(--color-chart-neutral)',
 ]
+export const DEFAULT_DASHBOARD_FILTERS: DashboardPreferences = {
+  expensePeriod: 'current_month',
+  balanceEvolutionPeriod: 'one_month',
+}
 export const EMPTY_DASHBOARD_SUMMARY: DashboardSummary = {
   totalAvailable: 0,
   totalCreditDebt: 0,
@@ -415,6 +422,11 @@ export function formatIsoDate(value: string | null | undefined): string {
   }
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
   return match ? `${match[3]}/${match[2]}/${match[1]}` : value
+}
+
+export function formatMonth(month: string): string {
+  return new Intl.DateTimeFormat('es-MX', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+    .format(new Date(`${month}-01T00:00:00Z`))
 }
 
 export function getCategoryTypeLabel(type: CategoryType): string {

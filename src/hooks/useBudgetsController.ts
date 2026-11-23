@@ -1,7 +1,8 @@
 import { useState, type SyntheticEvent } from 'react'
 import { apiClient } from '../api/client'
-import { EMPTY_BUDGET_FORM } from '../app/appHelpers'
-import type { Budget, BudgetInput } from '../types/domain'
+import { DEFAULT_BUDGET_FILTERS, EMPTY_BUDGET_FORM } from '../app/appHelpers'
+import type { Budget, BudgetFilters, BudgetInput } from '../types/domain'
+import { useAppliedFilters } from './useAppliedFilters'
 
 export function useBudgetsController() {
   const [budgets, setBudgets] = useState<Budget[]>([])
@@ -10,30 +11,34 @@ export function useBudgetsController() {
   const [budgetError, setBudgetError] = useState('')
   const [budgetForm, setBudgetForm] = useState<BudgetInput>(EMPTY_BUDGET_FORM)
   const [editingBudgetId, setEditingBudgetId] = useState<number | null>(null)
-  const [budgetFilterMonth, setBudgetFilterMonth] = useState(new Date().getMonth() + 1)
-  const [budgetFilterYear, setBudgetFilterYear] = useState(new Date().getFullYear())
+  const { appliedFilters: budgetFilters, getRequestedFilters, runFilterQuery } = useAppliedFilters(DEFAULT_BUDGET_FILTERS)
 
-  const loadBudgets = async (month: number = budgetFilterMonth, year: number = budgetFilterYear): Promise<void> => {
+  const applyBudgetFilters = async (filters: BudgetFilters): Promise<boolean> => {
     setIsBudgetsLoading(true)
     setBudgetError('')
 
-    const result = await apiClient.getBudgets(month, year)
+    const result = await runFilterQuery(filters, apiClient.getBudgets)
+    if (!result) return false
+    setIsBudgetsLoading(false)
 
     if (!result.success) {
       setBudgetError(result.error ?? 'No se pudieron cargar los presupuestos.')
-      setIsBudgetsLoading(false)
-      return
+      return false
     }
 
     setBudgets(result.data ?? [])
-    setIsBudgetsLoading(false)
+    return true
+  }
+
+  const loadBudgets = async (): Promise<void> => {
+    await applyBudgetFilters(getRequestedFilters())
   }
 
   const resetBudgetEditor = (): void => {
     setBudgetForm({
       ...EMPTY_BUDGET_FORM,
-      month: budgetFilterMonth,
-      year: budgetFilterYear,
+      month: budgetFilters.months.length === 1 ? budgetFilters.months[0] : EMPTY_BUDGET_FORM.month,
+      year: budgetFilters.years.length === 1 ? budgetFilters.years[0] : EMPTY_BUDGET_FORM.year,
     })
     setEditingBudgetId(null)
   }
@@ -82,7 +87,7 @@ export function useBudgetsController() {
     }
 
     resetBudgetEditor()
-    await loadBudgets(budgetFilterMonth, budgetFilterYear)
+    await loadBudgets()
   }
 
   const handleBudgetDelete = async (budgetId: number): Promise<void> => {
@@ -99,7 +104,7 @@ export function useBudgetsController() {
     if (editingBudgetId === budgetId) {
       resetBudgetEditor()
     }
-    await loadBudgets(budgetFilterMonth, budgetFilterYear)
+    await loadBudgets()
   }
 
   return {
@@ -109,11 +114,9 @@ export function useBudgetsController() {
     budgetError,
     budgetForm,
     editingBudgetId,
-    budgetFilterMonth,
-    budgetFilterYear,
+    budgetFilters,
     setBudgetForm,
-    setBudgetFilterMonth,
-    setBudgetFilterYear,
+    applyBudgetFilters,
     loadBudgets,
     resetBudgetEditor,
     startBudgetEdit,

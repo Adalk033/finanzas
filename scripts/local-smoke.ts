@@ -1147,7 +1147,7 @@ try {
   assert.deepEqual(request('/dashboard/summary'), balancesBeforeSimulation)
 
   const info = request<{ schemaVersion: string }>('/database/info')
-  assert.equal(info.schemaVersion, '7')
+  assert.equal(info.schemaVersion, '8')
 
   const cardBeforeHistorical = request<Array<{
     id: number
@@ -1339,6 +1339,13 @@ try {
     `/transactions?instrument_id=${splitSource.id}&page=1`,
   )
   assert.ok(sourcePaymentMovements.transactions.some((item) => item.type === 'card_payment' && item.id === splitPayment.id))
+  const mixedPaymentPath = `${paymentMovementsPath}&instrument_id=${splitSource.id}&type=expense&type=card_payment`
+  const mixedPaymentMovements = request<typeof paymentMovements>(mixedPaymentPath)
+  assert.equal(mixedPaymentMovements.total, 3)
+  assert.deepEqual(mixedPaymentMovements.transactions.map((item) => item.type), ['card_payment', 'expense', 'expense'])
+  const onlyPayments = request<typeof paymentMovements>(`${paymentMovementsPath}&instrument_id=${splitSource.id}&type=card_payment`)
+  assert.deepEqual(onlyPayments.transactions.map((item) => item.id), [splitPayment.id])
+  assert.deepEqual(onlyPayments.activeMsiTransactions, [])
   for (const filter of [
     'type=expense', 'type=income', `category_id=${category.id}`,
     'auto_adjustments_only=true', 'from_date=2026-03-02', 'to_date=2026-02-28',
@@ -1443,6 +1450,71 @@ try {
   splitStatements = request(`/statements?instrument_id=${splitCard.id}`)
   assert.equal(splitStatements.find((item) => item.cutOffDate === '2026-01-10')?.outstandingAmount, 100)
   assert.equal(splitStatements.find((item) => item.cutOffDate === '2026-02-10')?.outstandingAmount, 150)
+
+  getDatabase().exec('SAVEPOINT card_statement_reconciliation')
+  try {
+    const card = request<{ id: number }>('/instruments', 'POST', {
+      bankId: bank.id, name: 'Tarjeta conciliada', type: 'credit_card', currencyId: 1,
+      creditLimit: 1000, currentBalance: 0, cutOffDay: 10, paymentDueDay: 20,
+    })
+    const purchase = (amount: number, transactionDate: string) => request('/transactions', 'POST', {
+      instrumentId: card.id, currencyId: 1, type: 'expense', amount, transactionDate,
+    })
+    const payment = (amount: number, transferDate: string, statementId?: number) =>
+      request<{ id: number; amount: number; statementId: number | null }>('/transfers', 'POST', {
+        sourceInstrumentId: splitSource.id, destinationInstrumentId: card.id, currencyId: 1,
+        type: 'card_payment', amount, transferDate, statementId,
+      })
+    const reconcile = (actualBalance: number, reconciliationDate: string) =>
+      request(`/instruments/${card.id}/reconcile`, 'POST', { actualBalance, reconciliationDate })
+    const statementFor = (cutOffDate: string) => {
+      const result = request<Array<{
+        id: number; cutOffDate: string; totalAmount: number; paidAmount: number;
+        reconciliationApplied: number; outstandingAmount: number; isPaid: boolean;
+      }>>(`/statements?instrument_id=${card.id}`).find((item) => item.cutOffDate === cutOffDate)
+      assert.ok(result)
+      return result
+    }
+
+    purchase(100, '2026-05-05')
+    payment(80, '2026-05-11')
+    assert.equal(statementFor('2026-05-10').outstandingAmount, 20)
+    reconcile(0, '2026-05-12')
+    assert.equal(statementFor('2026-05-10').outstandingAmount, 0)
+    assert.equal(statementFor('2026-05-10').reconciliationApplied, 20)
+
+    purchase(150, '2026-06-05')
+    reconcile(125, '2026-05-09')
+    assert.equal(statementFor('2026-05-10').paidAmount, 75)
+    assert.equal(statementFor('2026-05-10').reconciliationApplied, 25)
+    assert.equal(statementFor('2026-06-10').paidAmount, 5)
+    const junePayment = payment(125, '2026-06-11')
+    const june = statementFor('2026-06-10')
+    assert.equal(junePayment.amount, 125)
+    assert.equal(june.paidAmount, 130)
+    assert.equal(june.reconciliationApplied, 20)
+    assert.equal(june.outstandingAmount, 0)
+    assert.equal(june.isPaid, true)
+
+    purchase(40, '2026-07-11')
+    const currentBalance = () => request<Array<{ id: number; currentBalance: number }>>('/instruments')
+      .find((item) => item.id === card.id)?.currentBalance
+    assert.equal(currentBalance(), 40)
+    assert.equal(statementFor('2026-06-10').outstandingAmount, 0)
+    assert.equal(statementFor('2026-07-10').outstandingAmount, 0)
+
+    purchase(10, '2026-07-09')
+    request(`/transfers/${junePayment.id}`, 'DELETE')
+    const july = statementFor('2026-07-10')
+    const targetedPayment = payment(10, '2026-07-12', july.id)
+    assert.equal(targetedPayment.statementId, july.id)
+    assert.equal(statementFor('2026-06-10').outstandingAmount, 125)
+    assert.equal(statementFor('2026-07-10').outstandingAmount, 0)
+    assert.equal(currentBalance(), 165)
+  } finally {
+    getDatabase().exec('ROLLBACK TO card_statement_reconciliation')
+    getDatabase().exec('RELEASE card_statement_reconciliation')
+  }
 
   const adjustableLoan = request<{ id: number }>('/loans', 'POST', {
     name: 'Prestamo con abono extra',
@@ -1664,6 +1736,80 @@ try {
   assert.match(invalidPageError, /«Página» debe ser un entero positivo/)
   for (const transactionId of paginatedTransactionIds) {
     request(`/transactions/${transactionId}`, 'DELETE')
+  }
+
+  getDatabase().exec('SAVEPOINT multiple_filters')
+  try {
+    const secondCategory = request<{ id: number }>('/categories', 'POST', {
+      name: 'Categoría de prueba para filtros',
+      type: 'expense',
+      isActive: true,
+    })
+    const addMovement = (instrumentId: number, categoryId: number, type: 'expense' | 'income') => (
+      request<{ id: number }>('/transactions', 'POST', {
+        instrumentId, categoryId, type, currencyId: 1, amount: 1, description: 'Prueba de selección múltiple',
+        transactionDate: '2026-10-12', affectsBalance: false,
+      }).id
+    )
+    const expense = addMovement(debit.id, category.id, 'expense')
+    const income = addMovement(splitSource.id, incomeOnlyCategory.id, 'income')
+    addMovement(credit.id, category.id, 'expense')
+    addMovement(debit.id, secondCategory.id, 'expense')
+
+    const movementQuery = new URLSearchParams({
+      from_date: '2026-10-12', to_date: '2026-10-12', search: 'Prueba de selección múltiple', page: '1',
+    })
+    movementQuery.append('category_id', String(category.id))
+    movementQuery.append('category_id', String(incomeOnlyCategory.id))
+    movementQuery.append('instrument_id', String(debit.id))
+    movementQuery.append('instrument_id', String(splitSource.id))
+    movementQuery.append('type', 'expense')
+    movementQuery.append('type', 'income')
+    const balancesBeforeFilters = request('/instruments')
+    const listMovements = () => request<{ total: number; transactions: Array<{ id: number }> }>(`/transactions?${movementQuery}`)
+    assert.equal(listMovements().total, 2)
+    assert.deepEqual(listMovements().transactions.map(({ id }) => id), [income, expense])
+    movementQuery.delete('category_id', String(category.id))
+    assert.deepEqual(listMovements().transactions.map(({ id }) => id), [income])
+
+    const addFamilyExpense = (categoryId: number, expenseDate: string) => (
+      request<{ id: number }>('/family-expenses', 'POST', {
+        categoryId, expenseDate, amount: 1, description: 'Prueba familiar para filtros',
+      }).id
+    )
+    const aprilExpense = addFamilyExpense(category.id, '2026-04-30')
+    const juneExpense = addFamilyExpense(secondCategory.id, '2026-06-01')
+    addFamilyExpense(secondCategory.id, '2026-05-01')
+    const familyFilter = `/family-expenses?month=2026-04&month=2026-06&month=2026-04&category_id=${category.id}&category_id=${secondCategory.id}`
+    assert.deepEqual(request<Array<{ id: number }>>(familyFilter).map(({ id }) => id), [juneExpense, aprilExpense])
+
+    const addBudget = (month: number, year: number) => (
+      request<{ id: number }>('/budgets', 'POST', { month, year, categoryId: secondCategory.id, currencyId: 1, amount: 30 }).id
+    )
+    const aprilBudget = addBudget(4, 2098)
+    const juneBudget = addBudget(6, 2099)
+    addBudget(5, 2099)
+    addBudget(6, 2100)
+    assert.deepEqual(request<Array<{ id: number }>>('/budgets?month=4&month=6&year=2098&year=2099').map(({ id }) => id), [
+      juneBudget, aprilBudget,
+    ])
+
+    const longFilter = new URLSearchParams({
+      search: 'Prueba de selección múltiple',
+    })
+    for (let id = 1; id <= 250; id += 1) longFilter.append('instrument_id', String(id))
+    assert.ok(longFilter.toString().length > 500)
+    assert.equal(request<Array<{ id: number }>>(`/transactions?${longFilter}`).length, 4)
+    longFilter.append('instrument_id', String(debit.id))
+    assert.match(requestFailure(`/transactions?${longFilter}`, 'GET', {}), /admite hasta 250 opciones/)
+    assert.match(requestFailure('/transactions?type=expense&type=otro', 'GET', {}), /valor permitido/)
+    assert.match(requestFailure(`/transactions?category_id=${category.id}&category_id=0`, 'GET', {}), /entero positivo/)
+    assert.match(requestFailure('/family-expenses?month=2026-04&month=2026-13', 'GET', {}), /mes no es válido/)
+    assert.match(requestFailure('/budgets?month=4&month=13&year=2098', 'GET', {}), /rango permitido/)
+    assert.deepEqual(request('/instruments'), balancesBeforeFilters)
+  } finally {
+    getDatabase().exec('ROLLBACK TO multiple_filters')
+    getDatabase().exec('RELEASE multiple_filters')
   }
 
   const exportedCsv = exportTransactionsCsv()

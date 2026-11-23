@@ -1,19 +1,33 @@
 import { ActionButton } from '../ActionButton'
+import { FilterChips, type FilterChip } from '../FilterChips'
+import { FilterOptions } from '../FilterOptions'
 import { FormModal } from '../FormModal'
 import { MovementDetailsModal } from '../MovementDetailsModal'
 import { useState, type SyntheticEvent } from 'react'
-import { formatCurrency, formatIsoDate } from '../../app/appHelpers'
+import { EMPTY_TRANSACTION_FILTERS, formatCurrency, formatIsoDate } from '../../app/appHelpers'
 import type {
   Category,
   FinancialInstrument,
   Transaction,
   Movement,
+  MovementFilterType,
   TransactionFilters,
   TransactionInput,
   TransactionType,
   TransferInput,
 } from '../../types/domain'
 import { NumberInput } from '../NumberInput'
+
+const MOVEMENT_FILTER_LABELS: Record<MovementFilterType, string> = {
+  expense: 'Gasto',
+  income: 'Ingreso',
+  card_payment: 'Abono a TDC',
+}
+
+const MOVEMENT_FILTER_OPTIONS = (Object.keys(MOVEMENT_FILTER_LABELS) as MovementFilterType[]).map((value) => ({
+  value,
+  label: MOVEMENT_FILTER_LABELS[value],
+}))
 
 type TransactionsSectionProps = {
   hasConfig: boolean
@@ -33,8 +47,8 @@ type TransactionsSectionProps = {
   selectedTransactionInstrument: FinancialInstrument | null
   transactionSubcategoryOptions: Category['subcategories']
   transactionFilters: TransactionFilters
+  transactionSearch: string
   excludeFromBalance: boolean
-  showAutoAdjustmentsOnly: boolean
   transactions: Movement[]
   activeMsiTransactions: Transaction[]
   transactionPagination: {
@@ -57,12 +71,9 @@ type TransactionsSectionProps = {
   onTransactionDelete: (transactionId: number) => void
   onDuplicateTransactionToFamily: (transaction: Transaction) => Promise<void>
   onResetTransactionForm: () => void
-  onFiltersChange: (nextFilters: TransactionFilters) => void
+  onApplyFilters: (filters: TransactionFilters) => Promise<boolean>
   onSearchChange: (search: string) => void
   onExcludeFromBalanceChange: (nextValue: boolean) => void
-  onToggleAutoAdjustmentsOnly: (nextValue: boolean) => void
-  onFiltersSubmit: (event: SyntheticEvent<HTMLFormElement>) => void
-  onClearFilters: () => void
   onPageChange: (page: number) => void
   onReload: () => void
 }
@@ -85,8 +96,8 @@ export function TransactionsSection({
   selectedTransactionInstrument,
   transactionSubcategoryOptions,
   transactionFilters,
+  transactionSearch,
   excludeFromBalance,
-  showAutoAdjustmentsOnly,
   transactions,
   activeMsiTransactions,
   transactionPagination,
@@ -104,12 +115,9 @@ export function TransactionsSection({
   onTransactionDelete,
   onDuplicateTransactionToFamily,
   onResetTransactionForm,
-  onFiltersChange,
+  onApplyFilters,
   onSearchChange,
   onExcludeFromBalanceChange,
-  onToggleAutoAdjustmentsOnly,
-  onFiltersSubmit,
-  onClearFilters,
   onPageChange,
   onReload,
 }: TransactionsSectionProps) {
@@ -117,8 +125,41 @@ export function TransactionsSection({
   const [duplicatingTransactionId, setDuplicatingTransactionId] = useState<number | null>(null)
   const [isTransactionFormOpen, setIsTransactionFormOpen] = useState(editingTransactionId !== null)
   const [isCardPaymentFormOpen, setIsCardPaymentFormOpen] = useState(false)
-  const [isFiltersFormOpen, setIsFiltersFormOpen] = useState(false)
+  const [filterDraft, setFilterDraft] = useState<TransactionFilters | null>(null)
   const isTransactionFormVisible = isTransactionFormOpen || editingTransactionId !== null
+  const { fromDate, toDate, types = [], categoryIds = [], instrumentIds = [], search, autoAdjustmentsOnly } = transactionFilters
+  const removeFilter = (changes: Partial<TransactionFilters>): void => {
+    void onApplyFilters({ ...transactionFilters, search: transactionSearch, ...changes })
+  }
+  const activeChips: FilterChip[] = []
+  if (fromDate) activeChips.push({ key: 'fromDate', label: `Desde: ${formatIsoDate(fromDate)}`, onRemove: () => removeFilter({ fromDate: '' }) })
+  if (toDate) activeChips.push({ key: 'toDate', label: `Hasta: ${formatIsoDate(toDate)}`, onRemove: () => removeFilter({ toDate: '' }) })
+  activeChips.push(
+    ...types.map((type) => ({
+      key: `type-${type}`,
+      label: `Tipo: ${MOVEMENT_FILTER_LABELS[type]}`,
+      onRemove: () => removeFilter({ types: types.filter((value) => value !== type) }),
+    })),
+    ...categoryIds.map((id) => ({
+      key: `category-${id}`,
+      label: `Categoría: ${categories.find((category) => category.id === id)?.name ?? id}`,
+      onRemove: () => removeFilter({ categoryIds: categoryIds.filter((value) => value !== id) }),
+    })),
+    ...instrumentIds.map((id) => ({
+      key: `instrument-${id}`,
+      label: `Instrumento: ${instruments.find((instrument) => instrument.id === id)?.name ?? id}`,
+      onRemove: () => removeFilter({ instrumentIds: instrumentIds.filter((value) => value !== id) }),
+    })),
+  )
+  if (search) activeChips.push({ key: 'search', label: `Búsqueda: ${search}`, onRemove: () => removeFilter({ search: '' }) })
+  if (autoAdjustmentsOnly) {
+    activeChips.push({ key: 'autoAdjustmentsOnly', label: 'Solo ajustes automáticos', onRemove: () => removeFilter({ autoAdjustmentsOnly: undefined }) })
+  }
+
+  const clearFilters = (): void => {
+    if (filterDraft) setFilterDraft(EMPTY_TRANSACTION_FILTERS)
+    void onApplyFilters(EMPTY_TRANSACTION_FILTERS)
+  }
 
   const firstVisibleTransaction = transactionPagination.total === 0
     ? 0
@@ -163,13 +204,16 @@ export function TransactionsSection({
           icon={isCardPaymentFormOpen ? 'close' : 'payment'}
           label={isCardPaymentFormOpen ? 'Ocultar abono' : 'Abonar a tarjeta'}
         />
-        <ActionButton className="button button--secondary" type="button" onClick={() => setIsFiltersFormOpen((value) => !value)}
-          icon="filter"
-          label={isFiltersFormOpen ? 'Ocultar filtros' : 'Filtros'}
-        />
+        <div className="filter-actions">
+          <ActionButton aria-haspopup="dialog" onClick={() => setFilterDraft({ ...transactionFilters, search: transactionSearch })}
+            icon="filter" label="Filtros" />
+          <ActionButton onClick={clearFilters} icon="reset" label="Limpiar filtros"
+            disabled={!hasConfig || (activeChips.length === 0 && !transactionSearch && !isTransactionsLoading)} />
+        </div>
         <div className="section-toolbar__spacer" />
         <ActionButton iconOnly className="button button--secondary" type="button" onClick={onReload} icon="refresh" label="Recargar" />
       </div>
+      <FilterChips chips={activeChips} disabled={!hasConfig || isTransactionsLoading} />
 
       {isCardPaymentFormOpen ? (
         <FormModal title="Abonar a tarjeta" onClose={() => setIsCardPaymentFormOpen(false)} error={cardPaymentError} message={cardPaymentMessage}>
@@ -492,106 +536,89 @@ export function TransactionsSection({
         </FormModal>
       ) : null}
 
-      {isFiltersFormOpen ? (
-        <FormModal title="Filtros de transacciones" onClose={() => setIsFiltersFormOpen(false)} error={transactionError}>
-      <header className="mini-card__header form-modal__intro">
-        <p className="mini-card__subtitle">Refina por fecha, tipo, categoria, instrumento y texto.</p>
-      </header>
+      {filterDraft ? (
+        <FormModal title="Filtros de transacciones" onClose={() => setFilterDraft(null)} error={transactionError}>
+          <header className="mini-card__header form-modal__intro">
+            <p className="mini-card__subtitle">Refina por fecha, tipo, categoría, instrumento y texto.</p>
+          </header>
 
-      <div className="section-panel">
-        <form className="form-grid" onSubmit={onFiltersSubmit}>
-        <label className="form-grid__field" htmlFor="filterFromDate">Desde</label>
-        <input
-          id="filterFromDate"
-          className="form-grid__input"
-          type="date"
-          value={transactionFilters.fromDate ?? ''}
-          onChange={(event) => onFiltersChange({ ...transactionFilters, fromDate: event.target.value })}
-        />
+          <div className="section-panel">
+            <form className="form-grid" onSubmit={(event) => {
+              event.preventDefault()
+              void onApplyFilters(filterDraft).then((applied) => {
+                if (applied) setFilterDraft((current) => current === filterDraft ? null : current)
+              })
+            }}>
+              <label className="form-grid__field" htmlFor="filterFromDate">Desde</label>
+              <input
+                id="filterFromDate"
+                className="form-grid__input"
+                type="date"
+                value={filterDraft.fromDate ?? ''}
+                onChange={(event) => setFilterDraft({ ...filterDraft, fromDate: event.target.value })}
+              />
 
-        <label className="form-grid__field" htmlFor="filterToDate">Hasta</label>
-        <input
-          id="filterToDate"
-          className="form-grid__input"
-          type="date"
-          value={transactionFilters.toDate ?? ''}
-          onChange={(event) => onFiltersChange({ ...transactionFilters, toDate: event.target.value })}
-        />
+              <label className="form-grid__field" htmlFor="filterToDate">Hasta</label>
+              <input
+                id="filterToDate"
+                className="form-grid__input"
+                type="date"
+                value={filterDraft.toDate ?? ''}
+                onChange={(event) => setFilterDraft({ ...filterDraft, toDate: event.target.value })}
+              />
 
-        <label className="form-grid__field" htmlFor="filterType">Tipo</label>
-        <select
-          id="filterType"
-          className="form-grid__input"
-          value={transactionFilters.type ?? ''}
-          onChange={(event) => {
-            const nextType = event.target.value ? (event.target.value as TransactionType) : undefined
-            onFiltersChange({ ...transactionFilters, type: nextType })
-          }}
-        >
-          <option value="">Todos</option>
-          <option value="expense">Gasto</option>
-          <option value="income">Ingreso</option>
-        </select>
+              <FilterOptions
+                label="Tipos de movimiento"
+                options={MOVEMENT_FILTER_OPTIONS}
+                selected={filterDraft.types ?? []}
+                onChange={(types) => setFilterDraft({ ...filterDraft, types })}
+              />
+              <FilterOptions
+                label="Categorías"
+                options={categories.map(({ id, name }) => ({ value: id, label: name }))}
+                selected={filterDraft.categoryIds ?? []}
+                onChange={(categoryIds) => setFilterDraft({ ...filterDraft, categoryIds })}
+              />
+              <FilterOptions
+                label="Instrumentos"
+                options={instruments.map(({ id, name }) => ({ value: id, label: name }))}
+                selected={filterDraft.instrumentIds ?? []}
+                onChange={(instrumentIds) => setFilterDraft({ ...filterDraft, instrumentIds })}
+              />
 
-        <label className="form-grid__field" htmlFor="filterCategory">Categoria</label>
-        <select
-          id="filterCategory"
-          className="form-grid__input"
-          value={transactionFilters.categoryId ?? ''}
-          onChange={(event) => {
-            const nextCategoryId = event.target.value ? Number(event.target.value) : undefined
-            onFiltersChange({ ...transactionFilters, categoryId: nextCategoryId })
-          }}
-        >
-          <option value="">Todas</option>
-          {categories.map((category) => (
-            <option key={category.id} value={category.id}>{category.name}</option>
-          ))}
-        </select>
+              <label className="form-grid__field" htmlFor="filterSearch">Búsqueda</label>
+              <input
+                id="filterSearch"
+                className="form-grid__input"
+                type="text"
+                value={filterDraft.search ?? ''}
+                maxLength={255}
+                onChange={(event) => setFilterDraft({ ...filterDraft, search: event.target.value })}
+                placeholder="Descripción, categoría o instrumento"
+              />
 
-        <label className="form-grid__field" htmlFor="filterInstrument">Instrumento</label>
-        <select
-          id="filterInstrument"
-          className="form-grid__input"
-          value={transactionFilters.instrumentId ?? ''}
-          onChange={(event) => {
-            const nextInstrumentId = event.target.value ? Number(event.target.value) : undefined
-            onFiltersChange({ ...transactionFilters, instrumentId: nextInstrumentId })
-          }}
-        >
-          <option value="">Todos</option>
-          {instruments.map((instrument) => (
-            <option key={instrument.id} value={instrument.id}>{instrument.name}</option>
-          ))}
-        </select>
+              <label className="form-grid__field" htmlFor="filterAutoAdjustmentsOnly">Ajustes automáticos</label>
+              <label className="form-grid__input" htmlFor="filterAutoAdjustmentsOnly">
+                <input
+                  id="filterAutoAdjustmentsOnly"
+                  type="checkbox"
+                  checked={filterDraft.autoAdjustmentsOnly ?? false}
+                  disabled={!hasConfig}
+                  onChange={(event) => {
+                    const autoAdjustmentsOnly = event.target.checked || undefined
+                    setFilterDraft({ ...filterDraft, autoAdjustmentsOnly })
+                    void onApplyFilters({ ...transactionFilters, search: transactionSearch, autoAdjustmentsOnly })
+                  }}
+                />
+                {' '}Solo mostrar Otros (por ajuste)
+              </label>
 
-        <label className="form-grid__field" htmlFor="filterSearch">Busqueda</label>
-        <input
-          id="filterSearch"
-          className="form-grid__input"
-          type="text"
-          value={transactionFilters.search ?? ''}
-          onChange={(event) => onFiltersChange({ ...transactionFilters, search: event.target.value })}
-          placeholder="Descripcion, categoria o instrumento"
-        />
-
-        <label className="form-grid__field" htmlFor="filterAutoAdjustmentsOnly">Ajustes automáticos</label>
-        <label className="form-grid__input" htmlFor="filterAutoAdjustmentsOnly">
-          <input
-            id="filterAutoAdjustmentsOnly"
-            type="checkbox"
-            checked={showAutoAdjustmentsOnly}
-            onChange={(event) => onToggleAutoAdjustmentsOnly(event.target.checked)}
-          />
-          {' '}Solo mostrar Otros (por ajuste)
-        </label>
-
-            <div className="form-grid__actions">
-              <ActionButton className="button button--primary" type="submit" disabled={!hasConfig} icon="filter" label="Aplicar filtros" />
-              <ActionButton iconOnly className="button button--secondary" type="button" onClick={onClearFilters} icon="reset" label="Limpiar filtros" />
-            </div>
-        </form>
-      </div>
+                <div className="form-grid__actions">
+                  <ActionButton className="button button--primary" type="submit" disabled={!hasConfig || isTransactionsLoading} icon="filter" label="Aplicar filtros" />
+                  <ActionButton iconOnly type="button" onClick={clearFilters} disabled={!hasConfig} icon="reset" label="Limpiar filtros" />
+                </div>
+            </form>
+          </div>
         </FormModal>
       ) : null}
 
@@ -604,7 +631,8 @@ export function TransactionsSection({
             id="movementSearch"
             className="form-grid__input transaction-search__input"
             type="search"
-            value={transactionFilters.search ?? ''}
+            value={transactionSearch}
+            maxLength={255}
             onChange={(event) => onSearchChange(event.target.value)}
             placeholder="Buscar"
             aria-label="Buscar movimientos"
