@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { apiClient } from '../api/client'
-import { EMPTY_DASHBOARD_SUMMARY, EMPTY_DASHBOARD_UPCOMING_COMMITMENTS } from '../app/appHelpers'
+import { DEFAULT_DASHBOARD_FILTERS, EMPTY_DASHBOARD_SUMMARY, EMPTY_DASHBOARD_UPCOMING_COMMITMENTS } from '../app/appHelpers'
 import type {
   DashboardBalanceEvolution,
   DashboardBalanceEvolutionPeriod,
@@ -15,8 +15,7 @@ import type {
 export function useDashboardController() {
   const [dashboardSummary, setDashboardSummary] = useState<DashboardSummary>(EMPTY_DASHBOARD_SUMMARY)
   const [dashboardExpensesByCategory, setDashboardExpensesByCategory] = useState<DashboardExpenseByCategory[]>([])
-  const [dashboardExpensePeriod, setDashboardExpensePeriod] = useState<DashboardExpensePeriod>('current_month')
-  const [dashboardBalanceEvolutionPeriod, setDashboardBalanceEvolutionPeriod] = useState<DashboardBalanceEvolutionPeriod>('one_month')
+  const [dashboardFilters, setDashboardFilters] = useState(DEFAULT_DASHBOARD_FILTERS)
   const [dashboardCashFlow, setDashboardCashFlow] = useState<DashboardCashFlowPoint[]>([])
   const [dashboardBalanceEvolution, setDashboardBalanceEvolution] = useState<DashboardBalanceEvolution>({
     series: [],
@@ -27,26 +26,24 @@ export function useDashboardController() {
   )
   const [isDashboardLoading, setIsDashboardLoading] = useState(false)
   const [dashboardError, setDashboardError] = useState('')
+  const requestId = useRef(0)
 
   const loadDashboard = async (preferences?: DashboardPreferences): Promise<void> => {
+    const id = ++requestId.current
     setIsDashboardLoading(true)
     setDashboardError('')
 
     let selectedPreferences = preferences
     if (!selectedPreferences) {
       const preferencesResult = await apiClient.getDashboardPreferences()
+      if (id !== requestId.current) return
       if (!preferencesResult.success) {
         setDashboardError(preferencesResult.error ?? 'No se pudieron cargar las preferencias del resumen.')
         setIsDashboardLoading(false)
         return
       }
-      selectedPreferences = preferencesResult.data ?? {
-        expensePeriod: 'current_month',
-        balanceEvolutionPeriod: 'one_month',
-      }
+      selectedPreferences = preferencesResult.data ?? DEFAULT_DASHBOARD_FILTERS
     }
-    setDashboardExpensePeriod(selectedPreferences.expensePeriod)
-    setDashboardBalanceEvolutionPeriod(selectedPreferences.balanceEvolutionPeriod)
 
     const [
       summaryResult,
@@ -61,6 +58,7 @@ export function useDashboardController() {
       apiClient.getDashboardBalanceEvolution(),
       apiClient.getDashboardUpcomingCommitments(),
     ])
+    if (id !== requestId.current) return
 
     if (!summaryResult.success) {
       setDashboardError(summaryResult.error ?? 'No se pudo cargar el resumen financiero.')
@@ -92,6 +90,7 @@ export function useDashboardController() {
       return
     }
 
+    setDashboardFilters(selectedPreferences)
     setDashboardSummary(summaryResult.data ?? EMPTY_DASHBOARD_SUMMARY)
     setDashboardExpensesByCategory(expensesResult.data ?? [])
     setDashboardCashFlow(cashFlowResult.data ?? [])
@@ -103,8 +102,8 @@ export function useDashboardController() {
   return {
     dashboardSummary,
     dashboardExpensesByCategory,
-    dashboardExpensePeriod,
-    dashboardBalanceEvolutionPeriod,
+    dashboardExpensePeriod: dashboardFilters.expensePeriod,
+    dashboardBalanceEvolutionPeriod: dashboardFilters.balanceEvolutionPeriod,
     dashboardCashFlow,
     dashboardBalanceEvolution,
     dashboardUpcomingCommitments,

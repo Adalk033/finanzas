@@ -1,4 +1,5 @@
 import { ActionButton } from '../ActionButton'
+import { FilterChips } from '../FilterChips'
 import {
   Bar,
   BarChart,
@@ -14,7 +15,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { DASHBOARD_BALANCE_CHART_COLORS, formatCurrency, formatIsoDate } from '../../app/appHelpers'
+import { DASHBOARD_BALANCE_CHART_COLORS, DEFAULT_DASHBOARD_FILTERS, formatCurrency, formatIsoDate } from '../../app/appHelpers'
 import type {
   DashboardBalanceEvolution,
   DashboardBalanceEvolutionPeriod,
@@ -45,8 +46,8 @@ type DashboardSectionProps = {
 const DASHBOARD_EXPENSE_PERIOD_OPTIONS: Array<{ value: DashboardExpensePeriod; label: string }> = [
   { value: 'current_month', label: 'Mes actual' },
   { value: 'previous_month', label: 'Mes pasado' },
-  { value: 'last_3_months', label: 'Ultimos 3 meses' },
-  { value: 'last_year', label: 'Ultimo año' },
+  { value: 'last_3_months', label: 'Últimos 3 meses' },
+  { value: 'last_year', label: 'Último año' },
 ]
 
 const DASHBOARD_BALANCE_EVOLUTION_PERIOD_OPTIONS: Array<{ value: DashboardBalanceEvolutionPeriod; label: string }> = [
@@ -87,6 +88,15 @@ export function DashboardSection({
     ...point,
     label: formatIsoDate(point.date),
   }))
+  const expenseFilter = dashboardExpensePeriod === DEFAULT_DASHBOARD_FILTERS.expensePeriod
+    ? undefined
+    : DASHBOARD_EXPENSE_PERIOD_OPTIONS.find(({ value }) => value === dashboardExpensePeriod)
+  const balanceFilter = dashboardBalanceEvolutionPeriod === DEFAULT_DASHBOARD_FILTERS.balanceEvolutionPeriod
+    ? undefined
+    : DASHBOARD_BALANCE_EVOLUTION_PERIOD_OPTIONS.find(({ value }) => value === dashboardBalanceEvolutionPeriod)
+  const filtersDisabled = !hasConfig || isDashboardLoading
+  const clearExpenseFilter = (): void => { void onDashboardExpensePeriodChange(DEFAULT_DASHBOARD_FILTERS.expensePeriod) }
+  const clearBalanceFilter = (): void => { void onDashboardBalanceEvolutionPeriodChange(DEFAULT_DASHBOARD_FILTERS.balanceEvolutionPeriod) }
 
   return (
     <section className="card dashboard-page">
@@ -192,23 +202,29 @@ export function DashboardSection({
         <article className="mini-card">
           <header className="mini-card__header dashboard-expenses-header">
             <h3 className="mini-card__title">Gasto por categoria</h3>
-            <nav className="dashboard-expense-periods" aria-label="Periodo de gasto por categoria">
-              {DASHBOARD_EXPENSE_PERIOD_OPTIONS.map((option) => (
-                <button
-                  key={option.value}
-                  className={dashboardExpensePeriod === option.value ? 'dashboard-expense-periods__item--active' : ''}
-                  type="button"
-                  disabled={isDashboardLoading}
-                  aria-pressed={dashboardExpensePeriod === option.value}
-                  onClick={() => {
-                    void onDashboardExpensePeriodChange(option.value)
-                  }}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </nav>
+            <div className="filter-actions filter-actions--period">
+              <nav className="dashboard-expense-periods" aria-label="Periodo de gasto por categoría">
+                {DASHBOARD_EXPENSE_PERIOD_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    className={dashboardExpensePeriod === option.value ? 'dashboard-expense-periods__item--active' : ''}
+                    type="button"
+                    disabled={filtersDisabled}
+                    aria-pressed={dashboardExpensePeriod === option.value}
+                    onClick={() => {
+                      void onDashboardExpensePeriodChange(option.value)
+                    }}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </nav>
+              <ActionButton onClick={clearExpenseFilter} icon="reset" label="Limpiar filtros" disabled={filtersDisabled || !expenseFilter} />
+            </div>
           </header>
+          <FilterChips disabled={filtersDisabled} chips={expenseFilter
+            ? [{ key: 'expense-period', label: `Periodo: ${expenseFilter.label}`, onRemove: clearExpenseFilter }]
+            : []} />
           {dashboardExpensesByCategory.length === 0 ? (
             <p className="card__subtitle">Sin datos para el periodo seleccionado.</p>
           ) : (
@@ -272,23 +288,29 @@ export function DashboardSection({
         <article className="mini-card">
           <header className="mini-card__header dashboard-balance-evolution-header">
             <h3 className="mini-card__title">Evolucion de saldo por cuenta</h3>
-            <nav className="dashboard-balance-evolution-periods" aria-label="Periodo de evolucion de saldo por cuenta">
-              {DASHBOARD_BALANCE_EVOLUTION_PERIOD_OPTIONS.map((option) => (
-                <button
-                  key={option.value}
-                  className={dashboardBalanceEvolutionPeriod === option.value ? 'dashboard-balance-evolution-periods__item--active' : ''}
-                  type="button"
-                  disabled={isDashboardLoading}
-                  aria-pressed={dashboardBalanceEvolutionPeriod === option.value}
-                  onClick={() => {
-                    void onDashboardBalanceEvolutionPeriodChange(option.value)
-                  }}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </nav>
+            <div className="filter-actions filter-actions--period">
+              <nav className="dashboard-balance-evolution-periods" aria-label="Periodo de evolución de saldo por cuenta">
+                {DASHBOARD_BALANCE_EVOLUTION_PERIOD_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    className={dashboardBalanceEvolutionPeriod === option.value ? 'dashboard-balance-evolution-periods__item--active' : ''}
+                    type="button"
+                    disabled={filtersDisabled}
+                    aria-pressed={dashboardBalanceEvolutionPeriod === option.value}
+                    onClick={() => {
+                      void onDashboardBalanceEvolutionPeriodChange(option.value)
+                    }}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </nav>
+              <ActionButton onClick={clearBalanceFilter} icon="reset" label="Limpiar filtros" disabled={filtersDisabled || !balanceFilter} />
+            </div>
           </header>
+          <FilterChips disabled={filtersDisabled} chips={balanceFilter
+            ? [{ key: 'balance-period', label: `Periodo: ${balanceFilter.label}`, onRemove: clearBalanceFilter }]
+            : []} />
           {dashboardBalanceEvolution.series.length === 0 ? (
             <p className="card__subtitle">No hay cuentas de debito/cuenta para graficar.</p>
           ) : (

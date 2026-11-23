@@ -1,9 +1,12 @@
 import { ActionButton } from '../ActionButton'
+import { FilterChips, type FilterChip } from '../FilterChips'
+import { FilterOptions } from '../FilterOptions'
 import { FormModal } from '../FormModal'
 import { useState, type SyntheticEvent } from 'react'
-import { formatCurrency, formatIsoDate, getBudgetStatusLabel } from '../../app/appHelpers'
+import { DEFAULT_BUDGET_FILTERS, formatCurrency, formatIsoDate, getBudgetStatusLabel } from '../../app/appHelpers'
 import type {
   Budget,
+  BudgetFilters,
   BudgetInput,
   Category,
   FinancialInstrument,
@@ -11,6 +14,16 @@ import type {
   SavingsGoalInput,
 } from '../../types/domain'
 import { NumberInput } from '../NumberInput'
+
+const monthFormatter = new Intl.DateTimeFormat('es-MX', { month: 'long', timeZone: 'UTC' })
+const monthOptions = Array.from({ length: 12 }, (_, index) => ({
+  value: index + 1,
+  label: monthFormatter.format(new Date(Date.UTC(2000, index, 1))),
+}))
+const defaultYear = DEFAULT_BUDGET_FILTERS.years[0]
+const yearOptions = Array.from({ length: 201 }, (_, index) => index + 2000)
+  .sort((a, b) => Math.abs(a - defaultYear) - Math.abs(b - defaultYear) || b - a)
+  .map((year) => ({ value: year, label: String(year) }))
 
 type BudgetsSectionProps = {
   hasConfig: boolean
@@ -20,15 +33,12 @@ type BudgetsSectionProps = {
   editingBudgetId: number | null
   budgetForm: BudgetInput
   isBudgetsLoading: boolean
-  budgetFilterMonth: number
-  budgetFilterYear: number
+  budgetFilters: BudgetFilters
   budgets: Budget[]
   onBudgetFormChange: (nextForm: BudgetInput) => void
-  onBudgetFilterMonthChange: (month: number) => void
-  onBudgetFilterYearChange: (year: number) => void
   onSubmit: (event: SyntheticEvent<HTMLFormElement>) => void
   onReset: () => void
-  onApplyFilter: () => void
+  onApplyFilters: (filters: BudgetFilters) => Promise<boolean>
   onEditBudget: (budget: Budget) => void
   onDeleteBudget: (budgetId: number) => void
   savingsGoals: SavingsGoal[]
@@ -52,15 +62,12 @@ export function BudgetsSection({
   editingBudgetId,
   budgetForm,
   isBudgetsLoading,
-  budgetFilterMonth,
-  budgetFilterYear,
+  budgetFilters,
   budgets,
   onBudgetFormChange,
-  onBudgetFilterMonthChange,
-  onBudgetFilterYearChange,
   onSubmit,
   onReset,
-  onApplyFilter,
+  onApplyFilters,
   onEditBudget,
   onDeleteBudget,
   savingsGoals,
@@ -76,9 +83,41 @@ export function BudgetsSection({
   onSavingsGoalDelete,
 }: BudgetsSectionProps) {
   const [isSavingsGoalFormOpen, setIsSavingsGoalFormOpen] = useState(false)
-  const [isFiltersOpen, setIsFiltersOpen] = useState(false)
+  const [filterDraft, setFilterDraft] = useState<BudgetFilters | null>(null)
   const [isFormOpen, setIsFormOpen] = useState(editingBudgetId !== null)
   const isFormVisible = isFormOpen || editingBudgetId !== null
+  const { months, years } = budgetFilters
+  const isDefaultMonth = months.length === 1 && months[0] === DEFAULT_BUDGET_FILTERS.months[0]
+  const isDefaultYear = years.length === 1 && years[0] === defaultYear
+  const activeChips: FilterChip[] = []
+  if (!isDefaultMonth) {
+    activeChips.push(...months.map((month) => ({
+      key: `month-${month}`,
+      label: `Mes: ${monthOptions[month - 1].label}`,
+      onRemove: () => { void onApplyFilters({ ...budgetFilters, months: months.filter((value) => value !== month) }) },
+    })))
+  }
+  if (!months.length) {
+    activeChips.push({
+      key: 'all-months',
+      label: 'Todos los meses',
+      onRemove: () => { void onApplyFilters({ ...budgetFilters, months: DEFAULT_BUDGET_FILTERS.months }) },
+    })
+  }
+  if (!isDefaultYear) {
+    activeChips.push(...years.map((year) => ({
+      key: `year-${year}`,
+      label: `Año: ${year}`,
+      onRemove: () => { void onApplyFilters({ ...budgetFilters, years: years.filter((value) => value !== year) }) },
+    })))
+  }
+  if (!years.length) {
+    activeChips.push({
+      key: 'all-years',
+      label: 'Todos los años',
+      onRemove: () => { void onApplyFilters({ ...budgetFilters, years: DEFAULT_BUDGET_FILTERS.years }) },
+    })
+  }
 
   return (
     <section className="card">
@@ -194,48 +233,44 @@ export function BudgetsSection({
           </header>
 
           <div className="section-toolbar">
-            <ActionButton className="button button--secondary" type="button" onClick={() => setIsFiltersOpen(true)} icon="filter" label="Filtros" />
-          </div>
-          {isFiltersOpen ? (
-            <FormModal title="Filtros de presupuestos" onClose={() => setIsFiltersOpen(false)} error={budgetError}>
-              <div className="form-grid form-grid--inline">
-            <label className="form-grid__field" htmlFor="budgetFilterMonth">Mes filtro</label>
-            <NumberInput
-              id="budgetFilterMonth"
-              className="form-grid__input"
-              min={1}
-              max={12}
-              value={budgetFilterMonth}
-              emptyValue={0}
-              onValueChange={(month) => {
-                onBudgetFilterMonthChange(month)
-              }}
-            />
-
-            <label className="form-grid__field" htmlFor="budgetFilterYear">Anio filtro</label>
-            <NumberInput
-              id="budgetFilterYear"
-              className="form-grid__input"
-              min={2000}
-              max={2200}
-              value={budgetFilterYear}
-              emptyValue={0}
-              onValueChange={(year) => {
-                onBudgetFilterYearChange(year)
-              }}
-            />
-
-            <div className="form-grid__actions">
-              <ActionButton
-                className="button button--secondary"
-                type="button"
-                disabled={!hasConfig || isBudgetsLoading}
-                onClick={onApplyFilter}
-                icon="filter"
-                label={isBudgetsLoading ? 'Cargando...' : 'Aplicar filtro'}
-              />
+            <div className="filter-actions">
+              <ActionButton aria-haspopup="dialog" onClick={() => setFilterDraft({ ...budgetFilters })} icon="filter" label="Filtros" />
+              <ActionButton onClick={() => { void onApplyFilters(DEFAULT_BUDGET_FILTERS) }} icon="reset" label="Limpiar filtros"
+                disabled={!hasConfig || (activeChips.length === 0 && !isBudgetsLoading)} />
             </div>
           </div>
+          <FilterChips chips={activeChips} disabled={!hasConfig || isBudgetsLoading} />
+          {filterDraft ? (
+            <FormModal title="Filtros de presupuestos" onClose={() => setFilterDraft(null)} error={budgetError}>
+              <form className="form-grid" onSubmit={(event) => {
+                event.preventDefault()
+                void onApplyFilters(filterDraft).then((applied) => {
+                  if (applied) setFilterDraft((current) => current === filterDraft ? null : current)
+                })
+              }}>
+                <FilterOptions
+                  label="Meses"
+                  options={monthOptions}
+                  selected={filterDraft.months}
+                  onChange={(months) => setFilterDraft({ ...filterDraft, months })}
+                />
+                <FilterOptions
+                  label="Años"
+                  options={yearOptions}
+                  selected={filterDraft.years}
+                  onChange={(years) => setFilterDraft({ ...filterDraft, years })}
+                />
+
+                <div className="form-grid__actions">
+                  <ActionButton
+                    className="button button--secondary"
+                    type="submit"
+                    disabled={!hasConfig || isBudgetsLoading}
+                    icon="filter"
+                    label={isBudgetsLoading ? 'Cargando...' : 'Aplicar filtros'}
+                  />
+                </div>
+              </form>
             </FormModal>
           ) : null}
 

@@ -30,6 +30,7 @@ const LAST_FOUR = /^\d{4}$/
 const INSTRUMENT_TYPES = new Set(['credit_card', 'debit_card', 'account'])
 const CATEGORY_TYPES = new Set(['expense', 'income', 'both'])
 const TRANSACTION_TYPES = new Set(['expense', 'income'])
+const MOVEMENT_FILTER_TYPES = new Set([...TRANSACTION_TYPES, 'card_payment'])
 const TRANSFER_TYPES = new Set(['card_payment', 'inter_account', 'other'])
 const PAYMENT_TYPES = new Set(['fixed', 'variable'])
 const LOAN_PAYMENT_FREQUENCIES = new Set(['weekly', 'biweekly', 'monthly'])
@@ -44,6 +45,9 @@ const DASHBOARD_BALANCE_EVOLUTION_PERIODS = new Set(['one_month', 'three_months'
 const DASHBOARD_BALANCE_EVOLUTION_PERIOD_DEFAULT = 'one_month'
 const TRANSACTIONS_PAGE_SIZE = 10
 const TRANSACTIONS_MAX_PAGE = 1_000_000
+const MULTIPLE_FILTER_ROUTES = new Set(['/transactions', '/family-expenses', '/budgets'])
+const MAX_FILTER_ROUTE_LENGTH = 24_576
+const MAX_FILTER_CHOICES = 250
 const AUTO_ADJUSTMENT_NOTE_PREFIX = 'AUTO_ADJUSTMENT_TRANSFER:'
 const AUTO_ADJUSTMENT_DESCRIPTION = 'Otros (por ajuste)'
 
@@ -147,19 +151,31 @@ function optionalDate(input: Input, key: string): string | null {
   return requiredDate(input, key)
 }
 
-function optionalPositiveSearchParam(url: URL, key: string, max: number): number | null {
-  const raw = url.searchParams.get(key)
-  if (raw === null) {
-    return null
-  }
+function searchInteger(raw: string, key: string, min: number, max: number): number {
   if (!/^[1-9]\d*$/.test(raw)) {
     throw new ValidationError(`${getValidationFieldLabel(key)} debe ser un entero positivo.`)
   }
   const value = Number(raw)
-  if (!Number.isSafeInteger(value) || value > max) {
+  if (!Number.isSafeInteger(value) || value < min || value > max) {
     throw new ValidationError(`${getValidationFieldLabel(key)} está fuera del rango permitido.`)
   }
   return value
+}
+
+function filterChoices<Value>(url: URL, key: string, parse: (raw: string) => Value): Value[] {
+  const values = url.searchParams.getAll(key)
+  if (values.length > MAX_FILTER_CHOICES) {
+    throw new ValidationError(`${getValidationFieldLabel(key)} admite hasta ${MAX_FILTER_CHOICES} opciones.`)
+  }
+  return [...new Set(values.map(parse))]
+}
+
+function integerFilterChoices(url: URL, key: string, min = 1, max = Number.MAX_SAFE_INTEGER): number[] {
+  return filterChoices(url, key, (value) => searchInteger(value, key, min, max))
+}
+
+function sqlPlaceholders(values: readonly unknown[]): string {
+  return values.map(() => '?').join(', ')
 }
 
 function requiredMonth(value: string): string {
@@ -1198,7 +1214,6 @@ function validateTransaction(db: Database.Database, body: Input): {
 }
 
 function listTransactions(db: Database.Database, url: URL): Record<string, unknown>[] | Record<string, unknown> {
-  syncMsiRemaining(db)
   const clauses: string[] = []
   const params: unknown[] = []
   const add = (clause: string, ...values: unknown[]): void => {
@@ -1209,19 +1224,24 @@ function listTransactions(db: Database.Database, url: URL): Record<string, unkno
   const toDateValue = url.searchParams.get('to_date')
   const fromDate = fromDateValue === null ? null : requiredDate({ transactionDate: fromDateValue }, 'transactionDate')
   const toDate = toDateValue === null ? null : requiredDate({ transactionDate: toDateValue }, 'transactionDate')
-  const categoryId = optionalPositiveSearchParam(url, 'category_id', Number.MAX_SAFE_INTEGER)
-  const instrumentId = optionalPositiveSearchParam(url, 'instrument_id', Number.MAX_SAFE_INTEGER)
-  const type = url.searchParams.get('type')
-  if (type !== null && !TRANSACTION_TYPES.has(type)) throw new ValidationError('El tipo de movimiento no es válido.')
+  const categoryIds = integerFilterChoices(url, 'category_id')
+  const instrumentIds = integerFilterChoices(url, 'instrument_id')
+  const types = filterChoices(url, 'type', (value) => requiredEnum({ type: value }, 'type', MOVEMENT_FILTER_TYPES))
+  const transactionTypes = types.filter((type) => TRANSACTION_TYPES.has(type))
   const search = url.searchParams.get('search')?.trim()
   const autoAdjustmentsOnly = url.searchParams.get('auto_adjustments_only')
-  const page = optionalPositiveSearchParam(url, 'page', TRANSACTIONS_MAX_PAGE)
+  const pageValue = url.searchParams.get('page')
+  const page = pageValue === null ? null : searchInteger(pageValue, 'page', 1, TRANSACTIONS_MAX_PAGE)
   const automaticAdjustmentClause = '(t.notes LIKE ? OR t.description = ?)'
   if (fromDate) add('t.transaction_date >= ?', fromDate)
   if (toDate) add('t.transaction_date <= ?', toDate)
-  if (categoryId !== null) add('t.category_id = ?', categoryId)
-  if (instrumentId !== null) add('t.instrument_id = ?', instrumentId)
-  if (type && TRANSACTION_TYPES.has(type)) add('t.type = ?', type)
+  if (categoryIds.length) add(`t.category_id IN (${sqlPlaceholders(categoryIds)})`, ...categoryIds)
+  if (instrumentIds.length) add(`t.instrument_id IN (${sqlPlaceholders(instrumentIds)})`, ...instrumentIds)
+  if (transactionTypes.length) {
+    add(`t.type IN (${sqlPlaceholders(transactionTypes)})`, ...transactionTypes)
+  } else if (types.length) {
+    add('0 = 1')
+  }
   if (search && search.length > 255) throw new ValidationError('La búsqueda no puede superar 255 caracteres.')
   if (search) {
     const searchValue = `%${search}%`
@@ -1240,6 +1260,7 @@ function listTransactions(db: Database.Database, url: URL): Record<string, unkno
   if (autoAdjustmentsOnly === 'true') {
     add(automaticAdjustmentClause, `${AUTO_ADJUSTMENT_NOTE_PREFIX}%`, AUTO_ADJUSTMENT_DESCRIPTION)
   }
+  syncMsiRemaining(db)
   const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : ''
   if (page === null) {
     return (db.prepare(`${transactionSelect(where)} ORDER BY t.transaction_date DESC, t.id DESC`).all(...params) as DbRow[])
@@ -1254,11 +1275,15 @@ function listTransactions(db: Database.Database, url: URL): Record<string, unkno
   }
   if (fromDate) addPayment('tr.transfer_date >= ?', fromDate)
   if (toDate) addPayment('tr.transfer_date <= ?', toDate)
-  if (instrumentId !== null) {
-    addPayment('(tr.source_instrument_id = ? OR tr.destination_instrument_id = ?)', instrumentId, instrumentId)
+  if (instrumentIds.length) {
+    const placeholders = sqlPlaceholders(instrumentIds)
+    addPayment(
+      `(tr.source_instrument_id IN (${placeholders}) OR tr.destination_instrument_id IN (${placeholders}))`,
+      ...instrumentIds, ...instrumentIds,
+    )
   }
-  // Card payments are transfers, so expense/income and category filters exclude them.
-  if ((type && TRANSACTION_TYPES.has(type)) || categoryId !== null
+  // Card payments are transfers and have no transaction category.
+  if ((types.length && !types.includes('card_payment')) || categoryIds.length
     || autoAdjustmentsOnly === 'true') {
     addPayment('0 = 1')
   }
@@ -1479,31 +1504,27 @@ function validateFamilyExpense(db: Database.Database, body: Input): {
 }
 
 function listFamilyExpenses(db: Database.Database, url: URL): Record<string, unknown>[] {
-  const clauses: string[] = []
-  const params: unknown[] = []
-  const add = (clause: string, value: unknown): void => {
-    clauses.push(clause)
-    params.push(value)
-  }
-  const month = url.searchParams.get('month') ?? todayIso().slice(0, 7)
-  const categoryIdValue = url.searchParams.get('category_id')
+  const selectedMonths = filterChoices(url, 'month', requiredMonth)
+  const months = selectedMonths.length ? selectedMonths : [todayIso().slice(0, 7)]
+  const categoryIds = integerFilterChoices(url, 'category_id')
   const search = url.searchParams.get('search')?.trim()
-  const start = `${requiredMonth(month)}-01`
-  add('fe.expense_date >= ?', start)
-  add('fe.expense_date < ?', addMonths(start, 1))
-  if (categoryIdValue) {
-    const categoryId = Number(categoryIdValue)
-    if (!Number.isInteger(categoryId) || categoryId < 1) {
-      throw new ValidationError('La categoría no es válida.')
-    }
-    add('fe.category_id = ?', categoryId)
+  const clauses = [`(${months.map(() => 'fe.expense_date BETWEEN ? AND ?').join(' OR ')})`]
+  const params: unknown[] = months.flatMap((month) => {
+    const start = `${month}-01`
+    const end = new Date(`${start}T00:00:00Z`)
+    end.setUTCMonth(end.getUTCMonth() + 1, 0)
+    return [start, end.toISOString().slice(0, 10)]
+  })
+  if (categoryIds.length) {
+    clauses.push(`fe.category_id IN (${sqlPlaceholders(categoryIds)})`)
+    params.push(...categoryIds)
   }
   if (search) {
     if (search.length > 100) throw new ValidationError('La busqueda no puede exceder 100 caracteres.')
     clauses.push('(fe.description LIKE ? OR fe.notes LIKE ?)')
     params.push(`%${search}%`, `%${search}%`)
   }
-  const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : ''
+  const where = `WHERE ${clauses.join(' AND ')}`
   return (db.prepare(`${familyExpenseSelect(where)} ORDER BY fe.expense_date DESC, fe.id DESC`).all(...params) as DbRow[])
     .map(mapFamilyExpense)
 }
@@ -3300,15 +3321,15 @@ function mapBudget(db: Database.Database, row: DbRow): Record<string, unknown> {
 function listBudgets(db: Database.Database, url: URL): Record<string, unknown>[] {
   const clauses: string[] = []
   const params: number[] = []
-  const month = Number(url.searchParams.get('month'))
-  const year = Number(url.searchParams.get('year'))
-  if (Number.isInteger(month) && month >= 1 && month <= 12) {
-    clauses.push('b.month = ?')
-    params.push(month)
+  const months = integerFilterChoices(url, 'month', 1, 12)
+  const years = integerFilterChoices(url, 'year', 2000, 2200)
+  if (months.length) {
+    clauses.push(`b.month IN (${sqlPlaceholders(months)})`)
+    params.push(...months)
   }
-  if (Number.isInteger(year) && year >= 2000 && year <= 2200) {
-    clauses.push('b.year = ?')
-    params.push(year)
+  if (years.length) {
+    clauses.push(`b.year IN (${sqlPlaceholders(years)})`)
+    params.push(...years)
   }
   const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : ''
   const rows = db.prepare(`
@@ -4649,14 +4670,16 @@ function routeRequest(
 
 export function handleLocalRequest(payload: LocalRequestPayload): ApiResponse<unknown> {
   try {
-    if (!payload || typeof payload !== 'object' || typeof payload.path !== 'string') {
+    if (!payload || typeof payload !== 'object' || typeof payload.path !== 'string'
+      || (payload.method !== undefined && typeof payload.method !== 'string')) {
       throw new ValidationError('La solicitud local no es valida.')
     }
     const method = (payload.method ?? 'GET').toUpperCase()
     if (!new Set(['GET', 'POST', 'PUT', 'DELETE']).has(method)) {
       throw new ValidationError('El metodo solicitado no esta permitido.')
     }
-    if (payload.path.length > 500 || !payload.path.startsWith('/')) {
+    if (!payload.path.startsWith('/') || payload.path.length > MAX_FILTER_ROUTE_LENGTH
+      || (payload.path.length > 500 && (method !== 'GET' || !MULTIPLE_FILTER_ROUTES.has(payload.path.split('?', 1)[0])))) {
       throw new ValidationError('La ruta local no es valida.')
     }
     const db = getDatabase()

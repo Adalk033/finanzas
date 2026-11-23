@@ -3,6 +3,7 @@ import type { DatabaseStatus } from '../hooks/useLocalDatabase'
 import type { AppSection } from '../app/appHelpers'
 import { filterNavigationGroups } from '../app/navigation'
 import { useSidebarPreferences } from '../hooks/useSidebarPreferences'
+import { SidebarIcon } from './SidebarIcon'
 import './AppSidebar.css'
 
 type AppSidebarProps = {
@@ -104,6 +105,7 @@ export function AppSidebar({ activeSection, pendingRemindersCount, databaseStatu
                     title={item.description}
                     onClick={() => onSectionChange(item.key)}
                   >
+                    <SidebarIcon section={item.key} />
                     <span className="nav-button__label">
                       <span>{item.label}</span>
                       {isSearching ? <span className="nav-button__description">{item.description}</span> : null}

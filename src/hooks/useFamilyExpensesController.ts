@@ -10,11 +10,12 @@ import type {
   FamilyExpenseFilters,
   FamilyExpenseInput,
 } from '../types/domain'
+import { useAppliedFilters } from './useAppliedFilters'
 
 export function useFamilyExpensesController(categories: Category[]) {
   const [familyExpenses, setFamilyExpenses] = useState<FamilyExpense[]>([])
   const [familyExpenseForm, setFamilyExpenseForm] = useState<FamilyExpenseInput>(EMPTY_FAMILY_EXPENSE_FORM)
-  const [familyExpenseFilters, setFamilyExpenseFilters] = useState<FamilyExpenseFilters>(EMPTY_FAMILY_EXPENSE_FILTERS)
+  const { appliedFilters: familyExpenseFilters, getRequestedFilters, runFilterQuery } = useAppliedFilters(EMPTY_FAMILY_EXPENSE_FILTERS)
   const [editingFamilyExpenseId, setEditingFamilyExpenseId] = useState<number | null>(null)
   const [isFamilyExpensesLoading, setIsFamilyExpensesLoading] = useState(false)
   const [familyExpenseError, setFamilyExpenseError] = useState('')
@@ -25,17 +26,23 @@ export function useFamilyExpensesController(categories: Category[]) {
     return categories.find((category) => category.id === familyExpenseForm.categoryId)?.subcategories ?? []
   }, [categories, familyExpenseForm.categoryId])
 
-  const loadFamilyExpenses = async (filters = familyExpenseFilters): Promise<void> => {
+  const applyFamilyExpenseFilters = async (filters: FamilyExpenseFilters): Promise<boolean> => {
     setIsFamilyExpensesLoading(true)
     setFamilyExpenseError('')
-    const result = await apiClient.getFamilyExpenses(filters)
+    const query = filters.months.length ? filters : { ...filters, months: EMPTY_FAMILY_EXPENSE_FILTERS.months }
+    const result = await runFilterQuery(query, apiClient.getFamilyExpenses)
+    if (!result) return false
+    setIsFamilyExpensesLoading(false)
     if (!result.success) {
       setFamilyExpenseError(result.error ?? 'No se pudieron cargar los gastos familiares.')
-      setIsFamilyExpensesLoading(false)
-      return
+      return false
     }
     setFamilyExpenses(result.data ?? [])
-    setIsFamilyExpensesLoading(false)
+    return true
+  }
+
+  const loadFamilyExpenses = async (): Promise<void> => {
+    await applyFamilyExpenseFilters(getRequestedFilters())
   }
 
   const resetFamilyExpenseForm = (): void => {
@@ -80,13 +87,12 @@ export function useFamilyExpensesController(categories: Category[]) {
       return
     }
     const month = payload.expenseDate.slice(0, 7)
-    const nextFilters = { ...familyExpenseFilters, month }
-    setFamilyExpenseFilters(nextFilters)
     setFamilyExpenseMessage(editingFamilyExpenseId === null
       ? 'Gasto familiar registrado correctamente.'
       : 'Gasto familiar actualizado correctamente.')
     resetFamilyExpenseForm()
-    await loadFamilyExpenses(nextFilters)
+    const filters = getRequestedFilters()
+    await applyFamilyExpenseFilters(filters.months.includes(month) ? filters : { ...filters, months: [month] })
   }
 
   const handleFamilyExpenseDelete = async (id: number): Promise<void> => {
@@ -101,21 +107,8 @@ export function useFamilyExpensesController(categories: Category[]) {
     await loadFamilyExpenses()
   }
 
-  const applyFamilyExpenseFilters = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
-    event.preventDefault()
-    await loadFamilyExpenses(familyExpenseFilters)
-  }
-
-  const clearFamilyExpenseFilters = async (): Promise<void> => {
-    const nextFilters = { ...EMPTY_FAMILY_EXPENSE_FILTERS, month: familyExpenseFilters.month }
-    setFamilyExpenseFilters(nextFilters)
-    await loadFamilyExpenses(nextFilters)
-  }
-
   const changeFamilyExpenseMonth = async (month: string): Promise<void> => {
-    const nextFilters = { ...familyExpenseFilters, month }
-    setFamilyExpenseFilters(nextFilters)
-    await loadFamilyExpenses(nextFilters)
+    await applyFamilyExpenseFilters({ ...getRequestedFilters(), months: [month] })
   }
 
   return {
@@ -128,14 +121,12 @@ export function useFamilyExpensesController(categories: Category[]) {
     familyExpenseError,
     familyExpenseMessage,
     setFamilyExpenseForm,
-    setFamilyExpenseFilters,
     loadFamilyExpenses,
     resetFamilyExpenseForm,
     startFamilyExpenseEdit,
     handleFamilyExpenseSubmit,
     handleFamilyExpenseDelete,
     applyFamilyExpenseFilters,
-    clearFamilyExpenseFilters,
     changeFamilyExpenseMonth,
   }
 }

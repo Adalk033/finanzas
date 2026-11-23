@@ -111,6 +111,17 @@
   display: none;
 }
 
+.nav-button__icon {
+  flex-shrink: 0;
+  color: var(--color-nav-icon);
+}
+
+.nav-button:hover .nav-button__icon,
+.nav-button:focus-visible .nav-button__icon,
+.nav-button--active .nav-button__icon {
+  color: var(--color-nav-icon-active);
+}
+
 .nav-button__description {
   display: block;
   margin-top: 4px;
@@ -122,6 +133,7 @@
 
 .app-sidebar__navigation .nav-button__label {
   display: block;
+  flex: 1;
   min-width: 0;
 }
 

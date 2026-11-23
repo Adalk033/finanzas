@@ -1,7 +1,9 @@
 import { ActionButton } from '../ActionButton'
+import { FilterChips, type FilterChip } from '../FilterChips'
+import { FilterOptions } from '../FilterOptions'
 import { FormModal } from '../FormModal'
 import { useState, type SyntheticEvent } from 'react'
-import { formatCurrency, formatIsoDate } from '../../app/appHelpers'
+import { CURRENT_MONTH_ISO, EMPTY_FAMILY_EXPENSE_FILTERS, formatCurrency, formatIsoDate, formatMonth } from '../../app/appHelpers'
 import type {
   Category,
   FamilyExpense,
@@ -22,12 +24,10 @@ type FamilyExpensesSectionProps = {
   error: string
   message: string
   onFormChange: (form: FamilyExpenseInput) => void
-  onFiltersChange: (filters: FamilyExpenseFilters) => void
+  onApplyFilters: (filters: FamilyExpenseFilters) => Promise<boolean>
   onMonthChange: (month: string) => void
   onSubmit: (event: SyntheticEvent<HTMLFormElement>) => void
-  onFiltersSubmit: (event: SyntheticEvent<HTMLFormElement>) => void
   onReset: () => void
-  onClearFilters: () => void
   onReload: () => void
   onEdit: (expense: FamilyExpense) => void
   onDelete: (id: number) => void
@@ -45,22 +45,47 @@ export function FamilyExpensesSection({
   error,
   message,
   onFormChange,
-  onFiltersChange,
+  onApplyFilters,
   onMonthChange,
   onSubmit,
-  onFiltersSubmit,
   onReset,
-  onClearFilters,
   onReload,
   onEdit,
   onDelete,
 }: FamilyExpensesSectionProps) {
   const [isFormOpen, setIsFormOpen] = useState(editingId !== null)
-  const [areFiltersOpen, setAreFiltersOpen] = useState(false)
+  const [filterDraft, setFilterDraft] = useState<FamilyExpenseFilters | null>(null)
+  const [monthToAdd, setMonthToAdd] = useState('')
   const isFormVisible = isFormOpen || editingId !== null
   const expenseCategories = categories.filter((category) => (
     category.isActive && (category.type === 'expense' || category.type === 'both')
   ))
+  const isDefaultMonth = filters.months.length === 1 && filters.months[0] === CURRENT_MONTH_ISO
+  const activeChips: FilterChip[] = isDefaultMonth ? [] : filters.months.map((month) => ({
+    key: `month-${month}`,
+    label: `Mes: ${formatMonth(month)}`,
+    onRemove: () => { void onApplyFilters({ ...filters, months: filters.months.filter((value) => value !== month) }) },
+  }))
+  const categoryIds = filters.categoryIds ?? []
+  activeChips.push(...categoryIds.map((id) => ({
+    key: `category-${id}`,
+    label: `Categoría: ${categories.find((category) => category.id === id)?.name ?? id}`,
+    onRemove: () => { void onApplyFilters({ ...filters, categoryIds: categoryIds.filter((value) => value !== id) }) },
+  })))
+  if (filters.search?.trim()) {
+    activeChips.push({
+      key: 'search',
+      label: `Búsqueda: ${filters.search.trim()}`,
+      onRemove: () => { void onApplyFilters({ ...filters, search: '' }) },
+    })
+  }
+
+  const clearFilters = (): void => {
+    if (filterDraft) setFilterDraft(EMPTY_FAMILY_EXPENSE_FILTERS)
+    setMonthToAdd('')
+    void onApplyFilters(EMPTY_FAMILY_EXPENSE_FILTERS)
+  }
+  const canAddMonth = /^\d{4}-(0[1-9]|1[0-2])$/.test(monthToAdd) && !filterDraft?.months.includes(monthToAdd)
 
   return (
     <section className="card">
@@ -70,16 +95,15 @@ export function FamilyExpensesSection({
       </header>
 
       <div className="family-month-filter">
-        <label className="form-grid__field" htmlFor="familyExpenseMonth">Mes</label>
+        <label className="form-grid__field" htmlFor="familyExpenseMonth">Ir al mes</label>
         <input
           id="familyExpenseMonth"
           className="form-grid__input"
           type="month"
-          value={filters.month}
+          value={filters.months.length === 1 ? filters.months[0] : ''}
           onChange={(event) => {
             if (event.target.value) onMonthChange(event.target.value)
           }}
-          required
         />
       </div>
 
@@ -95,13 +119,18 @@ export function FamilyExpensesSection({
           icon={isFormVisible ? 'close' : 'plus'}
           label={isFormVisible ? 'Ocultar formulario' : 'Nuevo gasto familiar'}
         />
-        <ActionButton className="button button--secondary" type="button" onClick={() => setAreFiltersOpen((value) => !value)}
-          icon="filter"
-          label={areFiltersOpen ? 'Ocultar filtros' : 'Filtros'}
-        />
+        <div className="filter-actions">
+          <ActionButton aria-haspopup="dialog" onClick={() => {
+            setMonthToAdd('')
+            setFilterDraft({ ...filters })
+          }} icon="filter" label="Filtros" />
+          <ActionButton onClick={clearFilters} icon="reset" label="Limpiar filtros"
+            disabled={!hasConfig || (activeChips.length === 0 && !isLoading)} />
+        </div>
         <div className="section-toolbar__spacer" />
         <ActionButton iconOnly className="button button--secondary" type="button" onClick={onReload} icon="refresh" label="Recargar" />
       </div>
+      <FilterChips chips={activeChips} disabled={!hasConfig || isLoading} />
 
       <div className="section-stack">
         {isFormVisible ? (
@@ -197,37 +226,60 @@ export function FamilyExpensesSection({
             </FormModal>
           ) : null}
 
-        {areFiltersOpen ? (
-            <FormModal title="Filtros del mes" onClose={() => setAreFiltersOpen(false)} error={error}>
-              <form className="form-grid" onSubmit={onFiltersSubmit}>
-                <label className="form-grid__field" htmlFor="familyExpenseFilterCategory">Categoria</label>
-                <select
-                  id="familyExpenseFilterCategory"
-                  className="form-grid__input"
-                  value={filters.categoryId ?? ''}
-                  onChange={(event) => onFiltersChange({
-                    ...filters,
-                    categoryId: event.target.value ? Number(event.target.value) : undefined,
-                  })}
-                >
-                  <option value="">Todas</option>
-                  {expenseCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
-                </select>
+        {filterDraft ? (
+            <FormModal title="Filtros de gastos familiares" onClose={() => setFilterDraft(null)} error={error}>
+              <form className="form-grid" onSubmit={(event) => {
+                event.preventDefault()
+                const nextFilters = canAddMonth ? { ...filterDraft, months: [...filterDraft.months, monthToAdd] } : filterDraft
+                void onApplyFilters(nextFilters).then((applied) => {
+                  if (applied) setFilterDraft((current) => current === filterDraft ? null : current)
+                })
+              }}>
+                <fieldset className="filter-options">
+                  <legend className="form-grid__field">Meses</legend>
+                  <div className="filter-actions">
+                    <input
+                      className="form-grid__input filter-options__month"
+                      type="month"
+                      max="9999-12"
+                      aria-label="Mes para añadir"
+                      value={monthToAdd}
+                      onChange={(event) => setMonthToAdd(event.target.value)}
+                    />
+                    <ActionButton icon="plus" label="Añadir mes" disabled={!canAddMonth} onClick={() => {
+                      setFilterDraft({ ...filterDraft, months: [...filterDraft.months, monthToAdd] })
+                      setMonthToAdd('')
+                    }} />
+                  </div>
+                  {filterDraft.months.length === 0 ? <p className="filter-options__empty">Mes actual</p> : null}
+                  <FilterChips chips={filterDraft.months.map((month) => ({
+                    key: month,
+                    label: formatMonth(month),
+                    onRemove: () => setFilterDraft({ ...filterDraft, months: filterDraft.months.filter((value) => value !== month) }),
+                  }))} />
+                </fieldset>
 
-                <label className="form-grid__field" htmlFor="familyExpenseSearch">Busqueda</label>
+                <FilterOptions
+                  label="Categorías"
+                  options={expenseCategories.map(({ id, name }) => ({ value: id, label: name }))}
+                  selected={filterDraft.categoryIds ?? []}
+                  onChange={(categoryIds) => setFilterDraft({ ...filterDraft, categoryIds })}
+                />
+
+                <label className="form-grid__field" htmlFor="familyExpenseSearch">Búsqueda</label>
                 <input
                   id="familyExpenseSearch"
                   className="form-grid__input"
                   type="text"
                   maxLength={100}
-                  value={filters.search ?? ''}
-                  onChange={(event) => onFiltersChange({ ...filters, search: event.target.value })}
-                  placeholder="Descripcion o notas"
+                  value={filterDraft.search ?? ''}
+                  onChange={(event) => setFilterDraft({ ...filterDraft, search: event.target.value })}
+                  placeholder="Descripción o notas"
                 />
 
                 <div className="form-grid__actions">
-                  <ActionButton className="button button--primary" type="submit" disabled={!hasConfig} icon="filter" label="Aplicar filtros" />
-                  <ActionButton iconOnly className="button button--secondary" type="button" onClick={onClearFilters} icon="reset" label="Limpiar" />
+                  <ActionButton className="button button--primary" type="submit" disabled={!hasConfig || isLoading} icon="filter" label="Aplicar filtros" />
+                  <ActionButton iconOnly type="button" onClick={clearFilters} disabled={!hasConfig} icon="reset" label="Limpiar filtros" />
                 </div>
               </form>
             </FormModal>
@@ -251,7 +303,7 @@ export function FamilyExpensesSection({
           </thead>
           <tbody>
             {isLoading ? <tr><td colSpan={6}>Cargando gastos familiares...</td></tr> : null}
-            {!isLoading && expenses.length === 0 ? <tr><td colSpan={6}>No hay gastos familiares en este mes.</td></tr> : null}
+            {!isLoading && expenses.length === 0 ? <tr><td colSpan={6}>No hay gastos familiares con estos filtros.</td></tr> : null}
             {!isLoading ? expenses.map((expense) => (
               <tr key={expense.id}>
                 <td>{formatIsoDate(expense.expenseDate)}</td>

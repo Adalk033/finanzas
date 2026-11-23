@@ -99,7 +99,7 @@ export function App() {
               isLoading={familyDashboardController.isFamilyDashboardLoading}
               error={familyDashboardController.familyDashboardError}
               onMonthChange={(month) => {
-                void familyDashboardController.changeFamilyMonth(month)
+                void familyDashboardController.loadFamilyDashboard(month)
               }}
               onReload={() => {
                 void familyDashboardController.loadFamilyDashboard()
@@ -120,16 +120,12 @@ export function App() {
               error={familyExpensesController.familyExpenseError}
               message={familyExpensesController.familyExpenseMessage}
               onFormChange={familyExpensesController.setFamilyExpenseForm}
-              onFiltersChange={familyExpensesController.setFamilyExpenseFilters}
+              onApplyFilters={familyExpensesController.applyFamilyExpenseFilters}
               onMonthChange={(month) => {
                 void familyExpensesController.changeFamilyExpenseMonth(month)
               }}
               onSubmit={familyExpensesController.handleFamilyExpenseSubmit}
-              onFiltersSubmit={familyExpensesController.applyFamilyExpenseFilters}
               onReset={familyExpensesController.resetFamilyExpenseForm}
-              onClearFilters={() => {
-                void familyExpensesController.clearFamilyExpenseFilters()
-              }}
               onReload={() => {
                 void familyExpensesController.loadFamilyExpenses()
               }}
@@ -269,8 +265,8 @@ export function App() {
               selectedTransactionInstrument={transactionsController.selectedTransactionInstrument}
               transactionSubcategoryOptions={transactionsController.transactionSubcategoryOptions}
               transactionFilters={transactionsController.transactionFilters}
+              transactionSearch={transactionsController.transactionSearch}
               excludeFromBalance={transactionsController.excludeFromBalance}
-              showAutoAdjustmentsOnly={transactionsController.showAutoAdjustmentsOnly}
               transactions={transactionsController.transactions}
               activeMsiTransactions={transactionsController.activeMsiTransactions}
               transactionPagination={transactionsController.transactionPagination}
@@ -297,14 +293,9 @@ export function App() {
                 }
               }}
               onResetTransactionForm={transactionsController.resetTransactionForm}
-              onFiltersChange={transactionsController.setTransactionFilters}
+              onApplyFilters={transactionsController.applyTransactionFilters}
               onSearchChange={transactionsController.handleTransactionSearchChange}
               onExcludeFromBalanceChange={transactionsController.setExcludeFromBalance}
-              onToggleAutoAdjustmentsOnly={transactionsController.setShowAutoAdjustmentsOnly}
-              onFiltersSubmit={transactionsController.handleTransactionFiltersSubmit}
-              onClearFilters={() => {
-                void transactionsController.clearTransactionFilters()
-              }}
               onPageChange={transactionsController.changeTransactionPage}
               onReload={() => {
                 void transactionsController.loadTransactions()
@@ -566,17 +557,12 @@ export function App() {
               editingBudgetId={budgetsController.editingBudgetId}
               budgetForm={budgetsController.budgetForm}
               isBudgetsLoading={budgetsController.isBudgetsLoading}
-              budgetFilterMonth={budgetsController.budgetFilterMonth}
-              budgetFilterYear={budgetsController.budgetFilterYear}
+              budgetFilters={budgetsController.budgetFilters}
               budgets={budgetsController.budgets}
               onBudgetFormChange={budgetsController.setBudgetForm}
-              onBudgetFilterMonthChange={budgetsController.setBudgetFilterMonth}
-              onBudgetFilterYearChange={budgetsController.setBudgetFilterYear}
               onSubmit={budgetsController.handleBudgetSubmit}
               onReset={budgetsController.resetBudgetEditor}
-              onApplyFilter={() => {
-                void budgetsController.loadBudgets(budgetsController.budgetFilterMonth, budgetsController.budgetFilterYear)
-              }}
+              onApplyFilters={budgetsController.applyBudgetFilters}
               onEditBudget={budgetsController.startBudgetEdit}
               onDeleteBudget={(budgetId) => {
                 if (window.confirm('¿Eliminar este presupuesto?')) {
