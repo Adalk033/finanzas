@@ -120,6 +120,7 @@ const SCHEMA = `
     no_interest_payment_cents INTEGER,
     is_paid INTEGER NOT NULL DEFAULT 0 CHECK (is_paid IN (0, 1)),
     paid_amount_cents INTEGER,
+    reconciliation_applied_cents INTEGER NOT NULL DEFAULT 0 CHECK (reconciliation_applied_cents >= 0),
     paid_date TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -188,6 +189,7 @@ const SCHEMA = `
     transfer_date TEXT NOT NULL,
     type TEXT NOT NULL CHECK (type IN ('card_payment', 'inter_account', 'loan_payment', 'other')),
     statement_id INTEGER REFERENCES credit_card_statements(id),
+    requested_statement_id INTEGER REFERENCES credit_card_statements(id) ON DELETE SET NULL,
     loan_id INTEGER REFERENCES loans(id),
     description TEXT CHECK (description IS NULL OR length(description) <= 255),
     notes TEXT,
@@ -333,6 +335,7 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_family_expenses_date ON family_expenses(expense_date);
   CREATE INDEX IF NOT EXISTS idx_family_expenses_category_date ON family_expenses(category_id, expense_date);
   CREATE INDEX IF NOT EXISTS idx_transfers_instruments_date ON transfers(source_instrument_id, destination_instrument_id, transfer_date);
+  CREATE INDEX IF NOT EXISTS idx_transfers_destination_type_date ON transfers(destination_instrument_id, type, transfer_date);
   CREATE INDEX IF NOT EXISTS idx_loan_payments_loan ON loan_payments(loan_id, installment_num);
   CREATE INDEX IF NOT EXISTS idx_loan_reconciliations_loan_date
     ON loan_reconciliations(loan_id, reconciliation_date DESC, id DESC);
@@ -354,6 +357,8 @@ function hasColumn(table: string, column: string): boolean {
     'recurring_incomes',
     'loans',
     'reminders',
+    'credit_card_statements',
+    'transfers',
   ])
   if (!allowedTables.has(table)) {
     throw new Error('Tabla de migracion no permitida.')
@@ -424,6 +429,12 @@ function addColumn(table: string, definition: string, column: string): void {
     ])],
     ['reminders', new Set([
       'is_automatic INTEGER NOT NULL DEFAULT 0 CHECK (is_automatic IN (0, 1))',
+    ])],
+    ['credit_card_statements', new Set([
+      'reconciliation_applied_cents INTEGER NOT NULL DEFAULT 0 CHECK (reconciliation_applied_cents >= 0)',
+    ])],
+    ['transfers', new Set([
+      'requested_statement_id INTEGER REFERENCES credit_card_statements(id) ON DELETE SET NULL',
     ])],
   ])
   if (!allowedDefinitions.get(table)?.has(definition)) {
@@ -534,15 +545,21 @@ function migrateSchema(): void {
     'is_automatic INTEGER NOT NULL DEFAULT 0 CHECK (is_automatic IN (0, 1))',
     'is_automatic',
   )
+  addColumn(
+    'credit_card_statements',
+    'reconciliation_applied_cents INTEGER NOT NULL DEFAULT 0 CHECK (reconciliation_applied_cents >= 0)',
+    'reconciliation_applied_cents',
+  )
+  addColumn(
+    'transfers',
+    'requested_statement_id INTEGER REFERENCES credit_card_statements(id) ON DELETE SET NULL',
+    'requested_statement_id',
+  )
   database?.exec(`
     CREATE INDEX IF NOT EXISTS idx_instruments_linked_account
       ON financial_instruments(linked_account_id);
     CREATE INDEX IF NOT EXISTS idx_statement_allocations_statement
       ON statement_payment_allocations(statement_id);
-    INSERT OR IGNORE INTO statement_payment_allocations (transfer_id, statement_id, amount_cents)
-    SELECT id, statement_id, amount_cents
-    FROM transfers
-    WHERE statement_id IS NOT NULL;
     UPDATE reminders
     SET is_automatic = 1
     WHERE is_automatic = 0
@@ -572,7 +589,7 @@ export function initializeLocalDb(dbPath: string): void {
 
   database.prepare(`
     INSERT INTO app_metadata (key, value)
-    VALUES ('schema_version', '7')
+    VALUES ('schema_version', '8')
     ON CONFLICT(key) DO UPDATE SET value = excluded.value
   `).run()
 }

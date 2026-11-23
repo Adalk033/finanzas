@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3'
 import { getDatabase, getDatabasePath } from './local-db.js'
+import { settleStatements } from './statement-settlement.js'
 import { getValidationFieldLabel } from './validation-labels.js'
 import type { ApiResponse, DatabaseInfo } from '../src/types/config.js'
 import { SIDEBAR_GROUP_IDS, type SidebarPreferences } from '../src/types/navigation.js'
@@ -348,8 +349,9 @@ function mapStatement(row: DbRow): Record<string, unknown> {
     noInterestPayment: fromCents(row.no_interest_payment_cents),
     isPaid: toBoolean(row.is_paid),
     paidAmount: fromCents(row.paid_amount_cents),
+    reconciliationApplied: toNumber(row.reconciliation_applied_cents) / 100,
     outstandingAmount: Math.max(
-      toNumber(row.total_amount_cents) - toNumber(row.paid_amount_cents),
+      toNumber(row.total_amount_cents) - toNumber(row.paid_amount_cents) - toNumber(row.reconciliation_applied_cents),
       0,
     ) / 100,
     paidDate: row.paid_date ?? null,
@@ -1625,8 +1627,11 @@ function statementMovementRows(
     ORDER BY t.transaction_date DESC, t.id DESC
   `).all(instrumentId, previous, cutOffDate, cutOffDate) as DbRow[]
   return rows.filter((row) => {
-    if (row.source_type === 'opening_balance' || row.source_type === 'reconciliation') {
+    if (row.source_type === 'opening_balance') {
       return false
+    }
+    if (row.source_type === 'reconciliation') {
+      return row.type === 'expense' && toBoolean(row.affects_balance)
     }
     if (!toBoolean(row.is_msi)) {
       return true
@@ -1649,7 +1654,8 @@ function calculateStatementTotal(
     SELECT COALESCE(SUM(CASE WHEN type = 'expense' THEN amount_cents ELSE -amount_cents END), 0) AS total
     FROM transactions
     WHERE instrument_id = ? AND is_msi = 0 AND transaction_date > ? AND transaction_date <= ?
-      AND COALESCE(source_type, '') NOT IN ('opening_balance', 'reconciliation')
+      AND COALESCE(source_type, '') <> 'opening_balance'
+      AND (COALESCE(source_type, '') <> 'reconciliation' OR (type = 'expense' AND affects_balance = 1))
   `).get(instrumentId, previous, cutOffDate) as { total: number }
   const msiRows = db.prepare(`
     SELECT amount_cents, msi_start_date, msi_months, msi_monthly_amount_cents
@@ -1693,15 +1699,102 @@ function latestCutOffDate(referenceDate: string, cutOffDay: number): string {
 function refreshInstrumentStatements(db: Database.Database, instrumentId: number): void {
   const rows = db.prepare(`
     SELECT id, cut_off_date FROM credit_card_statements WHERE instrument_id = ?
+    ORDER BY cut_off_date, id
   `).all(instrumentId) as Array<{ id: number; cut_off_date: string }>
+  if (rows.length === 0) return
+
+  const charges = rows.map((row) => ({
+    id: row.id, date: row.cut_off_date, amountCents: calculateStatementTotal(db, instrumentId, row.cut_off_date),
+  }))
+  const payments = db.prepare(`
+    SELECT id, transfer_date AS date, amount_cents AS amountCents,
+           requested_statement_id AS requestedStatementId
+    FROM transfers
+    WHERE destination_instrument_id = ? AND type = 'card_payment'
+    ORDER BY transfer_date, id
+  `).all(instrumentId) as Array<{
+    id: number; date: string; amountCents: number; requestedStatementId: number | null
+  }>
+  const balanceEntries = db.prepare(`
+    SELECT source_type, transaction_date AS date, amount_cents AS amountCents
+    FROM transactions
+    WHERE instrument_id = ? AND (
+      (source_type = 'opening_balance' AND type = 'expense')
+      OR (source_type = 'reconciliation' AND type = 'income' AND affects_balance = 1)
+    )
+    ORDER BY transaction_date, id
+  `).all(instrumentId) as Array<{ source_type: string; date: string; amountCents: number }>
+  const settlements = settleStatements(
+    charges,
+    payments,
+    balanceEntries.filter((entry) => entry.source_type === 'reconciliation'),
+    balanceEntries.filter((entry) => entry.source_type === 'opening_balance'),
+  )
+
+  const saveAllocation = db.prepare(`
+    INSERT INTO statement_payment_allocations (transfer_id, statement_id, amount_cents)
+    SELECT @transferId, @statementId, @amountCents
+    WHERE NOT EXISTS (
+      SELECT 1 FROM statement_payment_allocations
+      WHERE transfer_id = @transferId AND statement_id = @statementId AND amount_cents = @amountCents
+    )
+    ON CONFLICT (transfer_id, statement_id) DO UPDATE SET amount_cents = excluded.amount_cents
+  `)
+  const deleteAllocation = db.prepare(`
+    DELETE FROM statement_payment_allocations WHERE transfer_id = ? AND statement_id = ?
+  `)
+  const previousAllocations = db.prepare(`
+    SELECT a.transfer_id, a.statement_id
+    FROM statement_payment_allocations a JOIN transfers t ON t.id = a.transfer_id
+    WHERE t.destination_instrument_id = ? AND t.type = 'card_payment'
+  `).all(instrumentId) as Array<{ transfer_id: number; statement_id: number }>
+  for (const allocation of previousAllocations) {
+    if (!settlements.get(allocation.statement_id)?.payments.has(allocation.transfer_id)) {
+      deleteAllocation.run(allocation.transfer_id, allocation.statement_id)
+    }
+  }
+
   const update = db.prepare(`
     UPDATE credit_card_statements
-    SET total_amount_cents = ?, updated_at = datetime('now')
-    WHERE id = ?
+    SET total_amount_cents = @total, paid_amount_cents = @paid, reconciliation_applied_cents = @reconciled,
+        is_paid = @isPaid, paid_date = @paidDate, updated_at = datetime('now')
+    WHERE id = @id AND (
+      total_amount_cents <> @total OR paid_amount_cents IS NOT @paid
+      OR reconciliation_applied_cents <> @reconciled OR is_paid <> @isPaid OR paid_date IS NOT @paidDate
+    )
   `)
-  for (const row of rows) {
-    update.run(calculateStatementTotal(db, instrumentId, row.cut_off_date), row.id)
-    refreshStatementPayment(db, row.id)
+  const dismissReminders = db.prepare(`
+    UPDATE reminders SET is_dismissed = 1, updated_at = datetime('now')
+    WHERE reference_type = 'statement' AND reference_id = ? AND is_dismissed = 0
+  `)
+  const firstAllocatedStatement = new Map<number, number>()
+  for (const charge of charges) {
+    const settlement = settlements.get(charge.id)!
+    let paid = 0
+    for (const [transferId, amountCents] of settlement.payments) {
+      saveAllocation.run({ transferId, statementId: charge.id, amountCents })
+      paid += amountCents
+      if (!firstAllocatedStatement.has(transferId)) {
+        firstAllocatedStatement.set(transferId, charge.id)
+      }
+    }
+    update.run({
+      id: charge.id,
+      total: charge.amountCents,
+      paid,
+      reconciled: settlement.reconciliationCents,
+      isPaid: Number(charge.amountCents > 0 && settlement.remainingCents === 0),
+      paidDate: settlement.settledDate,
+    })
+    if (settlement.remainingCents === 0 && charge.amountCents > 0) {
+      dismissReminders.run(charge.id)
+    }
+  }
+  const updateTransfer = db.prepare(`
+    UPDATE transfers SET statement_id = @statementId WHERE id = @id AND statement_id IS NOT @statementId
+  `)
+  for (const payment of payments) {
+    updateTransfer.run({ id: payment.id, statementId: firstAllocatedStatement.get(payment.id) ?? null })
   }
 }
 
@@ -1743,34 +1836,36 @@ function ensureAutomaticStatements(db: Database.Database): void {
   `)
   const insert = db.prepare(`
     INSERT OR IGNORE INTO credit_card_statements (
-      instrument_id, cut_off_date, payment_due_date, total_amount_cents
-    ) VALUES (?, ?, ?, ?)
+      instrument_id, cut_off_date, payment_due_date
+    ) VALUES (?, ?, ?)
   `)
-  for (const card of cards) {
-    const latest = latestCutOffDate(todayIso(), card.cut_off_day)
-    const earliest = earliestTransaction.get(card.id) as { first_date: string | null }
-    let candidate = latest
-    if (earliest.first_date) {
-      const first = new Date(`${earliest.first_date}T00:00:00Z`)
-      candidate = boundedDate(first.getUTCFullYear(), first.getUTCMonth(), card.cut_off_day)
-      if (candidate < earliest.first_date) {
+  db.transaction(() => {
+    for (const card of cards) {
+      const latest = latestCutOffDate(todayIso(), card.cut_off_day)
+      const earliest = earliestTransaction.get(card.id) as { first_date: string | null }
+      let candidate = latest
+      if (earliest.first_date) {
+        const first = new Date(`${earliest.first_date}T00:00:00Z`)
+        candidate = boundedDate(first.getUTCFullYear(), first.getUTCMonth(), card.cut_off_day)
+        if (candidate < earliest.first_date) {
+          candidate = addMonths(candidate, 1, card.cut_off_day)
+        }
+      }
+      let generated = 0
+      while (candidate <= latest && generated < 60) {
+        insert.run(card.id, candidate, defaultPaymentDueDate(candidate, card.payment_due_day))
         candidate = addMonths(candidate, 1, card.cut_off_day)
+        generated += 1
       }
     }
-    let generated = 0
-    while (candidate <= latest && generated < 60) {
-      insert.run(
-        card.id,
-        candidate,
-        defaultPaymentDueDate(candidate, card.payment_due_day),
-        calculateStatementTotal(db, card.id, candidate),
-      )
-      candidate = addMonths(candidate, 1, card.cut_off_day)
-      generated += 1
+    const statementInstruments = db.prepare(`
+      SELECT DISTINCT instrument_id FROM credit_card_statements
+    `).all() as Array<{ instrument_id: number }>
+    for (const { instrument_id } of statementInstruments) {
+      refreshInstrumentStatements(db, instrument_id)
     }
-    refreshInstrumentStatements(db, card.id)
-  }
-  syncMsiRemaining(db)
+    syncMsiRemaining(db)
+  })()
 }
 
 function listStatements(db: Database.Database, instrumentId?: number): Record<string, unknown>[] {
@@ -1799,7 +1894,6 @@ function saveStatement(db: Database.Database, body: Input, id?: number): Record<
     `).run(
       paymentDueDate, minimumPayment, noInterestPayment, id,
     )
-    refreshStatementPayment(db, id)
   } else {
     const instrumentId = requiredInteger(body, 'instrumentId')
     const instrument = getInstrument(db, instrumentId)
@@ -1809,32 +1903,34 @@ function saveStatement(db: Database.Database, body: Input, id?: number): Record<
     const cutOffDate = requiredDate(body, 'cutOffDate')
     const paymentDueDate = optionalDate(body, 'paymentDueDate')
       ?? defaultPaymentDueDate(cutOffDate, toNumber(instrument.payment_due_day ?? 1))
-    const result = db.prepare(`
-      INSERT INTO credit_card_statements (
-        instrument_id, cut_off_date, payment_due_date, total_amount_cents,
-        minimum_payment_cents, no_interest_payment_cents
-      ) VALUES (?, ?, ?, ?, ?, ?)
-    `).run(
-      instrumentId, cutOffDate, paymentDueDate,
-      calculateStatementTotal(db, instrumentId, cutOffDate),
-      optionalMoneyToCents(body, 'minimumPayment'),
-      optionalMoneyToCents(body, 'noInterestPayment'),
-    )
-    id = Number(result.lastInsertRowid)
+    const minimumPayment = optionalMoneyToCents(body, 'minimumPayment')
+    const noInterestPayment = optionalMoneyToCents(body, 'noInterestPayment')
+    id = db.transaction(() => {
+      const result = db.prepare(`
+        INSERT INTO credit_card_statements (
+          instrument_id, cut_off_date, payment_due_date, minimum_payment_cents, no_interest_payment_cents
+        ) VALUES (?, ?, ?, ?, ?)
+      `).run(instrumentId, cutOffDate, paymentDueDate, minimumPayment, noInterestPayment)
+      refreshInstrumentStatements(db, instrumentId)
+      return Number(result.lastInsertRowid)
+    })()
   }
   return mapStatement(asRow(db.prepare(statementSelect('WHERE st.id = ?')).get(id)))
 }
 
 function deleteStatement(db: Database.Database, id: number): { id: number } {
-  requireEntity(db, 'credit_card_statements', id)
-  const linked = db.prepare(`
-    SELECT COUNT(*) AS total FROM statement_payment_allocations WHERE statement_id = ?
-  `).get(id) as { total: number }
-  if (linked.total > 0) {
-    throw new ValidationError('No se puede eliminar un estado de cuenta con pagos relacionados.')
-  }
-  db.prepare('DELETE FROM credit_card_statements WHERE id = ?').run(id)
-  return { id }
+  return db.transaction(() => {
+    const statement = requireEntity(db, 'credit_card_statements', id)
+    const linked = db.prepare(`
+      SELECT 1 FROM statement_payment_allocations WHERE statement_id = ? LIMIT 1
+    `).get(id)
+    if (linked) {
+      throw new ValidationError('No se puede eliminar un estado de cuenta con pagos relacionados.')
+    }
+    db.prepare('DELETE FROM credit_card_statements WHERE id = ?').run(id)
+    refreshInstrumentStatements(db, toNumber(statement.instrument_id))
+    return { id }
+  })()
 }
 
 function listStatementMovements(db: Database.Database, statementId: number): Record<string, unknown>[] {
@@ -1882,90 +1978,6 @@ function applyTransferImpact(
       WHERE id = ?
     `).run(destinationAmount, destination.id)
   }
-}
-
-function refreshStatementPayment(db: Database.Database, statementId: number | null): void {
-  if (statementId === null) {
-    return
-  }
-  const statement = requireEntity(db, 'credit_card_statements', statementId)
-  const paid = db.prepare(`
-    SELECT COALESCE(SUM(amount_cents), 0) AS total
-    FROM statement_payment_allocations
-    WHERE statement_id = ?
-  `).get(statementId) as { total: number }
-  const paidAmount = toNumber(paid.total)
-  const isPaid = paidAmount >= toNumber(statement.total_amount_cents) && toNumber(statement.total_amount_cents) > 0
-  db.prepare(`
-    UPDATE credit_card_statements
-    SET paid_amount_cents = ?, is_paid = ?, paid_date = CASE WHEN ? THEN COALESCE(paid_date, date('now', 'localtime')) ELSE NULL END,
-        updated_at = datetime('now')
-    WHERE id = ?
-  `).run(paidAmount, Number(isPaid), Number(isPaid), statementId)
-  if (isPaid) {
-    db.prepare(`
-      UPDATE reminders
-      SET is_dismissed = 1, updated_at = datetime('now')
-      WHERE reference_type = 'statement' AND reference_id = ?
-    `).run(statementId)
-  }
-}
-
-function allocateCardPayment(
-  db: Database.Database,
-  transferId: number,
-  instrumentId: number,
-  amountCents: number,
-  transferDate: string,
-  requestedStatementId: number | null,
-): number[] {
-  const candidates = requestedStatementId === null
-    ? db.prepare(`
-        SELECT st.id, st.total_amount_cents,
-          COALESCE(SUM(a.amount_cents), 0) AS allocated_cents
-        FROM credit_card_statements st
-        LEFT JOIN statement_payment_allocations a ON a.statement_id = st.id
-        WHERE st.instrument_id = ? AND st.cut_off_date <= ?
-        GROUP BY st.id
-        HAVING st.total_amount_cents > allocated_cents
-        ORDER BY st.cut_off_date, st.id
-      `).all(instrumentId, transferDate) as Array<{
-        id: number
-        total_amount_cents: number
-        allocated_cents: number
-      }>
-    : db.prepare(`
-        SELECT st.id, st.total_amount_cents,
-          COALESCE(SUM(a.amount_cents), 0) AS allocated_cents
-        FROM credit_card_statements st
-        LEFT JOIN statement_payment_allocations a ON a.statement_id = st.id
-        WHERE st.id = ?
-        GROUP BY st.id
-      `).all(requestedStatementId) as Array<{
-        id: number
-        total_amount_cents: number
-        allocated_cents: number
-      }>
-  let remaining = amountCents
-  const affected: number[] = []
-  const insert = db.prepare(`
-    INSERT INTO statement_payment_allocations (transfer_id, statement_id, amount_cents)
-    VALUES (?, ?, ?)
-  `)
-  for (const statement of candidates) {
-    if (remaining <= 0) break
-    const outstanding = Math.max(
-      toNumber(statement.total_amount_cents) - toNumber(statement.allocated_cents),
-      0,
-    )
-    const allocation = Math.min(remaining, outstanding)
-    if (allocation <= 0) continue
-    insert.run(transferId, statement.id, allocation)
-    affected.push(statement.id)
-    remaining -= allocation
-  }
-  db.prepare('UPDATE transfers SET statement_id = ? WHERE id = ?').run(affected[0] ?? null, transferId)
-  return affected
 }
 
 function validateTransfer(db: Database.Database, body: Input, transferId?: number): {
@@ -2031,7 +2043,6 @@ function validateTransfer(db: Database.Database, body: Input, transferId?: numbe
   }
   const transferDate = requiredDate(body, 'transferDate')
   const statementId = optionalInteger(body, 'statementId')
-  if (type === 'card_payment') ensureAutomaticStatements(db)
   if (statementId !== null) {
     const statement = requireEntity(db, 'credit_card_statements', statementId)
     if (toNumber(statement.instrument_id) !== destinationId) {
@@ -2075,15 +2086,16 @@ function listTransfers(db: Database.Database, instrumentId?: number): Record<str
 }
 
 function saveTransfer(db: Database.Database, body: Input, id?: number): Record<string, unknown> {
-  const input = validateTransfer(db, body, id)
-  const affectedStatements = new Set<number>()
   const operation = db.transaction(() => {
+    const input = validateTransfer(db, body, id)
+    const statementId = input.type === 'card_payment' ? null : input.statementId
+    const requestedStatementId = input.type === 'card_payment' ? input.statementId : null
+    let previousCardId: number | null = null
     if (id) {
       const previous = requireEntity(db, 'transfers', id)
-      const previousAllocations = db.prepare(`
-        SELECT statement_id FROM statement_payment_allocations WHERE transfer_id = ?
-      `).all(id) as Array<{ statement_id: number }>
-      previousAllocations.forEach((item) => affectedStatements.add(item.statement_id))
+      if (previous.type === 'card_payment') {
+        previousCardId = toNumber(previous.destination_instrument_id)
+      }
       db.prepare('DELETE FROM statement_payment_allocations WHERE transfer_id = ?').run(id)
       applyTransferImpact(
         db,
@@ -2095,23 +2107,23 @@ function saveTransfer(db: Database.Database, body: Input, id?: number): Record<s
       db.prepare(`
         UPDATE transfers
         SET source_instrument_id = ?, destination_instrument_id = ?, amount_cents = ?,
-            currency_id = ?, transfer_date = ?, type = ?, statement_id = ?, loan_id = ?,
+            currency_id = ?, transfer_date = ?, type = ?, statement_id = ?, requested_statement_id = ?, loan_id = ?,
             description = ?, notes = ?, updated_at = datetime('now')
         WHERE id = ?
       `).run(
         input.sourceId, input.destinationId, input.amountCents, input.currencyId,
-        input.transferDate, input.type, input.statementId, input.loanId,
+        input.transferDate, input.type, statementId, requestedStatementId, input.loanId,
         input.description, input.notes, id,
       )
     } else {
       const result = db.prepare(`
         INSERT INTO transfers (
           source_instrument_id, destination_instrument_id, amount_cents, currency_id,
-          transfer_date, type, statement_id, loan_id, description, notes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          transfer_date, type, statement_id, requested_statement_id, loan_id, description, notes
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         input.sourceId, input.destinationId, input.amountCents, input.currencyId,
-        input.transferDate, input.type, input.statementId, input.loanId,
+        input.transferDate, input.type, statementId, requestedStatementId, input.loanId,
         input.description, input.notes,
       )
       id = Number(result.lastInsertRowid)
@@ -2124,17 +2136,10 @@ function saveTransfer(db: Database.Database, body: Input, id?: number): Record<s
       1,
     )
     if (input.type === 'card_payment') {
-      const allocatedStatements = allocateCardPayment(
-        db,
-        id!,
-        input.destinationId,
-        input.amountCents,
-        input.transferDate,
-        input.statementId,
-      )
-      allocatedStatements.forEach((statementId) => affectedStatements.add(statementId))
+      ensureAutomaticStatements(db)
+    } else if (previousCardId !== null) {
+      refreshInstrumentStatements(db, previousCardId)
     }
-    affectedStatements.forEach((statementId) => refreshStatementPayment(db, statementId))
   })
   operation()
   return mapTransfer(asRow(db.prepare(transferSelect('WHERE tr.id = ?')).get(id)))
@@ -2143,9 +2148,6 @@ function saveTransfer(db: Database.Database, body: Input, id?: number): Record<s
 function deleteTransfer(db: Database.Database, id: number): { id: number } {
   const operation = db.transaction(() => {
     const row = requireEntity(db, 'transfers', id)
-    const statements = db.prepare(`
-      SELECT statement_id FROM statement_payment_allocations WHERE transfer_id = ?
-    `).all(id) as Array<{ statement_id: number }>
     applyTransferImpact(
       db,
       getInstrument(db, toNumber(row.source_instrument_id), false),
@@ -2154,7 +2156,9 @@ function deleteTransfer(db: Database.Database, id: number): { id: number } {
       -1,
     )
     db.prepare('DELETE FROM transfers WHERE id = ?').run(id)
-    statements.forEach((item) => refreshStatementPayment(db, item.statement_id))
+    if (row.type === 'card_payment') {
+      refreshInstrumentStatements(db, toNumber(row.destination_instrument_id))
+    }
   })
   operation()
   return { id }
@@ -3661,7 +3665,7 @@ function ensureAutomaticReminders(db: Database.Database): void {
     FROM credit_card_statements st
     JOIN financial_instruments i ON i.id = st.instrument_id
     WHERE st.is_paid = 0
-      AND st.total_amount_cents > COALESCE(st.paid_amount_cents, 0)
+      AND st.total_amount_cents > COALESCE(st.paid_amount_cents, 0) + st.reconciliation_applied_cents
       AND st.payment_due_date <= ?
   `).all(until) as Array<{ id: number; payment_due_date: string; name: string }>
   for (const statement of statements) {
@@ -3848,11 +3852,11 @@ function getDashboardUpcomingCommitments(db: Database.Database): Record<string, 
 
   const cardPayments = db.prepare(`
     SELECT st.id, i.name, st.payment_due_date,
-           MAX(st.total_amount_cents - COALESCE(st.paid_amount_cents, 0), 0) AS amount_cents
+           MAX(st.total_amount_cents - COALESCE(st.paid_amount_cents, 0) - st.reconciliation_applied_cents, 0) AS amount_cents
     FROM credit_card_statements st
     JOIN financial_instruments i ON i.id = st.instrument_id
     WHERE st.is_paid = 0 AND st.payment_due_date BETWEEN ? AND ?
-      AND st.total_amount_cents > COALESCE(st.paid_amount_cents, 0)
+      AND st.total_amount_cents > COALESCE(st.paid_amount_cents, 0) + st.reconciliation_applied_cents
   `).all(startDate, endDate) as Array<{
     id: number
     name: string
@@ -4256,10 +4260,10 @@ function getDashboardFutureExpenses(db: Database.Database): Record<string, unkno
   `).all() as Array<{ payment_date: string; amount_cents: number }>
   const cardPayments = db.prepare(`
     SELECT st.payment_due_date,
-           MAX(st.total_amount_cents - COALESCE(st.paid_amount_cents, 0), 0) AS amount_cents
+           MAX(st.total_amount_cents - COALESCE(st.paid_amount_cents, 0) - st.reconciliation_applied_cents, 0) AS amount_cents
     FROM credit_card_statements st
     WHERE st.is_paid = 0
-      AND st.total_amount_cents > COALESCE(st.paid_amount_cents, 0)
+      AND st.total_amount_cents > COALESCE(st.paid_amount_cents, 0) + st.reconciliation_applied_cents
     GROUP BY st.id
   `).all() as Array<{ payment_due_date: string; amount_cents: number }>
   const recurringIncomes = db.prepare(`

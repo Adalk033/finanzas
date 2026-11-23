@@ -1147,7 +1147,7 @@ try {
   assert.deepEqual(request('/dashboard/summary'), balancesBeforeSimulation)
 
   const info = request<{ schemaVersion: string }>('/database/info')
-  assert.equal(info.schemaVersion, '7')
+  assert.equal(info.schemaVersion, '8')
 
   const cardBeforeHistorical = request<Array<{
     id: number
@@ -1443,6 +1443,71 @@ try {
   splitStatements = request(`/statements?instrument_id=${splitCard.id}`)
   assert.equal(splitStatements.find((item) => item.cutOffDate === '2026-01-10')?.outstandingAmount, 100)
   assert.equal(splitStatements.find((item) => item.cutOffDate === '2026-02-10')?.outstandingAmount, 150)
+
+  getDatabase().exec('SAVEPOINT card_statement_reconciliation')
+  try {
+    const card = request<{ id: number }>('/instruments', 'POST', {
+      bankId: bank.id, name: 'Tarjeta conciliada', type: 'credit_card', currencyId: 1,
+      creditLimit: 1000, currentBalance: 0, cutOffDay: 10, paymentDueDay: 20,
+    })
+    const purchase = (amount: number, transactionDate: string) => request('/transactions', 'POST', {
+      instrumentId: card.id, currencyId: 1, type: 'expense', amount, transactionDate,
+    })
+    const payment = (amount: number, transferDate: string, statementId?: number) =>
+      request<{ id: number; amount: number; statementId: number | null }>('/transfers', 'POST', {
+        sourceInstrumentId: splitSource.id, destinationInstrumentId: card.id, currencyId: 1,
+        type: 'card_payment', amount, transferDate, statementId,
+      })
+    const reconcile = (actualBalance: number, reconciliationDate: string) =>
+      request(`/instruments/${card.id}/reconcile`, 'POST', { actualBalance, reconciliationDate })
+    const statementFor = (cutOffDate: string) => {
+      const result = request<Array<{
+        id: number; cutOffDate: string; totalAmount: number; paidAmount: number;
+        reconciliationApplied: number; outstandingAmount: number; isPaid: boolean;
+      }>>(`/statements?instrument_id=${card.id}`).find((item) => item.cutOffDate === cutOffDate)
+      assert.ok(result)
+      return result
+    }
+
+    purchase(100, '2026-05-05')
+    payment(80, '2026-05-11')
+    assert.equal(statementFor('2026-05-10').outstandingAmount, 20)
+    reconcile(0, '2026-05-12')
+    assert.equal(statementFor('2026-05-10').outstandingAmount, 0)
+    assert.equal(statementFor('2026-05-10').reconciliationApplied, 20)
+
+    purchase(150, '2026-06-05')
+    reconcile(125, '2026-05-09')
+    assert.equal(statementFor('2026-05-10').paidAmount, 75)
+    assert.equal(statementFor('2026-05-10').reconciliationApplied, 25)
+    assert.equal(statementFor('2026-06-10').paidAmount, 5)
+    const junePayment = payment(125, '2026-06-11')
+    const june = statementFor('2026-06-10')
+    assert.equal(junePayment.amount, 125)
+    assert.equal(june.paidAmount, 130)
+    assert.equal(june.reconciliationApplied, 20)
+    assert.equal(june.outstandingAmount, 0)
+    assert.equal(june.isPaid, true)
+
+    purchase(40, '2026-07-11')
+    const currentBalance = () => request<Array<{ id: number; currentBalance: number }>>('/instruments')
+      .find((item) => item.id === card.id)?.currentBalance
+    assert.equal(currentBalance(), 40)
+    assert.equal(statementFor('2026-06-10').outstandingAmount, 0)
+    assert.equal(statementFor('2026-07-10').outstandingAmount, 0)
+
+    purchase(10, '2026-07-09')
+    request(`/transfers/${junePayment.id}`, 'DELETE')
+    const july = statementFor('2026-07-10')
+    const targetedPayment = payment(10, '2026-07-12', july.id)
+    assert.equal(targetedPayment.statementId, july.id)
+    assert.equal(statementFor('2026-06-10').outstandingAmount, 125)
+    assert.equal(statementFor('2026-07-10').outstandingAmount, 0)
+    assert.equal(currentBalance(), 165)
+  } finally {
+    getDatabase().exec('ROLLBACK TO card_statement_reconciliation')
+    getDatabase().exec('RELEASE card_statement_reconciliation')
+  }
 
   const adjustableLoan = request<{ id: number }>('/loans', 'POST', {
     name: 'Prestamo con abono extra',

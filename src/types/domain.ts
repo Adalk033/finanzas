@@ -225,6 +225,7 @@ export interface CreditCardStatement {
   noInterestPayment: number | null
   isPaid: boolean
   paidAmount: number | null
+  reconciliationApplied: number
   outstandingAmount: number
   paidDate: string | null
   createdAt: string
